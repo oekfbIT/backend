@@ -28,7 +28,7 @@ let package = Package(
                 .product(name: "Leaf", package: "leaf"),
                 .product(name: "Vapor", package: "vapor"),
 //                .product(name: "TokamakShim", package: "Tokamak"),
-                .product(name: "SwiftSMTP", package: "Swift-SMTP"),
+//                .product(name: "SwiftSMTP", package: "Swift-SMTP"),
 //                .product(name: "SSLService", package: "BlueSSLService")
             ]
         ),
