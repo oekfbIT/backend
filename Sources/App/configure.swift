@@ -42,20 +42,20 @@ public func configure(_ app: Application) throws {
     app.middleware.use(ErrorMiddleware.default(environment: app.environment))
     app.passwords.use(.bcrypt)
 
-    // Define your CORS configuration to allow requests from any origin
-    let corsConfiguration = CORSMiddleware.Configuration(
-        allowedOrigin: .all, // Allow all origins
-        allowedMethods: [.GET, .POST, .PUT, .OPTIONS, .DELETE, .PATCH], // Specify allowed methods
-        allowedHeaders: [.authorization, .contentType, .accept, .origin, .xRequestedWith], // Specify allowed headers
-        allowCredentials: true, // Whether to allow cookies/cross-origin requests
-        exposedHeaders: [.authorization, .contentType] // Optional: Specify headers that browsers are allowed to access
-    )
-
-    // Create the CORS middleware with the configuration
-    let corsMiddleware = CORSMiddleware(configuration: corsConfiguration)
+//    // Define your CORS configuration to allow requests from any origin
+//    let corsConfiguration = CORSMiddleware.Configuration(
+//        allowedOrigin: .all, // Allow all origins
+//        allowedMethods: [.GET, .POST, .PUT, .OPTIONS, .DELETE, .PATCH], // Specify allowed methods
+//        allowedHeaders: [.authorization, .contentType, .accept, .origin, .xRequestedWith], // Specify allowed headers
+//        allowCredentials: true, // Whether to allow cookies/cross-origin requests
+//        exposedHeaders: [.authorization, .contentType] // Optional: Specify headers that browsers are allowed to access
+//    )
+//
+//    // Create the CORS middleware with the configuration
+//    let corsMiddleware = CORSMiddleware(configuration: corsConfiguration)
 
     // Use the CORS middleware in your application
-    app.middleware.use(corsMiddleware, at: .beginning) // Ensure it's the first middleware to run
+//    app.middleware.use(corsMiddleware, at: .beginning) // Ensure it's the first middleware to run
 
     // register routes
     try routes(app)
