@@ -17,7 +17,7 @@ let package = Package(
         .package(url: "https://github.com/vapor/leaf.git", from: "4.2.4"),
 //        .package(url: "https://github.com/TokamakUI/Tokamak", from: "0.9.0")
         .package(url: "https://github.com/Kitura/Swift-SMTP.git", from: "5.1.0"),
-//        .package(url: "https://github.com/Kitura/BlueSSLService.git", from: "0.0.1")
+        .package(url: "https://github.com/Kitura/BlueSSLService.git", from: "0.0.1")
     ],
     targets: [
         .executableTarget(
