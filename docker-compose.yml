@@ -21,11 +21,11 @@ volumes:
 
 x-shared_environment: &shared_environment
   LOG_LEVEL: ${LOG_LEVEL:-debug}
-  DATABASE_URL: mongodb://db:27017/oekfb_db_production
+  DATABASE_URL: mongodb://db:27017/oekfb_db
   
 services:
   app:
-    image: bergnerbackend:latest
+    image: oekfbbackend:latest
     build:
       context: .
     environment:
@@ -37,7 +37,7 @@ services:
     # user: '0' # uncomment to run as root for testing purposes even though Dockerfile defines 'vapor' user.
     command: ["serve", "--env", "production", "--hostname", "0.0.0.0", "--port", "8080"]
   migrate:
-    image: bergnerbackend:latest
+    image: oekfbbackend:latest
     build:
       context: .
     environment:
@@ -48,7 +48,7 @@ services:
     deploy:
       replicas: 0
   revert:
-    image: bergnerbackend:latest
+    image: oekfbbackend:latest
     build:
       context: .
     environment:
