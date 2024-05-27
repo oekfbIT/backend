@@ -1,10 +1,3 @@
-//
-//
-//  Copyright © 2023.
-//  Alon Yakobichvili
-//  All rights reserved.
-//
-
 import Fluent
 import FluentMongoDriver
 import Leaf
@@ -14,6 +7,7 @@ import Vapor
 extension String {
     var bytes: [UInt8] { .init(self.utf8) }
 }
+
 // configures your application
 public func configure(_ app: Application) throws {
     // uncomment to serve files from /Public folder
@@ -48,9 +42,9 @@ public func configure(_ app: Application) throws {
     app.middleware.use(ErrorMiddleware.default(environment: app.environment))
     app.passwords.use(.bcrypt)
 
-    // Define your CORS configuration
+    // Define your CORS configuration to allow requests from any origin
     let corsConfiguration = CORSMiddleware.Configuration(
-        allowedOrigin: .custom("http://localhost:3000"), // Explicitly allow your React frontend
+        allowedOrigin: .all, // Allow all origins
         allowedMethods: [.GET, .POST, .PUT, .OPTIONS, .DELETE, .PATCH], // Specify allowed methods
         allowedHeaders: [.authorization, .contentType, .accept, .origin, .xRequestedWith], // Specify allowed headers
         allowCredentials: true, // Whether to allow cookies/cross-origin requests
