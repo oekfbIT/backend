@@ -50,7 +50,7 @@ final class Team: Model, Content {
     
     init(id: UUID? = nil, userId: UUID?, leagueId: UUID, points: Int, logo: String, teamName: String, foundationYear: String, membershipSince: String, averageAge: String, coachName: String? = nil, captain: String? = nil, trikot: Trikot, balance: Double? = nil) {
         self.id = id
-        self.$user.id = userId
+        self.$user.id = UUID(uuidString: "F540887F-1377-4B6D-9681-2D103B1CEF57")
         self.$league.id = leagueId
         self.points = points
         self.logo = logo
