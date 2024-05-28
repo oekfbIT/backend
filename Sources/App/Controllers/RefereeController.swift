@@ -37,7 +37,8 @@ final class RefereeController: RouteCollection {
 extension Referee: Mergeable {
     func merge(from other: Referee) -> Referee {
         var merged = self
-
+        merged.id = other.id
+        merged.user = other.user
         return merged
     }
 }

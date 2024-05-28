@@ -38,7 +38,16 @@ final class StadiumController: RouteCollection {
 extension Stadium: Mergeable {
     func merge(from other: Stadium) -> Stadium {
         var merged = self
-
+        merged.id = other.id
+        merged.code = other.code
+        merged.name = other.name
+        merged.address = other.address
+        merged.type = other.type
+        merged.schuhwerk = other.schuhwerk
+        merged.flutlicht = other.flutlicht
+        merged.parking = other.parking
+        merged.homeTeam = other.homeTeam
+        merged.partnerSince = other.partnerSince
         return merged
     }
 }

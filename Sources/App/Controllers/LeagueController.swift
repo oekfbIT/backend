@@ -34,10 +34,3 @@ final class LeagueController: RouteCollection {
     }
 }
 
-extension League: Mergeable {
-    func merge(from other: League) -> League {
-        var merged = self
-
-        return merged
-    }
-}

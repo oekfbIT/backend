@@ -38,7 +38,12 @@ final class MatchEventController: RouteCollection {
 extension MatchEvent: Mergeable {
     func merge(from other: MatchEvent) -> MatchEvent {
         var merged = self
-
+        merged.id = other.id
+        merged.type = other.type
+        merged.player = other.player
+        merged.time = other.time
+        merged.referee = other.referee
+        merged.match = other.match
         return merged
     }
 }

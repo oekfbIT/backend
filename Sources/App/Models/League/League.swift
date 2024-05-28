@@ -35,7 +35,21 @@ final class League: Model, Content, Codable {
         self.name = name
     }
 }
- 
+
+extension League: Mergeable {
+    func merge(from other: League) -> League {
+        var merged = self
+        merged.id = other.id
+        merged.state = other.state
+        merged.level = other.level
+        merged.name = other.name
+        merged.teams = other.teams
+        merged.seasons = other.seasons
+        return merged
+    }
+}
+
+
 // League Migration
 extension LeagueMigration: Migration {
     func prepare(on database: Database) -> EventLoopFuture<Void> {

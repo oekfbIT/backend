@@ -19,6 +19,7 @@ final class Referee: Model, Content, Codable {
     enum FieldKeys {
         static var id: FieldKey { "id" }
         static var userId: FieldKey { "userId" }
+        static var assignments: FieldKey { "assignments" }
     }
 
     init() {}

@@ -35,10 +35,3 @@ final class GameDayController: RouteCollection {
     }
 }
 
-extension GameDay: Mergeable {
-    func merge(from other: GameDay) -> GameDay {
-        var merged = self
-
-        return merged
-    }
-}

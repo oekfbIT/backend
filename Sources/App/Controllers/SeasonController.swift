@@ -38,7 +38,10 @@ final class SeasonController: RouteCollection {
 extension Season: Mergeable {
     func merge(from other: Season) -> Season {
         var merged = self
-
+        merged.id = other.id
+        merged.league?.id = other.id
+        merged.events = other.events
+        merged.details = other.details
         return merged
     }
 }

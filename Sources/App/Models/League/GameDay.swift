@@ -31,6 +31,17 @@ final class GameDay: Model, Content, Codable {
     }
 }
 
+extension GameDay: Mergeable {
+    func merge(from other: GameDay) -> GameDay {
+        var merged = self
+        merged.id = other.id
+        merged.details = other.details
+        merged.date = other.date
+        return merged
+    }
+}
+
+
 // Migration for GameDay
 extension GameDay: Migration {
     func prepare(on database: Database) -> EventLoopFuture<Void> {

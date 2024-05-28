@@ -124,6 +124,7 @@ extension User: Mergeable {
         let merged = self
         merged.firstName = other.firstName
         merged.lastName = other.lastName
+        merged.userID = other.userID
         merged.email = other.email
         merged.passwordHash = other.passwordHash
         merged.type = other.type
