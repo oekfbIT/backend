@@ -24,7 +24,7 @@ enum ENV {
     var dev_default: String {
         switch self {
         case .databaseURL:
-            return "mongodb://localhost:27017/oekfb_db_production"
+            return "mongodb://localhost:27017/oekfb_database"
         case .jwtSecret:
             return "3Cz30pJzxbqYvLjXqTJjU8VpU5bxvgoNRvq1a"
         }
@@ -33,7 +33,7 @@ enum ENV {
     var prod_default: String {
         switch self {
         case .databaseURL:
-            return "mongodb://localhost:27017/oekfb_db_production"
+            return "mongodb://localhost:27017/oekfb_database"
         case .jwtSecret:
             return "3Cz30pJzxbqYvLjXqTJjU8VpU5bxvgoNRvq1a"
         }

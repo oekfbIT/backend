@@ -13,7 +13,7 @@ final class Team: Model, Content {
     static let schema = "teams"
 
     @ID(custom: "id") var id: UUID?
-    @Parent(key: "user") var user: User
+    @OptionalParent(key: "user") var user: User?
     @Parent(key: "league") var league: League
     @Field(key: "points") var points: Int
     @Field(key: "logo") var logo: String
@@ -48,7 +48,7 @@ final class Team: Model, Content {
     
     init() {}
     
-    init(id: UUID? = nil, userId: UUID, leagueId: UUID, points: Int, logo: String, teamName: String, foundationYear: String, membershipSince: String, averageAge: String, coachName: String? = nil, captain: String? = nil, trikot: Trikot, balance: Double? = nil) {
+    init(id: UUID? = nil, userId: UUID?, leagueId: UUID, points: Int, logo: String, teamName: String, foundationYear: String, membershipSince: String, averageAge: String, coachName: String? = nil, captain: String? = nil, trikot: Trikot, balance: Double? = nil) {
         self.id = id
         self.$user.id = userId
         self.$league.id = leagueId
