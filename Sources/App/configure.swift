@@ -2,7 +2,6 @@ import Fluent
 import FluentMongoDriver
 import Leaf
 import Vapor
-import CORSSupport
 
 extension String {
     var bytes: [UInt8] { .init(self.utf8) }
