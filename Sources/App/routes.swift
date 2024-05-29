@@ -26,10 +26,8 @@ func routes(_ app: Application) throws {
         "Status Online!"
     }
     
-    // MAIL CONTROLLER
     let emailController = EmailController()
     app.get("sendTestEmail", use: emailController.sendTestEmail)
-
     
     do {
         try routes.forEach { try app.register(collection: $0) }
@@ -37,12 +35,5 @@ func routes(_ app: Application) throws {
         print("Routes couldn't be initialized!")
     }
 }
-
-
-    let mailConfig = EmailConfiguration(hostname: "smtp.easyname.com",
-                                        email: "admin@oekfb.eu",
-                                        password: "Oekfb$2024")
-
-
 
 

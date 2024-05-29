@@ -15,10 +15,8 @@ let package = Package(
         .package(url: "https://github.com/vapor/fluent-mongo-driver.git", from: "1.0.0"),
         // 🍃 An expressive, performant, and extensible templating language built for Swift.
         .package(url: "https://github.com/vapor/leaf.git", from: "4.2.4"),
-        // 📧 A package for sending emails.
-        .package(url: "https://github.com/Kitura/Swift-SMTP", .upToNextMinor(from: "5.1.0")),
-        // 🔒 SSL Service for Kitura.
-        .package(url: "https://github.com/Kitura/BlueSSLService.git", from: "1.0.200")
+        // Mail Helpers
+        .package(url: "https://github.com/Mikroservices/Smtp.git", from: "3.0.0")
     ],
     targets: [
         .executableTarget(
@@ -28,8 +26,7 @@ let package = Package(
                 .product(name: "FluentMongoDriver", package: "fluent-mongo-driver"),
                 .product(name: "Leaf", package: "leaf"),
                 .product(name: "Vapor", package: "vapor"),
-                .product(name: "SwiftSMTP", package: "Swift-SMTP"),
-                .product(name: "SSLService", package: "BlueSSLService")
+                .product(name: "Smtp", package: "Smtp")
             ]
         ),
         .testTarget(
