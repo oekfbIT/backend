@@ -3,16 +3,17 @@
 # ================================
 FROM swift:5.8-jammy as build
 
-# Install OS updates and, if needed, sqlite3
+# Install OS updates and OpenSSL
 RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true \
     && apt-get -q update \
-    && apt-get -q dist-upgrade -y\
+    && apt-get -q dist-upgrade -y \
+    && apt-get -q install -y openssl libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up a build area
 WORKDIR /build
 
-# First just resolve dependencies.
+# First, just resolve dependencies.
 # This creates a cached layer that can be reused
 # as long as your Package.swift/Package.resolved
 # files do not change.
@@ -21,9 +22,6 @@ RUN swift package resolve
 
 # Copy entire repo into container
 COPY . .
-
-RUN apt-get update
-RUN apt-get install -y openssl libssl-dev
 
 # Build everything, with optimizations
 RUN swift build -c release --static-swift-stdlib
@@ -54,10 +52,6 @@ RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true \
     && apt-get -q install -y \
       ca-certificates \
       tzdata \
-# If your app or its dependencies import FoundationNetworking, also install `libcurl4`.
-      # libcurl4 \
-# If your app or its dependencies import FoundationXML, also install `libxml2`.
-      # libxml2 \
     && rm -r /var/lib/apt/lists/*
 
 # Create a vapor user and group with /app as its home directory
