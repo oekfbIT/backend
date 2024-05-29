@@ -26,6 +26,11 @@ func routes(_ app: Application) throws {
         "Status Online!"
     }
     
+    // MAIL CONTROLLER
+    let emailController = EmailController()
+    app.get("sendTestEmail", use: emailController.sendTestEmail)
+
+    
     do {
         try routes.forEach { try app.register(collection: $0) }
     } catch {
@@ -33,11 +38,11 @@ func routes(_ app: Application) throws {
     }
 }
 
-//
-//    let mailConfig = EmailConfiguration(hostname: "smtp.gmail.com",
-//                                        email: "alon.yakoby@gmail.com",
-//                                        password: "mgdwoxhkusodvsjz")
-//
+
+    let mailConfig = EmailConfiguration(hostname: "smtp.easyname.com",
+                                        email: "admin@oekfb.eu",
+                                        password: "Oekfb$2024")
+
 
 
 
