@@ -4,7 +4,7 @@
 //  Alon Yakobichvili
 //  All rights reserved.
 //
-  
+   
 import Foundation
 import Fluent
 import Vapor
@@ -13,6 +13,7 @@ final class Team: Model, Content {
     static let schema = "teams"
 
     @ID(custom: "id") var id: UUID?
+    @ID(custom: "sid") var sid: String?
     @OptionalParent(key: "user") var user: User?
     @Parent(key: "league") var league: League
     @Field(key: "points") var points: Int
@@ -27,29 +28,33 @@ final class Team: Model, Content {
     @Field(key: "trikot") var trikot: Trikot
     @OptionalField(key: "balance") var balance: Double?
     
+    // Inbox
+    
     struct FieldKeys {
-          static var id: FieldKey { "id" }
-          static var userId: FieldKey { "user" }
-          static var points: FieldKey { "points" }
-          static var logo: FieldKey { "logo" }
-          static var leagueId: FieldKey { "league" }
-          static var teamName: FieldKey { "teamName" }
-          static var foundationYear: FieldKey { "foundationYear" }
-          static var membershipSince: FieldKey { "membershipSince" }
-          static var averageAge: FieldKey { "averageAge" }
-          static var coachName: FieldKey { "coachName" }
-          static var captain: FieldKey { "captain" }
-          static var totalMatches: FieldKey { "totalMatches" }
-          static var totalGoals: FieldKey { "totalGoals" }
-          static var goalsPerMatch: FieldKey { "goalsPerMatch" }
-          static var balance: FieldKey { "balance" }
+        static var id: FieldKey { "id" }
+        static var sid: FieldKey { "sid" }
+        static var userId: FieldKey { "user" }
+        static var points: FieldKey { "points" }
+        static var logo: FieldKey { "logo" }
+        static var leagueId: FieldKey { "league" }
+        static var teamName: FieldKey { "teamName" }
+        static var foundationYear: FieldKey { "foundationYear" }
+        static var membershipSince: FieldKey { "membershipSince" }
+        static var averageAge: FieldKey { "averageAge" }
+        static var coachName: FieldKey { "coachName" }
+        static var captain: FieldKey { "captain" }
+        static var totalMatches: FieldKey { "totalMatches" }
+        static var totalGoals: FieldKey { "totalGoals" }
+        static var goalsPerMatch: FieldKey { "goalsPerMatch" }
+        static var balance: FieldKey { "balance" }
     
       }
     
     init() {}
     
-    init(id: UUID? = nil, userId: UUID?, leagueId: UUID, points: Int, logo: String, teamName: String, foundationYear: String, membershipSince: String, averageAge: String, coachName: String? = nil, captain: String? = nil, trikot: Trikot, balance: Double? = nil) {
+    init(id: UUID? = nil, sid: String, userId: UUID?, leagueId: UUID, points: Int, logo: String, teamName: String, foundationYear: String, membershipSince: String, averageAge: String, coachName: String? = nil, captain: String? = nil, trikot: Trikot, balance: Double? = nil) {
         self.id = id
+        self.sid = sid
         self.$user.id = UUID(uuidString: "F540887F-1377-4B6D-9681-2D103B1CEF57")
         self.$league.id = leagueId
         self.points = points

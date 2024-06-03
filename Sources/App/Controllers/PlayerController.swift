@@ -7,7 +7,8 @@
   
 
 import Vapor
- 
+import Fluent
+
 final class PlayerController: RouteCollection {
     let repository: StandardControllerRepository<Player>
 
@@ -42,7 +43,8 @@ extension Player: Mergeable {
         merged.name = other.name
         merged.number = other.number
         merged.birthday = other.birthday
-        merged.team = other.team
+        // Ensure proper initialization of team relationship
+        merged.$team.id = other.$team.id
         merged.nationality = other.nationality
         merged.position = other.position
         merged.eligibility = other.eligibility

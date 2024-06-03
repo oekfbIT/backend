@@ -12,13 +12,13 @@ import Leaf
 func routes(_ app: Application) throws {
     let routes: [RouteCollection] = [
         UserController(path: "users"),
-        TeamController(path: "teams"), // Index fine
-        PlayerController(path: "players"), // NOT WORKING
-        LeagueController(path: "leagues"), //Index fine
-        SeasonController(path: "seasons"), // Index fine -> League Missing
-        StadiumController(path: "stadiums"), // Index fine
-        MatchController(path: "matches"), // Index fine
-        MatchEventController(path: "events"), // Events
+        TeamController(path: "teams"),
+        PlayerController(path: "players"),
+        LeagueController(path: "leagues"),
+        SeasonController(path: "seasons"),
+        StadiumController(path: "stadiums"),
+        MatchController(path: "matches"),
+        MatchEventController(path: "events"),
         RefereeController(path: "referees"),
     ]
     
