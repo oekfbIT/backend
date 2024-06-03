@@ -14,15 +14,15 @@
 # Run migrations: docker-compose run migrate
 #       Stop all: docker-compose down (add -v to wipe db)
 #
- version: '3.7'
+
+version: '3.7'
 
 volumes:
   db_data:
-    name: db_data
 
 x-shared_environment: &shared_environment
   LOG_LEVEL: ${LOG_LEVEL:-debug}
-  DATABASE_URL: mongodb://admin:EF6mecfU-p2GMq@db:27017/oekfb_db?authSource=admin
+  DATABASE_URL: mongodb://admin:password@db:27017/oekfb_database?authSource=admin
 
 services:
   app:
@@ -73,4 +73,3 @@ services:
       MONGO_INITDB_ROOT_USERNAME: admin
       MONGO_INITDB_ROOT_PASSWORD: EF6mecfU-p2GMq
     command: mongod --auth
-
