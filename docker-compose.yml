@@ -18,7 +18,7 @@
 version: '3.7'
 
 volumes:
-  db_data:
+  backend_db_data:
 
 x-shared_environment: &shared_environment
   LOG_LEVEL: ${LOG_LEVEL:-debug}
@@ -64,7 +64,7 @@ services:
   db:
     image: mongo:latest
     volumes:
-      - db_data:/data/db
+      - backend_db_data:/data/db
       - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
     restart: unless-stopped
     ports:
