@@ -22,8 +22,9 @@ RUN swift package resolve
 # Copy entire repo into container
 COPY . .
 
-RUN apt-get update
-RUN apt-get install -y openssl libssl-dev
+# Install necessary libraries for building
+RUN apt-get update \
+    && apt-get install -y openssl libssl-dev
 
 # Build everything, with optimizations
 RUN swift build -c release --static-swift-stdlib
@@ -54,10 +55,7 @@ RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true \
     && apt-get -q install -y \
       ca-certificates \
       tzdata \
-# If your app or its dependencies import FoundationNetworking, also install `libcurl4`.
-      # libcurl4 \
-# If your app or its dependencies import FoundationXML, also install `libxml2`.
-      # libxml2 \
+      libcurl4 \
     && rm -r /var/lib/apt/lists/*
 
 # Create a vapor user and group with /app as its home directory
