@@ -32,6 +32,10 @@ import Foundation
 import Vapor
 import SwiftSoup
 
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+
 class APIClient {
     private let session: URLSession
     
@@ -74,4 +78,3 @@ class APIClient {
         return promise.futureResult
     }
 }
-
