@@ -63,7 +63,7 @@ final class TeamRegistration: Model, Content, Mergeable {
         self.teamName = teamName
         self.status = status 
         self.bundesland = bundesland
-        self.initialPassword = generateRandomPassword()
+        self.initialPassword = String.randomString(length: 6)
         self.refereerLink = refereerLink
         self.assignedLeague = assignedLeague
         self.customerSignedContract = customerSignedContract
@@ -104,21 +104,13 @@ extension TeamRegistrationMigration: Migration {
     }
 }
 
-
-import Foundation
-
-func generateRandomPassword() -> String {
-    let characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-    var password = ""
-    
-    for _ in 0..<8 {
-        let randomIndex = Int(arc4random_uniform(UInt32(characters.count)))
-        let character = characters[characters.index(characters.startIndex, offsetBy: randomIndex)]
-        password.append(character)
+extension String {
+    static func randomString(length: Int) -> String {
+        let letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        return String((0..<length).map{ _ in letters.randomElement()! })
     }
-    
-    return password
 }
+
 
 // Example usage:
 //let password = generateRandomPassword()
