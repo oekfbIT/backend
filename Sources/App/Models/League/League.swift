@@ -13,8 +13,8 @@ final class League: Model, Content, Codable {
     static let schema = "leagues"
 
     @ID(custom: FieldKeys.id) var id: UUID?
-    @Field(key: FieldKeys.state) var state: Bundesland
-    @Field(key: FieldKeys.level) var level: Int
+    @OptionalField(key: FieldKeys.state) var state: Bundesland?
+    @Field(key: FieldKeys.code) var code: String
     @Field(key: FieldKeys.name) var name: String
     @Children(for: \.$league) var teams: [Team]
     @Children(for: \.$league) var seasons: [Season]
@@ -22,16 +22,16 @@ final class League: Model, Content, Codable {
     struct FieldKeys {
         static var id: FieldKey { "id" }
         static var state: FieldKey { "state" }
-        static var level: FieldKey { "level" }
+        static var code: FieldKey { "code" }
         static var name: FieldKey { "name" }
     }
 
     init() {}
 
-    init(id: UUID? = nil, state: Bundesland, level: Int, name: String) {
+    init(id: UUID? = nil, state: Bundesland?, code: String, name: String) {
         self.id = id
         self.state = state
-        self.level = level
+        self.code = code
         self.name = name
     }
 }
@@ -41,10 +41,8 @@ extension League: Mergeable {
         var merged = self
         merged.id = other.id
         merged.state = other.state
-        merged.level = other.level
+        merged.code = other.code
         merged.name = other.name
-        merged.teams = other.teams
-        merged.seasons = other.seasons
         return merged
     }
 }
@@ -56,7 +54,7 @@ extension LeagueMigration: Migration {
         database.schema(League.schema)
             .field(League.FieldKeys.id, .uuid, .identifier(auto: true))
             .field(League.FieldKeys.state, .string, .required)
-            .field(League.FieldKeys.level, .int, .required)
+            .field(League.FieldKeys.code, .string, .required)
             .field(League.FieldKeys.name, .string, .required)
             .create()
     }

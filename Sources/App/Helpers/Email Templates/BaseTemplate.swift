@@ -18,7 +18,7 @@ struct BaseTemplate {
     let assurance: String
     let disclaimer: String
     
-    func generateHTML() -> String {
+    func generateWelcomeHTML() -> String {
         let html = """
             <!DOCTYPE html>
             <html>

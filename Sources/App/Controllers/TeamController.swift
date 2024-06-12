@@ -81,7 +81,7 @@ extension Team: Mergeable {
         merged.foundationYear = other.foundationYear
         merged.membershipSince = other.membershipSince
         merged.averageAge = other.averageAge
-        merged.coachName = other.coachName
+        merged.coach = other.coach
         merged.captain = other.captain
         merged.trikot = other.trikot
         merged.balance = other.balance

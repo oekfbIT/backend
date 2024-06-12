@@ -49,8 +49,6 @@ extension Player: Mergeable {
         merged.position = other.position
         merged.eligibility = other.eligibility
         merged.registerDate = other.registerDate
-        merged.matchesPlayed = other.matchesPlayed
-        merged.goals = other.goals
         return merged
     }
 }

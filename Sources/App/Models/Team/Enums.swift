@@ -18,7 +18,7 @@ enum MatchEventType: String, Codable {
 }
 
 
-enum Bundesland: String, Codable {
+enum Bundesland: String, Codable, LosslessStringConvertible {
     case wien
     case niederoesterreich
     case oberoesterreich
@@ -29,7 +29,8 @@ enum Bundesland: String, Codable {
     case vorarlberg
     case burgenland
     case ausgetreten
-     
+    case auszuwerten
+    
     var name: String {
         switch self {
         case .wien: return "Wien"
@@ -42,7 +43,16 @@ enum Bundesland: String, Codable {
         case .vorarlberg: return "Vorarlberg"
         case .burgenland: return "Burgenland"
         case .ausgetreten: return "Ausgetreten"
+        case .auszuwerten: return "Auszuwerten"
         }
+    }
+    
+    init?(_ description: String) {
+        self.init(rawValue: description)
+    }
+    
+    var description: String {
+        return self.rawValue
     }
 }
 

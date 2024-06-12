@@ -10,8 +10,8 @@ import Fluent
 import Vapor
 
 enum PlayerEligibility: String, Codable {
-    case ok
-    case blocked
+    case Spielberechtigt
+    case Gesperrt
 }
 
 final class Player: Model, Content, Codable {
@@ -19,21 +19,23 @@ final class Player: Model, Content, Codable {
 
     @ID(custom: FieldKeys.id) var id: UUID?
     @Field(key: FieldKeys.sid) var sid: String
+    @Field(key: FieldKeys.image) var image: String
+    @Field(key: FieldKeys.team_oeid) var team_oeid: String
     @Field(key: FieldKeys.name) var name: String
     @Field(key: FieldKeys.number) var number: String
     @Field(key: FieldKeys.birthday) var birthday: String
-    @Parent(key: FieldKeys.teamID) var team: Team
+    @OptionalParent(key: FieldKeys.teamID) var team: Team?
     @Field(key: FieldKeys.nationality) var nationality: String
     @Field(key: FieldKeys.position) var position: String
     @Field(key: FieldKeys.eligibility) var eligibility: PlayerEligibility
     @Field(key: FieldKeys.registerDate) var registerDate: String
-    @Field(key: FieldKeys.matchesPlayed) var matchesPlayed: Int
-    @Field(key: FieldKeys.goals) var goals: Int
 
     struct FieldKeys {
         static var id: FieldKey { "id" }
         static var sid: FieldKey { "sid" }
-       static var name: FieldKey { "name" }
+        static var image: FieldKey { "image" }
+        static var team_oeid: FieldKey { "team_oeid" }
+        static var name: FieldKey { "name" }
         static var number: FieldKey { "number" }
         static var birthday: FieldKey { "birthday" }
         static var teamID: FieldKey { "teamID" }
@@ -41,15 +43,15 @@ final class Player: Model, Content, Codable {
         static var position: FieldKey { "position" }
         static var eligibility: FieldKey { "eligibility" }
         static var registerDate: FieldKey { "registerDate" }
-        static var matchesPlayed: FieldKey { "matchesPlayed" }
-        static var goals: FieldKey { "goals" }
     }
 
     init() {}
 
-    init(id: UUID? = nil, sid: String, name: String, number: String, birthday: String, teamID: UUID, nationality: String, position: String, eligibility: PlayerEligibility, registerDate: String, matchesPlayed: Int, goals: Int) {
+    init(id: UUID? = nil, sid: String, image: String, team_oeid: String, name: String, number: String, birthday: String, teamID: UUID?, nationality: String, position: String, eligibility: PlayerEligibility, registerDate: String) {
         self.id = id
         self.sid = sid
+        self.image = image
+        self.team_oeid = team_oeid
         self.name = name
         self.number = number
         self.birthday = birthday
@@ -58,8 +60,6 @@ final class Player: Model, Content, Codable {
         self.position = position
         self.eligibility = eligibility
         self.registerDate = registerDate
-        self.matchesPlayed = matchesPlayed
-        self.goals = goals
     }
 }
 
@@ -69,6 +69,8 @@ extension PlayerMigration: Migration {
         database.schema(Player.schema)
             .field(Player.FieldKeys.id, .uuid, .identifier(auto: true))
             .field(Player.FieldKeys.name, .string, .required)
+            .field(Player.FieldKeys.image, .string, .required)
+            .field(Player.FieldKeys.team_oeid, .string, .required)
             .field(Player.FieldKeys.number, .string, .required)
             .field(Player.FieldKeys.birthday, .string, .required)
             .field(Player.FieldKeys.teamID, .uuid, .required, .references(Team.schema, Team.FieldKeys.id))
@@ -76,8 +78,6 @@ extension PlayerMigration: Migration {
             .field(Player.FieldKeys.position, .string, .required)
             .field(Player.FieldKeys.eligibility, .string, .required)
             .field(Player.FieldKeys.registerDate, .string, .required)
-            .field(Player.FieldKeys.matchesPlayed, .int, .required)
-            .field(Player.FieldKeys.goals, .int, .required)
             .create()
     }
 

@@ -16,7 +16,10 @@ let package = Package(
         // 🍃 An expressive, performant, and extensible templating language built for Swift.
         .package(url: "https://github.com/vapor/leaf.git", from: "4.2.4"),
         // Mail Helpers
-        .package(url: "https://github.com/Mikroservices/Smtp.git", from: "3.0.0")
+        .package(url: "https://github.com/Mikroservices/Smtp.git", from: "3.0.0"),
+        // Web scraping
+        .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.6.0"),
+
     ],
     targets: [
         .executableTarget(
@@ -26,7 +29,9 @@ let package = Package(
                 .product(name: "FluentMongoDriver", package: "fluent-mongo-driver"),
                 .product(name: "Leaf", package: "leaf"),
                 .product(name: "Vapor", package: "vapor"),
-                .product(name: "Smtp", package: "Smtp")
+                .product(name: "Smtp", package: "Smtp"),
+                .product(name: "SwiftSoup", package: "SwiftSoup")
+
             ]
         ),
         .testTarget(

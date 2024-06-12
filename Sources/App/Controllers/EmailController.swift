@@ -10,6 +10,15 @@ import Smtp
 import NIO
 
 final class EmailController {
+    
+    let baseConfig = BaseTemplate(logoUrl: "",
+                                  title: "",
+                                  description: "",
+                                  buttonText: "",
+                                  buttonUrl: "",
+                                  assurance: "",
+                                  disclaimer: "")
+    
     let smtpConfig = SmtpServerConfiguration(
         hostname: "smtp.easyname.com",
         port: 587,  // Use port 587 for STARTTLS
@@ -32,6 +41,31 @@ final class EmailController {
             body: "This is a test email sent from Vapor application."
         )
         
+        return req.smtp.send(email).flatMapThrowing { result in
+            switch result {
+            case .success:
+                return .ok
+            case .failure(let error):
+                print("Email failed to send: \(error)")
+                throw Abort(.internalServerError, reason: "Failed to send email")
+            }
+        }
+    }
+    
+    func sendWelcomeMail(req: Request, recipient: String) throws -> EventLoopFuture<HTTPStatus> {
+        // Apply the SMTP configuration
+        req.application.smtp.configuration = smtpConfig
+
+        // Print the SMTP configuration for debugging
+        print("SMTP Configuration: \(req.application.smtp.configuration)")
+
+        let email = try Email(
+            from: EmailAddress(address: "admin@oekfb.eu", name: "Admin"),
+            to: [EmailAddress(address: recipient)],
+            subject: "OEKFB Anmeldung - Willkommen",
+            body: baseConfig.generateWelcomeHTML()
+        )
+
         return req.smtp.send(email).flatMapThrowing { result in
             switch result {
             case .success:

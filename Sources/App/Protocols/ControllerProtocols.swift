@@ -100,9 +100,17 @@ enum InitialContact: Codable {
     }
 }
 
-enum ClubType: String, Codable {
+enum ClubType: String, Codable, LosslessStringConvertible {
     case privat
     case verein
+    
+    init?(_ description: String) {
+        self.init(rawValue: description)
+    }
+    
+    var description: String {
+        return self.rawValue
+    }
 }
 
 enum EmailTemplate: String, Codable {

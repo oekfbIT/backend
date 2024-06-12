@@ -20,6 +20,7 @@ func routes(_ app: Application) throws {
         MatchController(path: "matches"),
         MatchEventController(path: "events"),
         RefereeController(path: "referees"),
+        ScraperDetailController()
     ]
     
     app.get("status") { req async -> String in
@@ -28,6 +29,12 @@ func routes(_ app: Application) throws {
     
     let emailController = EmailController()
     app.get("sendTestEmail", use: emailController.sendTestEmail)
+    
+    
+    let scraperController = ScraperController()
+    app.get("scraper", "league", ":id") { req -> EventLoopFuture<HTTPStatus> in
+        try scraperController.scrapeLeagueDetails(req: req)
+    }
     
     do {
         try routes.forEach { try app.register(collection: $0) }
