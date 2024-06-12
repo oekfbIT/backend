@@ -1,11 +1,9 @@
 import Vapor
 import Fluent
 import SwiftSoup
-import Combine
 
 final class ScraperController {
     let baseUrl = "https://oekfb.com/"
-    private var cancellables = Set<AnyCancellable>()
     private let apiClient = APIClient()
     
     func scrapeLeagueDetails(req: Request) throws -> EventLoopFuture<HTTPStatus> {
@@ -202,30 +200,35 @@ final class ScraperController {
             }
         }
     }
-    
+
     private func fetchHTML(from url: URL, on req: Request, retryCount: Int = 3) -> EventLoopFuture<String> {
         let promise = req.eventLoop.makePromise(of: String.self)
         
         func attemptFetch(retriesLeft: Int) {
-            apiClient.getHTMLDocument(from: url)
-                .sink(receiveCompletion: { completion in
-                    if case .failure(let error) = completion {
-                        if retriesLeft > 0 && (error as NSError).domain == NSURLErrorDomain && (error as NSError).code == -1011 {
-                            print("Retrying fetch HTML: \(url). Retries left: \(retriesLeft - 1)")
-                            attemptFetch(retriesLeft: retriesLeft - 1)
-                        } else {
-                            print("Error fetching HTML: \(url). Error: \(error.localizedDescription)")
-                            promise.fail(error)
-                        }
+            apiClient.getHTMLDocument(from: url, on: req.eventLoop).whenComplete { result in
+                switch result {
+                case .success(let document):
+                    do {
+                        let html = try document.outerHtml()
+                        promise.succeed(html)
+                    } catch {
+                        promise.fail(error)
                     }
-                }, receiveValue: { document in
-                    promise.succeed(try! document.outerHtml())
-                })
-                .store(in: &cancellables)
+                case .failure(let error):
+                    if retriesLeft > 0 && (error as NSError).domain == NSURLErrorDomain && (error as NSError).code == -1011 {
+                        print("Retrying fetch HTML: \(url). Retries left: \(retriesLeft - 1)")
+                        attemptFetch(retriesLeft: retriesLeft - 1)
+                    } else {
+                        print("Error fetching HTML: \(url). Error: \(error.localizedDescription)")
+                        promise.fail(error)
+                    }
+                }
+            }
         }
         
         attemptFetch(retriesLeft: retryCount)
         
         return promise.futureResult
     }
+
 }
