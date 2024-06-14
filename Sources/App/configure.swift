@@ -34,9 +34,12 @@ public func configure(_ app: Application) throws {
     app.middleware.use(ErrorMiddleware.default(environment: app.environment))
     app.passwords.use(.bcrypt)
 
+    // Configure multiple allowed origins
+    let allowedOrigins = ["http://165.232.91.105:3000", "http://84.115.221.22", "http://84.115.221.22:3000"]
+
     // CORS configuration
     let corsConfiguration = CORSMiddleware.Configuration(
-        allowedOrigin: .all, // Specify the exact origin
+        allowedOrigin: .any(allowedOrigins),
         allowedMethods: [.GET, .POST, .PUT, .OPTIONS, .DELETE, .PATCH],
         allowedHeaders: [.authorization, .contentType, .accept, .origin, .xRequestedWith],
         allowCredentials: true,
