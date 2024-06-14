@@ -36,7 +36,7 @@ public func configure(_ app: Application) throws {
 
     // CORS configuration
     let corsConfiguration = CORSMiddleware.Configuration(
-        allowedOrigin: .custom("http://165.232.91.105:3000"), // Specify the exact origin
+        allowedOrigin: .all, // Specify the exact origin
         allowedMethods: [.GET, .POST, .PUT, .OPTIONS, .DELETE, .PATCH],
         allowedHeaders: [.authorization, .contentType, .accept, .origin, .xRequestedWith],
         allowCredentials: true,
