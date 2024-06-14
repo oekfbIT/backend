@@ -26,10 +26,10 @@ final class TeamRegistrationController: RouteCollection {
         
         // Additional routes
         route.post("register", use: register)
-        route.post("confirm/:id", use: confirm)
-        route.post("reject/:id", use: reject)
-        route.post("updatePayment/:id", use: updatePaymentConfirmation)
-        route.post("startTeamCustomization/:id", use: startTeamCustomization)
+        route.post("confirm", ":id", use: confirm)
+        route.post("reject", ":id", use: reject)
+        route.post("updatePayment", ":id", use: updatePaymentConfirmation)
+        route.post("completeRegistration", ":id", use: startTeamCustomization)
     }
 
     func boot(routes: RoutesBuilder) throws {
@@ -39,14 +39,25 @@ final class TeamRegistrationController: RouteCollection {
     func register(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let registrationRequest = try req.content.decode(TeamRegistrationRequest.self)
 
+        print(registrationRequest)
+        
         let newRegistration = TeamRegistration()
         newRegistration.primary = registrationRequest.primaryContact
         newRegistration.secondary = registrationRequest.secondaryContact
         newRegistration.teamName = registrationRequest.teamName
         newRegistration.verein = registrationRequest.verein
         newRegistration.refereerLink = registrationRequest.referCode
+        newRegistration.status = .draft
         newRegistration.paidAmount = nil
-
+        newRegistration.bundesland = registrationRequest.bundesland
+        newRegistration.initialPassword = String.randomString(length: 8)
+        newRegistration.refereerLink = registrationRequest.referCode
+        newRegistration.customerSignedContract = nil
+        newRegistration.adminSignedContract = nil
+        newRegistration.paidAmount = 0.0
+        newRegistration.isWelcomeEmailSent = true
+        newRegistration.isLoginDataSent = false
+        
         return newRegistration.save(on: req.db).map { _ in
             // Send the welcome email in the background
             self.sendWelcomeEmailInBackground(req: req, recipient: registrationRequest.primaryContact.email)
@@ -108,14 +119,16 @@ final class TeamRegistrationController: RouteCollection {
         return TeamRegistration.find(id, on: req.db).flatMap { optionalRegistration in
             if let registration = optionalRegistration {
                 let primary = registration.primary
-
+                
+                let password = String.randomString(length: 8)
+                
                 let user = User(
                     userID: UUID().uuidString,
                     type: .team,
                     firstName: primary?.first ?? "",
                     lastName: primary?.last ?? "",
                     email: primary?.email ?? "",
-                    passwordHash: try! Bcrypt.hash(UUID().uuidString)
+                    passwordHash: try! Bcrypt.hash(password)
                 )
 
                 return user.save(on: req.db).flatMap {
@@ -135,10 +148,12 @@ final class TeamRegistrationController: RouteCollection {
                                        away: Dress(image: "", color: .light))
                     )
 
+                    // MARK: SEND EMAIL WITH THE LOGIN DATA
+                    
                     return team.save(on: req.db).map {
                         // Print values for email sending
                         print("User email: \(primary?.email)")
-                        print("User password: \(user.passwordHash)")
+                        print("User password: \(password)")
 
                         return HTTPStatus.ok
                     }
@@ -148,10 +163,4 @@ final class TeamRegistrationController: RouteCollection {
             }
         }
     }
-
-
-
-
-
-
 }

@@ -13,6 +13,7 @@ final class Stadium: Model, Content, Codable {
     static let schema = "stadiums"
 
     @ID(custom: FieldKeys.id) var id: UUID?
+    @Field(key: FieldKeys.bundesland) var bundesland: Bundesland
     @Field(key: FieldKeys.code) var code: String
     @Field(key: FieldKeys.name) var name: String
     @Field(key: FieldKeys.address) var address: String
@@ -27,6 +28,7 @@ final class Stadium: Model, Content, Codable {
         static var id: FieldKey { "id" }
         static let code: FieldKey = "code"
         static let name: FieldKey = "name"
+        static let bundesland: FieldKey = "bundesland"
         static let address: FieldKey = "address"
         static let type: FieldKey = "type"
         static let schuhwerk: FieldKey = "schuhwerk"
@@ -38,8 +40,9 @@ final class Stadium: Model, Content, Codable {
 
     init() {}
 
-    init(id: UUID? = nil, code: String, name: String, address: String, type: Belag, schuhwerk: Schuhwerk, flutlicht: Bool, parking: Bool, homeTeam: String, partnerSince: String) {
+    init(id: UUID? = nil, bundesland: Bundesland, code: String, name: String, address: String, type: Belag, schuhwerk: Schuhwerk, flutlicht: Bool, parking: Bool, homeTeam: String, partnerSince: String) {
         self.id = id
+        self.bundesland = bundesland
         self.code = code
         self.name = name
         self.address = address
@@ -57,6 +60,7 @@ extension StadiumMigration: Migration {
     func prepare(on database: Database) -> EventLoopFuture<Void> {
         database.schema(Stadium.schema)
             .field(Stadium.FieldKeys.id, .uuid, .identifier(auto: true))
+            .field(Stadium.FieldKeys.bundesland, .string, .required)
             .field(Stadium.FieldKeys.code, .string, .required)
             .field(Stadium.FieldKeys.name, .string, .required)
             .field(Stadium.FieldKeys.address, .string, .required)

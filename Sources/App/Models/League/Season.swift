@@ -9,21 +9,18 @@ import Foundation
 import Fluent
 import Vapor
 
-enum MatchState: String, Codable {
-    case pending, firstHalf, halftime, secondhalf, completed
-}
-
 final class Season: Model, Content, Codable {
     static let schema = "seasons"
 
     @ID(custom: "id") var id: UUID?
     @OptionalParent(key: FieldKeys.league) var league: League?
-    @Field(key: FieldKeys.events) var events: String
+    @Field(key: FieldKeys.name) var name: String
     @Field(key: FieldKeys.details) var details: Int
+    @Children(for: \.$season) var matches: [Match]
 
     struct FieldKeys {
         static var id: FieldKey { "id" }
-        static var events: FieldKey { "events" }
+        static var name: FieldKey { "name" }
         static var match: FieldKey { "match" }
         static var league: FieldKey { "league"}
         static var state: FieldKey { "state" }
@@ -32,10 +29,10 @@ final class Season: Model, Content, Codable {
 
     init() {}
 
-    init(id: UUID? = nil, leagueId: UUID? = nil,  events: String, details: Int) {
+    init(id: UUID? = nil, leagueId: UUID? = nil, name: String, details: Int) {
         self.id = id
         self.$league.id = leagueId
-        self.events = events
+        self.name = name
         self.details = details
     }
 }
@@ -45,7 +42,7 @@ extension Season: Migration {
     func prepare(on database: Database) -> EventLoopFuture<Void> {
         database.schema(Season.schema)
             .field(FieldKeys.id, .uuid, .identifier(auto: true))
-            .field(FieldKeys.events, .string, .required)
+            .field(FieldKeys.name, .string)
             .field(FieldKeys.state, .string)
             .field(FieldKeys.details, .int, .required)
             .create()

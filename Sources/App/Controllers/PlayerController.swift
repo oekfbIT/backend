@@ -5,7 +5,6 @@
 //  All rights reserved.
 //
   
-
 import Vapor
 import Fluent
 
@@ -28,10 +27,28 @@ final class PlayerController: RouteCollection {
 
         route.patch(":id", use: repository.updateID)
         route.patch("batch", use: repository.updateBatch)
+
+        // New route for updating player number
+        route.patch(":id", "number", ":number", use: updatePlayerNumber)
     }
 
     func boot(routes: RoutesBuilder) throws {
         try setupRoutes(on: routes)
+    }
+
+    // New handler function to update player's number
+    func updatePlayerNumber(req: Request) -> EventLoopFuture<Player> {
+        guard let playerID = req.parameters.get("id", as: UUID.self),
+              let newNumber = req.parameters.get("number") else {
+            return req.eventLoop.future(error: Abort(.badRequest, reason: "Invalid or missing parameters"))
+        }
+
+        return Player.find(playerID, on: req.db)
+            .unwrap(or: Abort(.notFound))
+            .flatMap { player in
+                player.number = newNumber
+                return player.save(on: req.db).map { player }
+            }
     }
 }
 
@@ -43,7 +60,6 @@ extension Player: Mergeable {
         merged.name = other.name
         merged.number = other.number
         merged.birthday = other.birthday
-        // Ensure proper initialization of team relationship
         merged.$team.id = other.$team.id
         merged.nationality = other.nationality
         merged.position = other.position

@@ -39,11 +39,12 @@ extension MatchEvent: Mergeable {
     func merge(from other: MatchEvent) -> MatchEvent {
         var merged = self
         merged.id = other.id
+        merged.id = other.id
         merged.type = other.type
-        merged.player = other.player
-        merged.time = other.time
-        merged.referee = other.referee
         merged.match = other.match
+        merged.$player.id = other.$player.id
+        merged.minute = other.minute
+
         return merged
     }
 }

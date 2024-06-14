@@ -5,8 +5,8 @@
 //  All rights reserved.
 //
   
-
 import Vapor
+import Fluent
 
 final class StadiumController: RouteCollection {
     let repository: StandardControllerRepository<Stadium>
@@ -28,17 +28,33 @@ final class StadiumController: RouteCollection {
         route.patch(":id", use: repository.updateID)
         route.patch("batch", use: repository.updateBatch)
         
+        // New route for getting stadiums by bundesland
+        route.get("bundesland", ":bundesland", use: getStadiumsByBundesland)
     }
 
     func boot(routes: RoutesBuilder) throws {
         try setupRoutes(on: routes)
     }
+
+    func getStadiumsByBundesland(req: Request) -> EventLoopFuture<[Stadium]> {
+        guard let bundeslandString = req.parameters.get("bundesland"),
+              let bundesland = Bundesland(bundeslandString) else {
+            return req.eventLoop.future(error: Abort(.badRequest, reason: "Invalid or missing bundesland parameter"))
+        }
+
+        return Stadium.query(on: req.db)
+            .filter(\.$bundesland == bundesland)
+            .all()
+    }
 }
+
+
 
 extension Stadium: Mergeable {
     func merge(from other: Stadium) -> Stadium {
         var merged = self
         merged.id = other.id
+        merged.bundesland = other.bundesland
         merged.code = other.code
         merged.name = other.name
         merged.address = other.address

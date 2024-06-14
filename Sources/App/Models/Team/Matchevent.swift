@@ -15,8 +15,7 @@ final class MatchEvent: Model, Content, Codable {
     @ID(custom: FieldKeys.id) var id: UUID?
     @Field(key: FieldKeys.type) var type: MatchEventType
     @Parent(key: FieldKeys.playerId) var player: Player
-    @Field(key: FieldKeys.time) var time: Double
-    @Parent(key: FieldKeys.refereeId) var referee: Referee
+    @Field(key: FieldKeys.minute) var minute: Int
     @Parent(key: FieldKeys.match) var match: Match
 
     enum FieldKeys {
@@ -24,18 +23,16 @@ final class MatchEvent: Model, Content, Codable {
         static let type: FieldKey = "type"
         static let match: FieldKey = "match"
         static let playerId: FieldKey = "playerId"
-        static let time: FieldKey = "time"
-        static let refereeId: FieldKey = "refereeId"
+        static let minute: FieldKey = "minute"
     }
 
     init() {}
 
-    init(id: UUID? = nil, type: MatchEventType, playerId: UUID, time: Double, refereeId: UUID) {
+    init(id: UUID? = nil, type: MatchEventType, playerId: UUID, minute: Int) {
         self.id = id
         self.type = type
-        self.time = time
+        self.minute = minute
         self.$player.id = playerId
-        self.$referee.id = refereeId
     }
 }
 
@@ -46,8 +43,7 @@ extension MatchEvent: Migration {
             .field(MatchEvent.FieldKeys.id, .uuid, .identifier(auto: true))
             .field(MatchEvent.FieldKeys.type, .string, .required)
             .field(MatchEvent.FieldKeys.playerId, .uuid, .required, .references(Player.schema, Player.FieldKeys.id))
-            .field(MatchEvent.FieldKeys.time, .double, .required)
-            .field(MatchEvent.FieldKeys.refereeId, .uuid, .required, .references(Referee.schema, Referee.FieldKeys.id))
+            .field(MatchEvent.FieldKeys.minute, .int, .required)
             .create()
     }
 

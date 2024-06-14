@@ -29,7 +29,7 @@ final class TeamController: RouteCollection {
         route.patch(":id", use: repository.updateID)
         route.patch("batch", use: repository.updateBatch)
         
-//        route.get(":oeid/players", use: getTeamWithPlayers) // Route to get a team with its players
+        route.get(":id", "players", use: getTeamWithPlayers) // Route to get a team with its players
         route.get("withPlayers", use: getAllTeamsWithPlayers) // Route to get all teams with their players
 
     }

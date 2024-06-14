@@ -14,7 +14,7 @@ final class League: Model, Content, Codable {
 
     @ID(custom: FieldKeys.id) var id: UUID?
     @OptionalField(key: FieldKeys.state) var state: Bundesland?
-    @Field(key: FieldKeys.code) var code: String
+    @OptionalField(key: FieldKeys.code) var code: String?
     @Field(key: FieldKeys.name) var name: String
     @Children(for: \.$league) var teams: [Team]
     @Children(for: \.$league) var seasons: [Season]
@@ -54,7 +54,7 @@ extension LeagueMigration: Migration {
         database.schema(League.schema)
             .field(League.FieldKeys.id, .uuid, .identifier(auto: true))
             .field(League.FieldKeys.state, .string, .required)
-            .field(League.FieldKeys.code, .string, .required)
+            .field(League.FieldKeys.code, .string)
             .field(League.FieldKeys.name, .string, .required)
             .create()
     }

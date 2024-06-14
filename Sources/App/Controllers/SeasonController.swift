@@ -39,9 +39,10 @@ extension Season: Mergeable {
     func merge(from other: Season) -> Season {
         var merged = self
         merged.id = other.id
-        merged.league?.id = other.id
-        merged.events = other.events
+        merged.league?.id = other.league?.id
+        merged.name = other.name
         merged.details = other.details
+        merged.matches = other.matches
         return merged
     }
 }
