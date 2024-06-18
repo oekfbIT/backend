@@ -27,6 +27,7 @@ final class TeamRegistrationController: RouteCollection {
         // Additional routes
         route.post("register", use: register)
         route.post("confirm", ":id", use: confirm)
+        route.post("assign", ":id", "league", ":leagueid", use: assignLeague)
         route.post("reject", ":id", use: reject)
         route.post("updatePayment", ":id", use: updatePaymentConfirmation)
         route.post("completeRegistration", ":id", use: startTeamCustomization)
@@ -103,6 +104,24 @@ final class TeamRegistrationController: RouteCollection {
             return registration.save(on: req.db).transform(to: .ok)
         }
     }
+    
+    // Assign League to TeamRegistration
+    func assignLeague(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        let registrationID = try req.parameters.require("id", as: UUID.self)
+        let leagueID = try req.parameters.require("leagueid", as: UUID.self)
+
+        return TeamRegistration.find(registrationID, on: req.db)
+            .unwrap(or: Abort(.notFound))
+            .flatMap { registration in
+                return League.find(leagueID, on: req.db)
+                    .unwrap(or: Abort(.notFound))
+                    .flatMap { league in
+                        registration.assignedLeague = leagueID
+                        return registration.save(on: req.db).transform(to: .ok)
+                    }
+            }
+    }
+
 
     // Update Payment Confirmation
     func updatePaymentConfirmation(req: Request) throws -> EventLoopFuture<HTTPStatus> {
