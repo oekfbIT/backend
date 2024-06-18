@@ -10,11 +10,13 @@ import Fluent
 
 final class UserController: RouteCollection {
     let repository: StandardControllerRepository<User>
-    
+    let emailController: EmailController  // Add this line
+
     init(path: String) {
         self.repository = StandardControllerRepository<User>(path: path)
+        self.emailController = EmailController()  // Initialize EmailController
     }
-    
+
     func setupRoutes(on app: RoutesBuilder) throws {
         let route = app.grouped(PathComponent(stringLiteral: repository.path))
         route.post(use: signup)
@@ -39,8 +41,7 @@ final class UserController: RouteCollection {
             .first()
             .map { $0 != nil }
     }
-    
-    
+
     func signup(req: Request) throws -> EventLoopFuture<NewSession> {
         let userSignup = try req.content.decode(UserSignup.self)
         let user = try User.create(from: userSignup)
@@ -58,9 +59,12 @@ final class UserController: RouteCollection {
                 return token.save(on: req.db)
             }.flatMap { _ -> EventLoopFuture<Void> in
                 let verificationToken = UserVerificationToken(userID: user.id!)
-                return verificationToken.save(on: req.db).map { _ in
-                    DispatchQueue.global(qos: .background).async {
-                        // Send Email to User with the password.
+                return verificationToken.save(on: req.db).flatMap { _ in
+                    // Send email asynchronously
+                    return req.eventLoop.submit {
+                        try self.emailController.sendEmailWithData(req: req, recipient: userSignup.email, email: userSignup.email, password: userSignup.password)
+                    }.flatMap {
+                        return req.eventLoop.makeSucceededFuture(())
                     }
                 }
             }
@@ -68,36 +72,52 @@ final class UserController: RouteCollection {
             return try NewSession(token: token.value, user: user.asPublic())
         }
     }
-    
+
     func signupBatch(req: Request) throws -> EventLoopFuture<[NewSession]> {
         let userSignups = try req.content.decode([UserSignup].self)
+        
+        // Map each user signup to an EventLoopFuture<NewSession>
         let signupFutures = try userSignups.map { userSignup -> EventLoopFuture<NewSession> in
             let user = try User.create(from: userSignup)
             var token: Token!
-
+            
+            // Check if user already exists
             return checkIfUserExists(userSignup.email, req: req).flatMap { exists in
                 guard !exists else {
                     return req.eventLoop.future(error: UserError.emailTaken)
                 }
+                
+                // Save user to database
                 return user.save(on: req.db).flatMap { _ -> EventLoopFuture<Void> in
+                    // Create token for user
                     guard let newToken = try? user.createToken(source: .signup) else {
                         return req.eventLoop.future(error: Abort(.internalServerError))
                     }
                     token = newToken
+                    
+                    // Save token to database
                     return token.save(on: req.db)
                 }.flatMap { _ -> EventLoopFuture<Void> in
                     let verificationToken = UserVerificationToken(userID: user.id!)
-                    return verificationToken.save(on: req.db).map { _ in
-                        DispatchQueue.global(qos: .background).async {
-                            // Send Email to User with the password.
+                    
+                    // Save verification token to database
+                    return verificationToken.save(on: req.db).flatMap { _ in
+                        // Send email to user with registration details
+                        return req.eventLoop.submit {
+                            try self.emailController.sendEmailWithData(req: req, recipient: userSignup.email, email: userSignup.email, password: userSignup.password)
+                        }.flatMap {
+                            // Return NewSession after sending email
+                            return req.eventLoop.makeSucceededFuture(())
                         }
                     }
                 }.flatMapThrowing {
+                    // Return NewSession with token and user details
                     return try NewSession(token: token.value, user: user.asPublic())
                 }
             }
         }
-
+        
+        // Return a future that completes when all signupFutures are successful
         return EventLoopFuture.whenAllSucceed(signupFutures, on: req.eventLoop)
     }
 
@@ -131,4 +151,5 @@ extension User: Mergeable {
         return merged
     }
 }
+
 

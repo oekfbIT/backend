@@ -52,6 +52,39 @@ final class EmailController {
         }
     }
     
+    func sendEmailWithData(req: Request, recipient: String, email: String, password: String) throws -> EventLoopFuture<HTTPStatus> {
+        // Apply the SMTP configuration
+        req.application.smtp.configuration = smtpConfig
+        
+        // Print the SMTP configuration for debugging
+        print("SMTP Configuration: \(req.application.smtp.configuration)")
+
+        // Prepare the email content
+        let emailBody = """
+        Thank you for your registration.
+
+        Login: \(email)
+        Password: \(password)
+        """
+
+        let email = try Email(
+            from: EmailAddress(address: "admin@oekfb.eu", name: "Admin"),
+            to: [EmailAddress(address: recipient)],
+            subject: "Registration Details",
+            body: emailBody
+        )
+
+        return req.smtp.send(email).flatMapThrowing { result in
+            switch result {
+            case .success:
+                return .ok
+            case .failure(let error):
+                print("Email failed to send: \(error)")
+                throw Abort(.internalServerError, reason: "Failed to send email")
+            }
+        }
+    }
+    
     func sendWelcomeMail(req: Request, recipient: String) throws -> EventLoopFuture<HTTPStatus> {
         // Apply the SMTP configuration
         req.application.smtp.configuration = smtpConfig
