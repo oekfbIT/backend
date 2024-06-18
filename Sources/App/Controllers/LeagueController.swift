@@ -29,6 +29,9 @@ final class LeagueController: RouteCollection {
         
         // Add the new route for creating a season
         route.post(":id", "createSeason", use: createSeason)
+        
+        // Add the new route to get league with seasons
+        route.get(":id", "seasons", use: getLeagueWithSeasons)
     }
 
     func boot(routes: RoutesBuilder) throws {
@@ -48,6 +51,29 @@ final class LeagueController: RouteCollection {
                 }
             }
     }
+    
+    func getLeagueWithSeasons(req: Request) -> EventLoopFuture<LeagueWithSeasons> {
+        guard let leagueID = req.parameters.get("id", as: UUID.self) else {
+            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league ID"))
+        }
+
+        return League.query(on: req.db)
+            .filter(\.$id == leagueID)
+            .with(\.$seasons)
+            .with(\.$teams)
+            .first()
+            .unwrap(or: Abort(.notFound, reason: "League not found"))
+            .map { league in
+                return LeagueWithSeasons(league: league, seasons: league.seasons)
+            }
+    }
+    
+
+    struct LeagueWithSeasons: Content {
+        var league: League
+        var seasons: [Season]
+    }
+
 }
 
 extension League {
@@ -90,21 +116,27 @@ extension League {
                         let awayTeam = teams[awayTeamIndex]
 
                         // Create match
-                        let match = Match()
+                        let match = Match(
+                            details: MatchDetails(gameday: gameDay, date: nil, stadium: nil),
+                            homeTeamId: homeTeam.id!,
+                            awayTeamId: awayTeam.id!,
+                            score: Score(home: 0, away: 0),
+                            status: .pending
+                        )
                         match.$season.id = season.id!
-                        match.$homeTeam.id = homeTeam.id!
-                        match.$awayTeam.id = awayTeam.id!
-                        match.status = .pending
-                        match.details = MatchDetails(gameday: gameDay, date: nil, stadium: nil)
+                        
                         matches.append(match)
 
                         // Swap home and away for the second leg
-                        let reverseMatch = Match()
+                        let reverseMatch = Match(
+                            details: MatchDetails(gameday: gameDay + (teamCount / 2), date: nil, stadium: nil),
+                            homeTeamId: awayTeam.id!,
+                            awayTeamId: homeTeam.id!,
+                            score: Score(home: 0, away: 0),
+                            status: .pending
+                        )
                         reverseMatch.$season.id = season.id!
-                        reverseMatch.$homeTeam.id = awayTeam.id!
-                        reverseMatch.$awayTeam.id = homeTeam.id!
-                        reverseMatch.status = .pending
-                        reverseMatch.details = MatchDetails(gameday: gameDay + (teamCount / 2), date: nil, stadium: nil)
+                        
                         matches.append(reverseMatch)
                     }
                     gameDay += 1
@@ -116,3 +148,5 @@ extension League {
         }
     }
 }
+
+

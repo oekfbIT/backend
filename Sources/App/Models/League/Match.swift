@@ -35,14 +35,14 @@ final class Match: Model, Content, Codable {
     @OptionalParent(key: FieldKeys.referee) var referee: Referee?
     @OptionalParent(key: FieldKeys.season) var season: Season?
     
-    @Children(for: \.$match) var events: [MatchEvent] // []
+    @Children(for: \.$match) var events: [MatchEvent]
     
-    @Field(key: FieldKeys.score) var score: Score // 0 - 0
-    @Field(key: FieldKeys.status) var status: GameStatus // pending
+    @Field(key: FieldKeys.score) var score: Score
+    @Field(key: FieldKeys.status) var status: GameStatus
     
     // MID GAME
-    @Field(key: FieldKeys.firstHalfStartDate) var firstHalfStartDate: Date?
-    @Field(key: FieldKeys.secondHalfStartDate) var secondHalfStartDate: Date?
+    @OptionalField(key: FieldKeys.firstHalfStartDate) var firstHalfStartDate: Date?
+    @OptionalField(key: FieldKeys.secondHalfStartDate) var secondHalfStartDate: Date?
     
     // POST GAME
     @OptionalField(key: FieldKeys.bericht) var bericht: String?
@@ -61,7 +61,6 @@ final class Match: Model, Content, Codable {
         static var score: FieldKey { "score" }
         static var status: FieldKey { "status" }
         static var referee: FieldKey { "referee" }
-        
         static var firstHalfStartDate: FieldKey { "firstHalfStartDate" }
         static var secondHalfStartDate: FieldKey { "secondHalfStartDate" }
     }
@@ -70,14 +69,14 @@ final class Match: Model, Content, Codable {
 
     init(id: UUID? = nil, details: MatchDetails, homeTeamId: UUID, awayTeamId: UUID, score: Score, status: GameStatus, bericht: String? = nil, refereeId: UUID? = nil, seasonId: UUID? = nil, firstHalfStartDate: Date? = nil, secondHalfStartDate: Date? = nil) {
         self.id = id
+        self.$referee.id = refereeId
+        self.$season.id = seasonId
         self.details = details
         self.$homeTeam.id = homeTeamId
         self.$awayTeam.id = awayTeamId
         self.score = score
         self.status = status
         self.bericht = bericht
-        self.$referee.id = refereeId
-        self.$season.id = seasonId
         self.firstHalfStartDate = firstHalfStartDate
         self.secondHalfStartDate = secondHalfStartDate
     }
@@ -118,7 +117,6 @@ extension Match: Mergeable {
         merged.bericht = other.bericht
         merged.$referee.id = other.$referee.id
         merged.$season.id = other.$season.id
-        merged.events = other.events
         merged.firstHalfStartDate = other.firstHalfStartDate
         merged.secondHalfStartDate = other.secondHalfStartDate
         return merged

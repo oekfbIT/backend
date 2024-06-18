@@ -7,6 +7,7 @@
   
 
 import Vapor
+import Fluent
 
 final class SeasonController: RouteCollection {
     let repository: StandardControllerRepository<Season>
@@ -27,12 +28,47 @@ final class SeasonController: RouteCollection {
 
         route.patch(":id", use: repository.updateID)
         route.patch("batch", use: repository.updateBatch)
-        
+        // Add the new route to delete a season with its matches
+        route.delete("matches", ":id", use: deleteSeasonWithMatches)
+        route.get(":id", "matches", use: getSeasonWithMatches)
+
     }
 
     func boot(routes: RoutesBuilder) throws {
         try setupRoutes(on: routes)
     }
+    
+    func deleteSeasonWithMatches(req: Request) -> EventLoopFuture<HTTPStatus> {
+        guard let seasonID = req.parameters.get("id", as: UUID.self) else {
+            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing season ID"))
+        }
+
+        return Season.query(on: req.db)
+            .filter(\.$id == seasonID)
+            .with(\.$matches)
+            .first()
+            .unwrap(or: Abort(.notFound, reason: "Season not found"))
+            .flatMap { season in
+                return season.$matches.query(on: req.db).all().flatMap { matches in
+                    let deleteMatches = matches.delete(on: req.db)
+                    let deleteSeason = season.delete(on: req.db)
+                    return deleteMatches.and(deleteSeason).transform(to: .ok)
+                }
+            }
+    }
+    
+    func getSeasonWithMatches(req: Request) throws -> EventLoopFuture<Season> {
+        guard let seasonID = req.parameters.get("id", as: UUID.self) else {
+            throw Abort(.badRequest)
+        }
+        
+        return Season.query(on: req.db)
+            .filter(\.$id == seasonID)
+            .with(\.$matches)
+            .first()
+            .unwrap(or: Abort(.notFound))
+    }
+
 }
 
 extension Season: Mergeable {

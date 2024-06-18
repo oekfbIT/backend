@@ -1,11 +1,3 @@
-//
-//
-//  Copyright © 2023.
-//  Alon Yakobichvili
-//  All rights reserved.
-//
-  
-
 import Vapor
 import Fluent
 
@@ -31,7 +23,8 @@ final class TeamController: RouteCollection {
         
         route.get(":id", "players", use: getTeamWithPlayers) // Route to get a team with its players
         route.get("withPlayers", use: getAllTeamsWithPlayers) // Route to get all teams with their players
-
+        
+        route.get("search", ":value", use: searchByTeamName) // Route to search by team name
     }
 
     func boot(routes: RoutesBuilder) throws {
@@ -57,18 +50,17 @@ final class TeamController: RouteCollection {
             .with(\.$players)
             .all()
     }
-
     
-    // func getTeamWithPLayers, parameter: teamID
-    // func getteamwithMatches, parameter: teamID
-    // func getTeamInbox, parameter: teamID
-    // func registerPlayer, parameter: player, teamID
-    // func updatePlayerNumber, parameter: playerID
-    // func registerCaptain, parameter: playerID, teamID
-    // func registerTrainer, parameter: trainer, teamID
-    // func getTeamBilling, parameter: teamID
-    
-    
+    // Function to search for a team by name
+    func searchByTeamName(req: Request) throws -> EventLoopFuture<[Team]> {
+        guard let teamName = req.parameters.get("value") else {
+            throw Abort(.badRequest)
+        }
+        
+        return Team.query(on: req.db)
+            .filter(\.$teamName ~~ teamName)
+            .all()
+    }
 }
 
 extension Team: Mergeable {
