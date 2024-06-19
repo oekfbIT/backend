@@ -10,8 +10,8 @@ import Fluent
 import Vapor
 
 enum PlayerEligibility: String, Codable {
-    case Spielberechtigt
-    case Gesperrt
+    case Spielberechtigt = "Spielberechtigt"
+    case Gesperrt = "Gesperrt"
 }
 
 final class Player: Model, Content, Codable {
@@ -20,7 +20,7 @@ final class Player: Model, Content, Codable {
     @ID(custom: FieldKeys.id) var id: UUID?
     @Field(key: FieldKeys.sid) var sid: String
     @Field(key: FieldKeys.image) var image: String
-    @Field(key: FieldKeys.team_oeid) var team_oeid: String
+    @OptionalField(key: FieldKeys.team_oeid) var team_oeid: String?
     @Field(key: FieldKeys.name) var name: String
     @Field(key: FieldKeys.number) var number: String
     @Field(key: FieldKeys.birthday) var birthday: String
@@ -47,7 +47,7 @@ final class Player: Model, Content, Codable {
 
     init() {}
 
-    init(id: UUID? = nil, sid: String, image: String, team_oeid: String, name: String, number: String, birthday: String, teamID: UUID?, nationality: String, position: String, eligibility: PlayerEligibility, registerDate: String) {
+    init(id: UUID? = nil, sid: String, image: String, team_oeid: String?, name: String, number: String, birthday: String, teamID: UUID?, nationality: String, position: String, eligibility: PlayerEligibility, registerDate: String) {
         self.id = id
         self.sid = sid
         self.image = image
@@ -70,7 +70,7 @@ extension PlayerMigration: Migration {
             .field(Player.FieldKeys.id, .uuid, .identifier(auto: true))
             .field(Player.FieldKeys.name, .string, .required)
             .field(Player.FieldKeys.image, .string, .required)
-            .field(Player.FieldKeys.team_oeid, .string, .required)
+            .field(Player.FieldKeys.team_oeid, .string)
             .field(Player.FieldKeys.number, .string, .required)
             .field(Player.FieldKeys.birthday, .string, .required)
             .field(Player.FieldKeys.teamID, .uuid, .required, .references(Team.schema, Team.FieldKeys.id))

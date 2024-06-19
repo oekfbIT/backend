@@ -61,6 +61,7 @@ final class TeamRegistrationController: RouteCollection {
         
         return newRegistration.save(on: req.db).map { _ in
             // Send the welcome email in the background
+            print("Created: ", newRegistration)
             self.sendWelcomeEmailInBackground(req: req, recipient: registrationRequest.primaryContact.email)
             return HTTPStatus.ok
         }.flatMapError { error in

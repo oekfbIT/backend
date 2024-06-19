@@ -30,6 +30,9 @@ final class PlayerController: RouteCollection {
 
         // New route for updating player number
         route.patch(":id", "number", ":number", use: updatePlayerNumber)
+        
+        // New route for searching players by name
+        route.get("name",":search", use: searchByName)
     }
 
     func boot(routes: RoutesBuilder) throws {
@@ -50,7 +53,21 @@ final class PlayerController: RouteCollection {
                 return player.save(on: req.db).map { player }
             }
     }
+
+    // New handler function to search players by name
+    func searchByName(req: Request) -> EventLoopFuture<[Player]> {
+        guard let searchValue = req.parameters.get("search") else {
+            return req.eventLoop.future(error: Abort(.badRequest, reason: "Missing search parameter"))
+        }
+
+        return Player.query(on: req.db)
+            .group(.or) { group in
+                group.filter(\.$name ~~ searchValue)
+            }
+            .all()
+    }
 }
+
 
 extension Player: Mergeable {
     func merge(from other: Player) -> Player {
