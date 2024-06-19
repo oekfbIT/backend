@@ -28,8 +28,8 @@ final class LeagueController: RouteCollection {
         route.patch("batch", use: repository.updateBatch)
         
         // Add the new route for creating a season
-        route.post(":id", "createSeason", use: createSeason)
-        
+        route.post(":id", "createSeason", ":number", use: createSeason)
+
         // Add the new route to get league with seasons
         route.get(":id", "seasons", use: getLeagueWithSeasons)
     }
@@ -39,14 +39,16 @@ final class LeagueController: RouteCollection {
     }
     
     func createSeason(req: Request) -> EventLoopFuture<HTTPStatus> {
-        guard let leagueID = req.parameters.get("id", as: UUID.self) else {
-            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league ID"))
+        guard let leagueID = req.parameters.get("id", as: UUID.self),
+        let numberOfRounds = req.parameters.get("number", as: Int.self) else {
+            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing parameters"))
         }
+
 
         return League.find(leagueID, on: req.db)
             .unwrap(or: Abort(.notFound, reason: "League not found"))
             .flatMap { league in
-                return league.createSeason(db: req.db).map {
+                return league.createSeason(db: req.db, numberOfRounds: numberOfRounds).map {
                     return .ok
                 }
             }
@@ -77,7 +79,7 @@ final class LeagueController: RouteCollection {
 }
 
 extension League {
-    func createSeason(db: Database) -> EventLoopFuture<Void> {
+    func createSeason(db: Database, numberOfRounds: Int) -> EventLoopFuture<Void> {
         guard let leagueID = self.id else {
             return db.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "League ID is required"))
         }
@@ -90,7 +92,7 @@ extension League {
         // Create a new season
         let season = Season(name: seasonName, details: 0)
         season.$league.id = leagueID
-        
+
         return season.save(on: db).flatMap {
             // Fetch all teams in the league
             self.$teams.query(on: db).all().flatMap { teams in
@@ -98,48 +100,52 @@ extension League {
                     return db.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "League must have more than one team"))
                 }
 
-                var matches: [Match] = []
-
-                // Generate the round-robin schedule (each team plays each other twice)
                 let teamCount = teams.count
+
+                // Ensure the number of teams is even
+                guard teamCount % 2 == 0 else {
+                    return db.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "League must have an even number of teams"))
+                }
+
+                var matches: [Match] = []
+                let totalGameDays = (teamCount - 1) * numberOfRounds
                 var gameDay = 1
 
-                for round in 0..<(teamCount - 1) {
-                    for matchIndex in 0..<(teamCount / 2) {
-                        let homeTeamIndex = (round + matchIndex) % (teamCount - 1)
-                        var awayTeamIndex = (teamCount - 1 - matchIndex + round) % (teamCount - 1)
-                        if matchIndex == 0 {
-                            awayTeamIndex = teamCount - 1
+                for round in 0..<numberOfRounds {
+                    for roundIndex in 0..<(teamCount - 1) {
+                        for matchIndex in 0..<(teamCount / 2) {
+                            let homeTeamIndex = (roundIndex + matchIndex) % (teamCount - 1)
+                            var awayTeamIndex = (teamCount - 1 - matchIndex + roundIndex) % (teamCount - 1)
+                            if matchIndex == 0 {
+                                awayTeamIndex = teamCount - 1
+                            }
+
+                            let homeTeam = teams[homeTeamIndex]
+                            let awayTeam = teams[awayTeamIndex]
+
+                            // Create match
+                            let match = Match(
+                                details: MatchDetails(gameday: gameDay, date: nil, stadium: nil),
+                                homeTeamId: homeTeam.id!,
+                                awayTeamId: awayTeam.id!,
+                                score: Score(home: 0, away: 0),
+                                status: .pending
+                            )
+                            match.$season.id = season.id!
+                            matches.append(match)
                         }
-
-                        let homeTeam = teams[homeTeamIndex]
-                        let awayTeam = teams[awayTeamIndex]
-
-                        // Create match
-                        let match = Match(
-                            details: MatchDetails(gameday: gameDay, date: nil, stadium: nil),
-                            homeTeamId: homeTeam.id!,
-                            awayTeamId: awayTeam.id!,
-                            score: Score(home: 0, away: 0),
-                            status: .pending
-                        )
-                        match.$season.id = season.id!
-                        
-                        matches.append(match)
-
-                        // Swap home and away for the second leg
-                        let reverseMatch = Match(
-                            details: MatchDetails(gameday: gameDay + (teamCount / 2), date: nil, stadium: nil),
-                            homeTeamId: awayTeam.id!,
-                            awayTeamId: homeTeam.id!,
-                            score: Score(home: 0, away: 0),
-                            status: .pending
-                        )
-                        reverseMatch.$season.id = season.id!
-                        
-                        matches.append(reverseMatch)
+                        gameDay += 1
+                        if gameDay > totalGameDays {
+                            gameDay = 1
+                        }
                     }
-                    gameDay += 1
+                }
+
+                // Ensure we have the correct number of matches and game days
+                let expectedMatches = (teamCount / 2) * (teamCount - 1) * numberOfRounds
+                print("Expected matches: \(expectedMatches) vs Actual matches: \(matches.count)")
+                guard matches.count == expectedMatches else {
+                    return db.eventLoop.makeFailedFuture(Abort(.internalServerError, reason: "Incorrect match calculation"))
                 }
 
                 // Save all matches to the database
@@ -147,6 +153,5 @@ extension League {
             }
         }
     }
+
 }
-
-

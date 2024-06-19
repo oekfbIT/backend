@@ -32,7 +32,7 @@ final class TeamController: RouteCollection {
     }
     
     // Function to get a team with all its players
-    func getTeamWithPlayers(req: Request) throws -> EventLoopFuture<Team> {
+    func getTeamWithPlayers(req: Request) throws -> EventLoopFuture<Team.Public> {
         guard let teamID = req.parameters.get("id", as: UUID.self) else {
             throw Abort(.badRequest)
         }
@@ -42,15 +42,27 @@ final class TeamController: RouteCollection {
             .with(\.$players)
             .first()
             .unwrap(or: Abort(.notFound))
+            .map { team in
+                var publicTeam = team.asPublic()
+                publicTeam.players = team.players.map { $0.asPublic() }
+                return publicTeam
+            }
     }
 
     // Function to get all teams with their players
-    func getAllTeamsWithPlayers(req: Request) throws -> EventLoopFuture<[Team]> {
+    func getAllTeamsWithPlayers(req: Request) throws -> EventLoopFuture<[Team.Public]> {
         return Team.query(on: req.db)
             .with(\.$players)
             .all()
+            .map { teams in
+                teams.map { team in
+                    var publicTeam = team.asPublic()
+                    publicTeam.players = team.players.map { $0.asPublic() }
+                    return publicTeam
+                }
+            }
     }
-    
+
     // Function to search for a team by name
     func searchByTeamName(req: Request) throws -> EventLoopFuture<[Team]> {
         guard let teamName = req.parameters.get("value") else {

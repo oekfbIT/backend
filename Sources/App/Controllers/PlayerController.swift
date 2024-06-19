@@ -1,10 +1,3 @@
-//
-//
-//  Copyright © 2023.
-//  Alon Yakobichvili
-//  All rights reserved.
-//
-  
 import Vapor
 import Fluent
 
@@ -32,7 +25,10 @@ final class PlayerController: RouteCollection {
         route.patch(":id", "number", ":number", use: updatePlayerNumber)
         
         // New route for searching players by name
-        route.get("name",":search", use: searchByName)
+        route.get("name", ":search", use: searchByName)
+        
+        // New route for getting a normal player with identification
+        route.get("internal", ":id", use: getPlayerWithIdentification)
     }
 
     func boot(routes: RoutesBuilder) throws {
@@ -40,7 +36,7 @@ final class PlayerController: RouteCollection {
     }
 
     // New handler function to update player's number
-    func updatePlayerNumber(req: Request) -> EventLoopFuture<Player> {
+    func updatePlayerNumber(req: Request) -> EventLoopFuture<Player.Public> {
         guard let playerID = req.parameters.get("id", as: UUID.self),
               let newNumber = req.parameters.get("number") else {
             return req.eventLoop.future(error: Abort(.badRequest, reason: "Invalid or missing parameters"))
@@ -50,12 +46,12 @@ final class PlayerController: RouteCollection {
             .unwrap(or: Abort(.notFound))
             .flatMap { player in
                 player.number = newNumber
-                return player.save(on: req.db).map { player }
+                return player.save(on: req.db).map { player.asPublic() }
             }
     }
 
     // New handler function to search players by name
-    func searchByName(req: Request) -> EventLoopFuture<[Player]> {
+    func searchByName(req: Request) -> EventLoopFuture<[Player.Public]> {
         guard let searchValue = req.parameters.get("search") else {
             return req.eventLoop.future(error: Abort(.badRequest, reason: "Missing search parameter"))
         }
@@ -66,9 +62,21 @@ final class PlayerController: RouteCollection {
                 group.filter(\.$sid ~~ searchValue)
             }
             .all()
+            .map { players in
+                players.map { $0.asPublic() }
+            }
+    }
+
+    // New handler function to get a player with identification
+    func getPlayerWithIdentification(req: Request) -> EventLoopFuture<Player> {
+        guard let playerID = req.parameters.get("id", as: UUID.self) else {
+            return req.eventLoop.future(error: Abort(.badRequest, reason: "Invalid or missing parameters"))
+        }
+
+        return Player.find(playerID, on: req.db)
+            .unwrap(or: Abort(.notFound))
     }
 }
-
 
 extension Player: Mergeable {
     func merge(from other: Player) -> Player {
@@ -83,6 +91,8 @@ extension Player: Mergeable {
         merged.position = other.position
         merged.eligibility = other.eligibility
         merged.registerDate = other.registerDate
+        merged.identification = other.identification
+        merged.status = other.status
         return merged
     }
 }

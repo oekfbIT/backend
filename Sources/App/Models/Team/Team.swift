@@ -14,7 +14,6 @@ struct Trainer: Codable {
     let imageURL: String?
 }
 
-
 final class Team: Model, Content {
     static let schema = "teams"
 
@@ -36,8 +35,6 @@ final class Team: Model, Content {
     @Field(key: FieldKeys.trikot) var trikot: Trikot
     @OptionalField(key: FieldKeys.balance) var balance: Double?
     
-    // Inbox
-    
     struct FieldKeys {
         static var id: FieldKey { "id" }
         static var sid: FieldKey { "sid" }
@@ -57,11 +54,10 @@ final class Team: Model, Content {
         static var totalGoals: FieldKey { "totalGoals" }
         static var trikot: FieldKey { "trikot" }
         static var balance: FieldKey { "balance" }
-    
-      }
-    
+    }
+
     init() {}
-    
+
     init(id: UUID? = nil, sid: String, userId: UUID?, leagueId: UUID?, leagueCode: String?, points: Int, coverimg: String, logo: String, teamName: String, foundationYear: String, membershipSince: String, averageAge: String, coach: Trainer? = nil, captain: String? = nil, trikot: Trikot, balance: Double? = nil) {
         self.id = id
         self.sid = sid
@@ -80,7 +76,31 @@ final class Team: Model, Content {
         self.trikot = trikot
         self.balance = balance
     }
+    
+    struct Public: Codable, Content {
+        var id: UUID?
+        var sid: String?
+        var teamName: String
+        var foundationYear: String
+        var membershipSince: String
+        var averageAge: String
+        var players: [Player.Public]
+    }
+
+    func asPublic() -> Public {
+        return Public(
+            id: self.id,
+            sid: self.sid,
+            teamName: self.teamName,
+            foundationYear: self.foundationYear,
+            membershipSince: self.membershipSince,
+            averageAge: self.averageAge,
+            players: []
+        )
+    }
 }
+
+
 
 
 // Team Migration

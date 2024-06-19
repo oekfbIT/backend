@@ -189,7 +189,7 @@ final class ScraperDetailController: RouteCollection {
                 nationality: nationality,
                 position: "field", // Assuming 'field' as the default position, adjust as necessary
                 eligibility: eligibility,
-                registerDate: registerDate
+                registerDate: registerDate, identification: nil, status: true
             )
         }
     }
@@ -257,7 +257,9 @@ final class ScraperDetailController: RouteCollection {
                 nationality: nationality  ?? "N/A",
                 position: "field", // Assuming 'field' as the default position, adjust as necessary
                 eligibility: eligibility,
-                registerDate: registerDate  ?? "N/A"
+                registerDate: registerDate  ?? "N/A",
+                identification: nil,
+                status: true
             )
             
             player.save(on: req.db).flatMapThrowing {

@@ -188,7 +188,9 @@ final class ScraperController {
                     nationality: nationality,
                     position: "field", // Assuming 'field' as the default position, adjust as necessary
                     eligibility: eligibility,
-                    registerDate: registerDate
+                    registerDate: registerDate, 
+                    identification: nil,
+                    status: true
                 )
                 
                 print("Saving player: \(name ?? "Unknown Player")")
