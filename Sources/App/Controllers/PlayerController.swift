@@ -63,6 +63,7 @@ final class PlayerController: RouteCollection {
         return Player.query(on: req.db)
             .group(.or) { group in
                 group.filter(\.$name ~~ searchValue)
+                group.filter(\.$sid ~~ searchValue)
             }
             .all()
     }

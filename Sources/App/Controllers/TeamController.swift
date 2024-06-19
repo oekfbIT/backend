@@ -58,7 +58,10 @@ final class TeamController: RouteCollection {
         }
         
         return Team.query(on: req.db)
-            .filter(\.$teamName ~~ teamName)
+            .group(.or) { group in
+                group.filter(\.$teamName ~~ teamName)
+                group.filter(\.$sid ~~ teamName)
+            }
             .all()
     }
 }
