@@ -349,7 +349,7 @@ final class ScraperDetailController: RouteCollection {
                             coach: coach,
                             captain: self.baseUrl + captainImageURL,
                             trikot: trikot,
-                            balance: 0.0)
+                            balance: 0.0, referCode: String.randomString(length: 6))
             
             return (team, playerLinks)
         }.flatMap { (team, playerLinks) in

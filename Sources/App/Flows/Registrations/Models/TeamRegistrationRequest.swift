@@ -19,6 +19,7 @@ struct TeamRegistrationRequest: Content, Codable, LosslessStringConvertible {
     let type: ClubType
     let acceptedAGB: Bool
     let referCode: String
+    let initialPassword: String
 
     // Custom initializer
     init(
@@ -29,7 +30,8 @@ struct TeamRegistrationRequest: Content, Codable, LosslessStringConvertible {
         bundesland: Bundesland,
         type: ClubType,
         acceptedAGB: Bool,
-        referCode: String
+        referCode: String,
+        initialPassword: String
     ) {
         self.primaryContact = primaryContact
         self.secondaryContact = secondaryContact
@@ -39,6 +41,7 @@ struct TeamRegistrationRequest: Content, Codable, LosslessStringConvertible {
         self.type = type
         self.acceptedAGB = acceptedAGB
         self.referCode = referCode
+        self.initialPassword = initialPassword
     }
     
     // Implementing LosslessStringConvertible

@@ -22,7 +22,7 @@ final class TeamRegistration: Model, Content, Mergeable {
     @Field(key: FieldKeys.teamName) var teamName: String
     @Field(key: FieldKeys.status) var status: TeamRegistrationStatus
     @Field(key: FieldKeys.bundesland) var bundesland: Bundesland
-    @Field(key: FieldKeys.initialPassword) var initialPassword: String
+    @Field(key: FieldKeys.initialPassword) var initialPassword: String?
     @OptionalField(key: FieldKeys.refereerLink) var refereerLink: String?
     @OptionalField(key: FieldKeys.assignedLeague) var assignedLeague: UUID?
     @OptionalField(key: FieldKeys.customerSignedContract) var customerSignedContract: String? // URL
@@ -55,7 +55,7 @@ final class TeamRegistration: Model, Content, Mergeable {
     
     init() {}
     
-    init(id: UUID? = nil, primary: ContactPerson? = nil, secondary: ContactPerson? = nil, verein: String? = nil, teamName: String, status: TeamRegistrationStatus, bundesland: Bundesland, refereerLink: String? = nil, assignedLeague: UUID? = nil, customerSignedContract: String? = nil, adminSignedContract: String? = nil, paidAmount: Double? = nil, user: UUID? = nil, team: UUID? = nil, isWelcomeEmailSent: Bool? = nil, isLoginDataSent: Bool? = nil) {
+    init(id: UUID? = nil, primary: ContactPerson? = nil, secondary: ContactPerson? = nil, verein: String? = nil, teamName: String, status: TeamRegistrationStatus, bundesland: Bundesland, initialPassword: String? , refereerLink: String? = nil, assignedLeague: UUID? = nil, customerSignedContract: String? = nil, adminSignedContract: String? = nil, paidAmount: Double? = nil, user: UUID? = nil, team: UUID? = nil, isWelcomeEmailSent: Bool? = nil, isLoginDataSent: Bool? = nil) {
         self.id = id
         self.primary = primary
         self.secondary = secondary
@@ -63,7 +63,7 @@ final class TeamRegistration: Model, Content, Mergeable {
         self.teamName = teamName
         self.status = status 
         self.bundesland = bundesland
-        self.initialPassword = String.randomString(length: 6)
+        self.initialPassword = initialPassword
         self.refereerLink = refereerLink
         self.assignedLeague = assignedLeague
         self.customerSignedContract = customerSignedContract
@@ -122,6 +122,7 @@ extension TeamRegistration {
         merged.id = other.id
         merged.primary = other.primary
         merged.secondary = other.secondary
+        merged.initialPassword = initialPassword
         merged.verein = other.verein
         merged.teamName = other.teamName
         merged.bundesland = other.bundesland

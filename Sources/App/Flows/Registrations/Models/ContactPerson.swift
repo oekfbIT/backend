@@ -9,6 +9,7 @@ import Foundation
 
 struct ContactPerson: Codable, LosslessStringConvertible {
     let first, last, phone, email: String
+    let identification: String?
     
     init?(_ description: String) {
         guard let data = description.data(using: .utf8),

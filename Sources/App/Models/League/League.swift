@@ -15,6 +15,7 @@ final class League: Model, Content, Codable {
     @ID(custom: FieldKeys.id) var id: UUID?
     @OptionalField(key: FieldKeys.state) var state: Bundesland?
     @OptionalField(key: FieldKeys.code) var code: String?
+    @OptionalField(key: FieldKeys.hourly) var hourly: Double?
     @Field(key: FieldKeys.name) var name: String
     @Children(for: \.$league) var teams: [Team]
     @Children(for: \.$league) var seasons: [Season]
@@ -22,6 +23,7 @@ final class League: Model, Content, Codable {
     struct FieldKeys {
         static var id: FieldKey { "id" }
         static var state: FieldKey { "state" }
+        static var hourly: FieldKey { "hourly" }
         static var code: FieldKey { "code" }
         static var name: FieldKey { "name" }
     }
@@ -41,6 +43,7 @@ extension League: Mergeable {
         var merged = self
         merged.id = other.id
         merged.state = other.state
+        merged.hourly = other.hourly
         merged.code = other.code
         merged.name = other.name
         return merged

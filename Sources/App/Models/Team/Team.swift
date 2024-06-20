@@ -26,14 +26,15 @@ final class Team: Model, Content {
     @Field(key: FieldKeys.logo) var logo: String
     @OptionalField(key: FieldKeys.coverimg) var coverimg: String?
     @Field(key: FieldKeys.teamName) var teamName: String
-    @Field(key: FieldKeys.foundationYear) var foundationYear: String
-    @Field(key: FieldKeys.membershipSince) var membershipSince: String
+    @OptionalField(key: FieldKeys.foundationYear) var foundationYear: String?
+    @OptionalField(key: FieldKeys.membershipSince) var membershipSince: String?
     @Field(key: FieldKeys.averageAge) var averageAge: String
     @OptionalField(key: FieldKeys.coach) var coach: Trainer?
     @OptionalField(key: FieldKeys.captain) var captain: String?
     @Children(for: \.$team) var players: [Player]
     @Field(key: FieldKeys.trikot) var trikot: Trikot
     @OptionalField(key: FieldKeys.balance) var balance: Double?
+    @OptionalField(key: FieldKeys.referCode) var referCode: String?
     
     struct FieldKeys {
         static var id: FieldKey { "id" }
@@ -54,11 +55,12 @@ final class Team: Model, Content {
         static var totalGoals: FieldKey { "totalGoals" }
         static var trikot: FieldKey { "trikot" }
         static var balance: FieldKey { "balance" }
+        static var referCode: FieldKey { "referCode" }
     }
 
     init() {}
 
-    init(id: UUID? = nil, sid: String, userId: UUID?, leagueId: UUID?, leagueCode: String?, points: Int, coverimg: String, logo: String, teamName: String, foundationYear: String, membershipSince: String, averageAge: String, coach: Trainer? = nil, captain: String? = nil, trikot: Trikot, balance: Double? = nil) {
+    init(id: UUID? = nil, sid: String, userId: UUID?, leagueId: UUID?, leagueCode: String?, points: Int, coverimg: String, logo: String, teamName: String, foundationYear: String?, membershipSince: String?, averageAge: String?, coach: Trainer? = nil, captain: String? = nil, trikot: Trikot, balance: Double? = nil, referCode: String? = String.randomString(length: 6).uppercased()) {
         self.id = id
         self.sid = sid
         self.$user.id = UUID(uuidString: "96D72F77-5EC8-4802-A8BA-E9928E362E2A")
@@ -70,20 +72,22 @@ final class Team: Model, Content {
         self.teamName = teamName
         self.foundationYear = foundationYear
         self.membershipSince = membershipSince
-        self.averageAge = averageAge
+        self.averageAge = averageAge ?? "0"
         self.coach = coach
         self.captain = captain
         self.trikot = trikot
         self.balance = balance
+        self.referCode = referCode
     }
     
     struct Public: Codable, Content {
         var id: UUID?
         var sid: String?
         var teamName: String
-        var foundationYear: String
-        var membershipSince: String
-        var averageAge: String
+        var foundationYear: String?
+        var membershipSince: String?
+        var averageAge: String?
+        var referCode: String
         var players: [Player.Public]
     }
 
@@ -95,6 +99,7 @@ final class Team: Model, Content {
             foundationYear: self.foundationYear,
             membershipSince: self.membershipSince,
             averageAge: self.averageAge,
+            referCode: self.referCode ?? String.randomString(length: 6),
             players: []
         )
     }

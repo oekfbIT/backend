@@ -92,11 +92,69 @@ final class EmailController {
         // Print the SMTP configuration for debugging
         print("SMTP Configuration: \(req.application.smtp.configuration)")
 
+        // Prepare the email content in German
+        let emailBody = """
+        Sehr geehrter Mannschaftsleiter,
+
+        Herzlich Willkommen bei der Österreichischen Kleinfeld Fußball Bund. Bitte senden Sie uns den Vertrag im Anhang ausgefüllt zurück.
+        Wir benötigen noch folgende Unterlagen:
+
+        · Ausweiskopie beider Personen am Vertrag
+        · Logo des Teams
+        · Bilder der Trikots (Heim und Auswärts komplett inklusive Stutzen)
+
+        Falls Sie Trikots benötigen und noch keine haben, können Sie sich über die Angebote für ÖKFB Mannschaften hier erkundigen: www.kaddur.at
+
+        Wir freuen uns über Ihre baldige Rückmeldung und verbleiben.
+        """
+
         let email = try Email(
             from: EmailAddress(address: "admin@oekfb.eu", name: "Admin"),
             to: [EmailAddress(address: recipient)],
             subject: "OEKFB Anmeldung - Willkommen",
-            body: baseConfig.generateWelcomeHTML()
+            body: emailBody
+        )
+
+        return req.smtp.send(email).flatMapThrowing { result in
+            switch result {
+            case .success:
+                return .ok
+            case .failure(let error):
+                print("Email failed to send: \(error)")
+                throw Abort(.internalServerError, reason: "Failed to send email")
+            }
+        }
+    }
+    
+    
+    func sendPaymentInstruction(req: Request, recipient: String, due: Double) throws -> EventLoopFuture<HTTPStatus> {
+        // Apply the SMTP configuration
+        req.application.smtp.configuration = smtpConfig
+
+        // Print the SMTP configuration for debugging
+        print("SMTP Configuration: \(req.application.smtp.configuration)")
+
+        // Prepare the email content in German
+        let emailBody = """
+        Sehr geehrter Mannschaftsleiter,
+
+        Herzlich Willkommen bei der Österreichischen Kleinfeld Fußball Bund. Bitte senden Sie uns den Vertrag im Anhang ausgefüllt zurück.
+        Wir benötigen noch folgende Unterlagen:
+
+        · Ausweiskopie beider Personen am Vertrag
+        · Logo des Teams
+        · Bilder der Trikots (Heim und Auswärts komplett inklusive Stutzen)
+
+        Falls Sie Trikots benötigen und noch keine haben, können Sie sich über die Angebote für ÖKFB Mannschaften hier erkundigen: www.kaddur.at
+
+        Wir freuen uns über Ihre baldige Rückmeldung und verbleiben.
+        """
+
+        let email = try Email(
+            from: EmailAddress(address: "admin@oekfb.eu", name: "Admin"),
+            to: [EmailAddress(address: recipient)],
+            subject: "OEKFB Anmeldung - Willkommen",
+            body: emailBody
         )
 
         return req.smtp.send(email).flatMapThrowing { result in

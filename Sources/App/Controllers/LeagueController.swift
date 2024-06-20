@@ -32,6 +32,8 @@ final class LeagueController: RouteCollection {
 
         // Add the new route to get league with seasons
         route.get(":id", "seasons", use: getLeagueWithSeasons)
+        route.get(":id", "teamCount", use: getNumberOfTeams)
+
     }
 
     func boot(routes: RoutesBuilder) throws {
@@ -69,7 +71,18 @@ final class LeagueController: RouteCollection {
                 return LeagueWithSeasons(league: league, seasons: league.seasons)
             }
     }
-    
+        
+    func getNumberOfTeams(req: Request) -> EventLoopFuture<Int> {
+        guard let leagueID = req.parameters.get("id", as: UUID.self) else {
+            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league ID"))
+        }
+
+        return League.find(leagueID, on: req.db)
+            .unwrap(or: Abort(.notFound, reason: "League not found"))
+            .flatMap { league in
+                league.$teams.query(on: req.db).count()
+            }
+    }
 
     struct LeagueWithSeasons: Content {
         var league: League

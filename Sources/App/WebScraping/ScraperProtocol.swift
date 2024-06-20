@@ -101,7 +101,7 @@ final class ScraperController {
                         coach: coach,
                         captain: self.baseUrl + captainImageURL,
                         trikot: trikot,
-                        balance: 0.0
+                        balance: 0.0, referCode: String.randomString(length: 6)
                     )
                     
                     print("Saving team: \(teamName)")

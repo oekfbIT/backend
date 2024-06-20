@@ -51,7 +51,7 @@ final class TeamRegistrationController: RouteCollection {
         newRegistration.status = .draft
         newRegistration.paidAmount = nil
         newRegistration.bundesland = registrationRequest.bundesland
-        newRegistration.initialPassword = String.randomString(length: 8)
+        newRegistration.initialPassword = registrationRequest.initialPassword ?? String.randomString(length: 8)
         newRegistration.refereerLink = registrationRequest.referCode
         newRegistration.customerSignedContract = nil
         newRegistration.adminSignedContract = nil
@@ -106,7 +106,6 @@ final class TeamRegistrationController: RouteCollection {
         }
     }
     
-    // Assign League to TeamRegistration
     func assignLeague(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let registrationID = try req.parameters.require("id", as: UUID.self)
         let leagueID = try req.parameters.require("leagueid", as: UUID.self)
@@ -117,8 +116,19 @@ final class TeamRegistrationController: RouteCollection {
                 return League.find(leagueID, on: req.db)
                     .unwrap(or: Abort(.notFound))
                     .flatMap { league in
-                        registration.assignedLeague = leagueID
-                        return registration.save(on: req.db).transform(to: .ok)
+                        return Team.query(on: req.db)
+                            .filter(\.$league.$id == leagueID)
+                            .count()
+                            .flatMap { numberOfTeams in
+                                let topayAmount = (numberOfTeams - 1) * 70
+                                registration.assignedLeague = leagueID
+                                if let currentPaidAmount = registration.paidAmount {
+                                    registration.paidAmount = currentPaidAmount - Double(topayAmount)
+                                } else {
+                                    registration.paidAmount = -Double(topayAmount)
+                                }
+                                return registration.save(on: req.db).transform(to: .ok)
+                            }
                     }
             }
     }
@@ -129,7 +139,11 @@ final class TeamRegistrationController: RouteCollection {
         let id = try req.parameters.require("id", as: UUID.self)
         let paymentRequest = try req.content.decode(UpdatePaymentRequest.self)
         return TeamRegistration.find(id, on: req.db).unwrap(or: Abort(.notFound)).flatMap { registration in
-            registration.paidAmount = paymentRequest.paidAmount
+            if let currentPaidAmount = registration.paidAmount {
+                registration.paidAmount = currentPaidAmount + paymentRequest.paidAmount
+            } else {
+                registration.paidAmount = paymentRequest.paidAmount
+            }
             return registration.save(on: req.db).transform(to: .ok)
         }
     }
@@ -165,7 +179,7 @@ final class TeamRegistrationController: RouteCollection {
                         membershipSince: "",
                         averageAge: "",
                         trikot: Trikot(home: Dress(image: "", color: .dark),
-                                       away: Dress(image: "", color: .light))
+                                       away: Dress(image: "", color: .light)), referCode: registration.refereerLink
                     )
 
                     // MARK: SEND EMAIL WITH THE LOGIN DATA
