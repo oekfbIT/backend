@@ -21,6 +21,7 @@ func routes(_ app: Application) throws {
         MatchEventController(path: "events"),
         RefereeController(path: "referees"),
         TeamRegistrationController(path: "registrations"),
+        ConversationController(path: "chat"),
         ScraperDetailController()
     ]
     

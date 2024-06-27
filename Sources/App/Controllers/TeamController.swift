@@ -21,10 +21,13 @@ final class TeamController: RouteCollection {
         route.patch(":id", use: repository.updateID)
         route.patch("batch", use: repository.updateBatch)
         
-        route.get(":id", "players", use: getTeamWithPlayers) // Route to get a team with its players
-        route.get("withPlayers", use: getAllTeamsWithPlayers) // Route to get all teams with their players
+        route.get(":id", "players", use: getTeamWithPlayers)
+        route.get("withPlayers", use: getAllTeamsWithPlayers)
         
-        route.get("search", ":value", use: searchByTeamName) // Route to search by team name
+        route.get("search", ":value", use: searchByTeamName)
+        
+        route.get(":id", "topup", ":amount", use: topUpBalance)
+        route.post(":id", "league", ":leagueID", use: assignNewLeague) 
     }
 
     func boot(routes: RoutesBuilder) throws {
@@ -76,6 +79,41 @@ final class TeamController: RouteCollection {
             }
             .all()
     }
+    
+    // Function to top up the balance
+    func topUpBalance(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        guard let teamID = req.parameters.get("id", as: UUID.self),
+              let amount = req.parameters.get("amount", as: Double.self) else {
+            throw Abort(.badRequest)
+        }
+        
+        return Team.find(teamID, on: req.db)
+            .unwrap(or: Abort(.notFound))
+            .flatMap { team in
+                team.balance = (team.balance ?? 0) + amount
+                return team.save(on: req.db).transform(to: .ok)
+            }
+    }
+
+    // Function to assign a new league
+    func assignNewLeague(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        guard let teamID = req.parameters.get("id", as: UUID.self),
+              let leagueID = req.parameters.get("leagueID", as: UUID.self) else {
+            throw Abort(.badRequest)
+        }
+        
+        return League.find(leagueID, on: req.db)
+            .unwrap(or: Abort(.notFound))
+            .flatMap { league in
+                return Team.find(teamID, on: req.db)
+                    .unwrap(or: Abort(.notFound))
+                    .flatMap { team in
+                        team.$league.id = leagueID
+                        return team.save(on: req.db).transform(to: .ok)
+                    }
+            }
+    }
+
 }
 
 extension Team: Mergeable {
