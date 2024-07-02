@@ -35,7 +35,7 @@ public func configure(_ app: Application) throws {
     app.passwords.use(.bcrypt)
 
     // Configure multiple allowed origins
-    let allowedOrigins = ["http://localhost:3000", "http://165.232.91.105:3000", "http://84.115.221.22", "http://84.115.221.22:3000"]
+    let allowedOrigins: [String] = ["http://localhost:3000", "https://admin.oekfb.eu", "https://oekfb.eu", "https://team.oekfb.eu", "https://ref.oekfb.eu", "http://165.232.91.105:3000", "http://84.115.221.22", "http://84.115.221.22:3000"]
 
     // CORS configuration
     let corsConfiguration = CORSMiddleware.Configuration(
