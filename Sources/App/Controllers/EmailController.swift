@@ -9,6 +9,8 @@ import Vapor
 import Smtp
 import NIO
 
+let vertragLink = "https://firebasestorage.googleapis.com/v0/b/oekfbbucket.appspot.com/o/adminfiles%2FOEKFB%20Anmelde%20Vertrag.pdf?alt=media&token=59cb8260-db03-488d-9a8c-a2e17e81f54f"
+
 final class EmailController {
     
     let baseConfig = BaseTemplate(logoUrl: "",
@@ -85,34 +87,41 @@ final class EmailController {
         }
     }
     
-    func sendWelcomeMail(req: Request, recipient: String) throws -> EventLoopFuture<HTTPStatus> {
+    func sendWelcomeMail(req: Request, recipient: String, registration: TeamRegistration?) throws -> EventLoopFuture<HTTPStatus> {
         // Apply the SMTP configuration
         req.application.smtp.configuration = smtpConfig
 
         // Print the SMTP configuration for debugging
         print("SMTP Configuration: \(req.application.smtp.configuration)")
 
-        // Prepare the email content in German
         let emailBody = """
-        Sehr geehrter Mannschaftsleiter,
+        <html>
+        <body>
+        <p>Sehr geehrter Mannschaftsleiter,</p>
 
-        Herzlich Willkommen bei der Österreichischen Kleinfeld Fußball Bund. Bitte senden Sie uns den Vertrag im Anhang ausgefüllt zurück.
-        Wir benötigen noch folgende Unterlagen:
+        <p>Herzlich Willkommen bei der Österreichischen Kleinfeld Fußball Bund. Bitte senden Sie uns den Vertrag im Anhang ausgefüllt zurück.
+        Wir benötigen noch folgende Unterlagen:</p>
 
-        · Ausweiskopie beider Personen am Vertrag
-        · Logo des Teams
-        · Bilder der Trikots (Heim und Auswärts komplett inklusive Stutzen)
+        <ul>
+          <li>Ausweiskopie beider Personen am Vertrag (<a href="\(vertragLink)" style="display: inline-block; padding: 10px 20px; font-size: 16px; color: white; background-color: #007bff; text-decoration: none; border-radius: 5px;">Vertrag Downloaden</a>)</li>
+          <li>Logo des Teams</li>
+          <li>Bilder der Trikots (Heim und Auswärts komplett inklusive Stutzen)</li>
+          <li>Sie können diese Dokumente über diesen link Hochladen (<a href="https://oekfb.eu/team/upload\(registration?.id)" style="display: inline-block; padding: 10px 20px; font-size: 16px; color: white; background-color: #007bff; text-decoration: none; border-radius: 5px;">Upload Page</a>)</li>
+        </ul>
 
-        Falls Sie Trikots benötigen und noch keine haben, können Sie sich über die Angebote für ÖKFB Mannschaften hier erkundigen: www.kaddur.at
+        <p>Falls Sie Trikots benötigen und noch keine haben, können Sie sich über die Angebote für ÖKFB Mannschaften hier erkundigen: <a href="https://www.kaddur.at">www.kaddur.at</a></p>
 
-        Wir freuen uns über Ihre baldige Rückmeldung und verbleiben.
+        <p>Wir freuen uns über Ihre baldige Rückmeldung und verbleiben.</p>
+        </body>
+        </html>
         """
 
         let email = try Email(
             from: EmailAddress(address: "admin@oekfb.eu", name: "Admin"),
             to: [EmailAddress(address: recipient)],
             subject: "OEKFB Anmeldung - Willkommen",
-            body: emailBody
+            body: emailBody,
+            isBodyHtml: true
         )
 
         return req.smtp.send(email).flatMapThrowing { result in
@@ -125,6 +134,7 @@ final class EmailController {
             }
         }
     }
+
     
     
     func sendPaymentInstruction(req: Request, recipient: String, due: Double) throws -> EventLoopFuture<HTTPStatus> {

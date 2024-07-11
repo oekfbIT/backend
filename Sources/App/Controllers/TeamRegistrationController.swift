@@ -62,7 +62,7 @@ final class TeamRegistrationController: RouteCollection {
         return newRegistration.save(on: req.db).map { _ in
             // Send the welcome email in the background
             print("Created: ", newRegistration)
-            self.sendWelcomeEmailInBackground(req: req, recipient: registrationRequest.primaryContact.email)
+            self.sendWelcomeEmailInBackground(req: req, recipient: registrationRequest.primaryContact.email, registration: newRegistration)
             return HTTPStatus.ok
         }.flatMapError { error in
             return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid request"))
@@ -70,11 +70,11 @@ final class TeamRegistrationController: RouteCollection {
     }
 
     // Background email sending function
-    private func sendWelcomeEmailInBackground(req: Request, recipient: String) {
+    private func sendWelcomeEmailInBackground(req: Request, recipient: String, registration: TeamRegistration?) {
         // Run the email sending on the request's event loop
         req.eventLoop.execute {
             do {
-                try emailController.sendWelcomeMail(req: req, recipient: recipient).whenComplete { result in
+                try emailController.sendWelcomeMail(req: req, recipient: recipient, registration: registration).whenComplete { result in
                     switch result {
                     case .success:
                         print("Welcome email sent successfully to \(recipient)")
