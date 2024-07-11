@@ -90,7 +90,10 @@ final class EmailController {
     func sendWelcomeMail(req: Request, recipient: String, registration: TeamRegistration?) throws -> EventLoopFuture<HTTPStatus> {
         // Apply the SMTP configuration
         req.application.smtp.configuration = smtpConfig
+        guard let registrationID = registration?.id else {
+            throw Abort(.notFound)
 
+        }
         // Print the SMTP configuration for debugging
         print("SMTP Configuration: \(req.application.smtp.configuration)")
 
@@ -103,10 +106,10 @@ final class EmailController {
         Wir benötigen noch folgende Unterlagen:</p>
 
         <ul>
-          <li>Ausweiskopie beider Personen am Vertrag (<a href="\(vertragLink)" style="display: inline-block; padding: 10px 20px; font-size: 16px; color: white; background-color: #007bff; text-decoration: none; border-radius: 5px;">Vertrag Downloaden</a>)</li>
+          <li>Ausweiskopie beider Personen am Vertrag (<a href="\(vertragLink)" style="font-size: 16px; color: #007bff; text-decoration: none;">Vertrag Downloaden</a>)</li>
           <li>Logo des Teams</li>
           <li>Bilder der Trikots (Heim und Auswärts komplett inklusive Stutzen)</li>
-          <li>Sie können diese Dokumente über diesen link Hochladen (<a href="https://oekfb.eu/team/upload\(registration?.id)" style="display: inline-block; padding: 10px 20px; font-size: 16px; color: white; background-color: #007bff; text-decoration: none; border-radius: 5px;">Upload Page</a>)</li>
+          <li>Sie können diese Dokumente über diesen link Hochladen (<a href="https://oekfb.eu/team/upload/\(registrationID)" style="font-size: 16px; color: #007bff; text-decoration: none;">Upload Page</a>)</li>
         </ul>
 
         <p>Falls Sie Trikots benötigen und noch keine haben, können Sie sich über die Angebote für ÖKFB Mannschaften hier erkundigen: <a href="https://www.kaddur.at">www.kaddur.at</a></p>
