@@ -9,7 +9,7 @@ import Fluent
 import Vapor
 
 enum TeamRegistrationStatus: String, Codable {
-    case draft, rejected, approved, paid, teamCustomization, completed
+    case draft, verified, rejected, approved, paid, teamCustomization, completed
 }
 
 final class TeamRegistration: Model, Content, Mergeable {
