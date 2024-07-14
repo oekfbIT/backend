@@ -22,7 +22,7 @@ final class ScraperController {
                 let teamElements: Elements = try doc.select("div.stat_name a[href^=\"?action=showTeam&data=\"]")
                 let teamLinks: [String] = try teamElements.map { try $0.attr("href") }
                 
-                let league = League(state: .auszuwerten, code: leagueId, name: leagueName)
+                let league = League(state: .auszuwerten, teamcount: teamLinks.count, code: leagueId, name: leagueName)
                 
                 print("Saving league: \(leagueName)")
                 

@@ -16,6 +16,7 @@ final class League: Model, Content, Codable {
     @OptionalField(key: FieldKeys.state) var state: Bundesland?
     @OptionalField(key: FieldKeys.code) var code: String?
     @OptionalField(key: FieldKeys.hourly) var hourly: Double?
+    @OptionalField(key: FieldKeys.teamcount) var teamcount: Int?
     @Field(key: FieldKeys.name) var name: String
     @Children(for: \.$league) var teams: [Team]
     @Children(for: \.$league) var seasons: [Season]
@@ -24,17 +25,19 @@ final class League: Model, Content, Codable {
         static var id: FieldKey { "id" }
         static var state: FieldKey { "state" }
         static var hourly: FieldKey { "hourly" }
+        static var teamcount: FieldKey { "teamcount" }
         static var code: FieldKey { "code" }
         static var name: FieldKey { "name" }
     }
 
     init() {}
 
-    init(id: UUID? = nil, state: Bundesland?, code: String, name: String) {
+    init(id: UUID? = nil, state: Bundesland?, teamcount: Int?, code: String, name: String) {
         self.id = id
         self.state = state
         self.code = code
         self.name = name
+        self.teamcount = teamcount ?? 14
     }
 }
 
@@ -46,6 +49,7 @@ extension League: Mergeable {
         merged.hourly = other.hourly
         merged.code = other.code
         merged.name = other.name
+        merged.teamcount = other.teamcount
         return merged
     }
 }
@@ -58,7 +62,8 @@ extension LeagueMigration: Migration {
             .field(League.FieldKeys.id, .uuid, .identifier(auto: true))
             .field(League.FieldKeys.state, .string, .required)
             .field(League.FieldKeys.code, .string)
-            .field(League.FieldKeys.name, .string, .required)
+            .field(League.FieldKeys.hourly, .double)
+            .field(League.FieldKeys.teamcount, .int)
             .create()
     }
 
