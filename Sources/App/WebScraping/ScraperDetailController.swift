@@ -88,6 +88,7 @@ final class ScraperDetailController: RouteCollection {
             // Construct the League object
             let league = League(
                 state: .auszuwerten,
+                teamcount: 14,
                 code: String(id),
                 name: leagueName
             )
