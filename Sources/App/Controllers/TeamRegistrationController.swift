@@ -123,9 +123,31 @@ final class TeamRegistrationController: RouteCollection {
                         } else {
                             registration.paidAmount = -Double(topayAmount)
                         }
+                        
+                        let primaryContactEmail = registration.primary?.email
+                        self.sendPaymentInstructionsInBackground(req: req, recipient: primaryContactEmail ?? "", registration: registration)
                         return registration.save(on: req.db).transform(to: .ok)
                     }
             }
+    }
+
+    // Background email sending function
+    private func sendPaymentInstructionsInBackground(req: Request, recipient: String, registration: TeamRegistration) {
+        // Run the email sending on the request's event loop
+        req.eventLoop.execute {
+            do {
+                try emailController.sendPaymentMail(req: req, recipient: recipient, registration: registration).whenComplete { result in
+                    switch result {
+                    case .success:
+                        print("Payment instructions email sent successfully to \(recipient)")
+                    case .failure(let error):
+                        print("Failed to send payment instructions email to \(recipient): \(error)")
+                    }
+                }
+            } catch {
+                print("Failed to initiate sending payment instructions email to \(recipient): \(error)")
+            }
+        }
     }
 
 

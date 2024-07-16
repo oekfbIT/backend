@@ -27,6 +27,7 @@ final class TeamRegistration: Model, Content, Mergeable {
     @OptionalField(key: FieldKeys.assignedLeague) var assignedLeague: UUID?
     @OptionalField(key: FieldKeys.customerSignedContract) var customerSignedContract: String? // URL
     @OptionalField(key: FieldKeys.adminSignedContract) var adminSignedContract: String? // URL
+    @OptionalField(key: FieldKeys.teamLogo) var teamLogo: String? // URL
     @OptionalField(key: FieldKeys.paidAmount) var paidAmount: Double?
     @OptionalField(key: FieldKeys.user) var user: UUID?
     @OptionalField(key: FieldKeys.team) var team: UUID?
@@ -49,13 +50,14 @@ final class TeamRegistration: Model, Content, Mergeable {
         static var paidAmount: FieldKey { "paidAmount" }
         static var user: FieldKey { "user" }
         static var team: FieldKey { "team" }
+        static var teamLogo: FieldKey { "teamLogo" }
         static var isWelcomeEmailSent: FieldKey { "isWelcomeEmailSent" }
         static var isLoginDataSent: FieldKey { "isLoginDataSent" }
     }
     
     init() {}
     
-    init(id: UUID? = nil, primary: ContactPerson? = nil, secondary: ContactPerson? = nil, verein: String? = nil, teamName: String, status: TeamRegistrationStatus, bundesland: Bundesland, initialPassword: String? , refereerLink: String? = nil, assignedLeague: UUID? = nil, customerSignedContract: String? = nil, adminSignedContract: String? = nil, paidAmount: Double? = nil, user: UUID? = nil, team: UUID? = nil, isWelcomeEmailSent: Bool? = nil, isLoginDataSent: Bool? = nil) {
+    init(id: UUID? = nil, primary: ContactPerson? = nil, secondary: ContactPerson? = nil, verein: String? = nil, teamName: String, status: TeamRegistrationStatus, bundesland: Bundesland, initialPassword: String? , refereerLink: String? = nil, assignedLeague: UUID? = nil, customerSignedContract: String? = nil, adminSignedContract: String? = nil, teamLogo: String?, paidAmount: Double? = nil, user: UUID? = nil, team: UUID? = nil, isWelcomeEmailSent: Bool? = nil, isLoginDataSent: Bool? = nil) {
         self.id = id
         self.primary = primary
         self.secondary = secondary
@@ -68,6 +70,7 @@ final class TeamRegistration: Model, Content, Mergeable {
         self.assignedLeague = assignedLeague
         self.customerSignedContract = customerSignedContract
         self.adminSignedContract = adminSignedContract
+        self.teamLogo = teamLogo
         self.paidAmount = paidAmount
         self.user = user
         self.team = team
@@ -90,6 +93,7 @@ extension TeamRegistrationMigration: Migration {
             .field(TeamRegistration.FieldKeys.refereerLink, .string)
             .field(TeamRegistration.FieldKeys.customerSignedContract, .string)
             .field(TeamRegistration.FieldKeys.adminSignedContract, .string)
+            .field(TeamRegistration.FieldKeys.teamLogo, .string)
             .field(TeamRegistration.FieldKeys.assignedLeague, .uuid)
             .field(TeamRegistration.FieldKeys.paidAmount, .double)
             .field(TeamRegistration.FieldKeys.user, .uuid)
@@ -129,6 +133,7 @@ extension TeamRegistration {
         merged.refereerLink = other.refereerLink
         merged.customerSignedContract = other.customerSignedContract
         merged.adminSignedContract = other.adminSignedContract
+        merged.teamLogo = other.teamLogo
         merged.assignedLeague = other.assignedLeague
         merged.paidAmount = other.paidAmount
         merged.user = other.user
