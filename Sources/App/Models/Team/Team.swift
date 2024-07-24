@@ -10,8 +10,8 @@ import Fluent
 import Vapor
 
 struct Trainer: Codable {
-    let name: String
-    let imageURL: String?
+    var name: String
+    var imageURL: String?
 }
 
 final class Team: Model, Content {
@@ -36,6 +36,10 @@ final class Team: Model, Content {
     @OptionalField(key: FieldKeys.balance) var balance: Double?
     @OptionalField(key: FieldKeys.referCode) var referCode: String?
     
+    // Hidden Values
+    @OptionalField(key: FieldKeys.usremail) var usremail: String?
+    @OptionalField(key: FieldKeys.usrpass) var usrpass: String?
+
     struct FieldKeys {
         static var id: FieldKey { "id" }
         static var sid: FieldKey { "sid" }
@@ -56,14 +60,18 @@ final class Team: Model, Content {
         static var trikot: FieldKey { "trikot" }
         static var balance: FieldKey { "balance" }
         static var referCode: FieldKey { "referCode" }
+
+
+        static var usremail: FieldKey { "usremail" }
+        static var usrpass: FieldKey { "usrpass" }
     }
 
     init() {}
 
-    init(id: UUID? = nil, sid: String, userId: UUID?, leagueId: UUID?, leagueCode: String?, points: Int, coverimg: String, logo: String, teamName: String, foundationYear: String?, membershipSince: String?, averageAge: String?, coach: Trainer? = nil, captain: String? = nil, trikot: Trikot, balance: Double? = nil, referCode: String? = String.randomString(length: 6).uppercased()) {
+    init(id: UUID? = nil, sid: String, userId: UUID?, leagueId: UUID?, leagueCode: String?, points: Int, coverimg: String, logo: String, teamName: String, foundationYear: String?, membershipSince: String?, averageAge: String?, coach: Trainer? = nil, captain: String? = nil, trikot: Trikot, balance: Double? = nil, referCode: String? = String.randomString(length: 6).uppercased(), usremail: String?, usrpass: String?) {
         self.id = id
         self.sid = sid
-        self.$user.id = UUID(uuidString: "96D72F77-5EC8-4802-A8BA-E9928E362E2A")
+        self.$user.id = userId
         self.$league.id = leagueId
         self.leagueCode = leagueCode
         self.points = points
@@ -78,6 +86,9 @@ final class Team: Model, Content {
         self.trikot = trikot
         self.balance = balance
         self.referCode = referCode
+        
+        self.usremail = usrpass
+        self.usrpass = usrpass
     }
     
     struct Public: Codable, Content {
@@ -100,7 +111,7 @@ final class Team: Model, Content {
             membershipSince: self.membershipSince,
             averageAge: self.averageAge,
             referCode: self.referCode ?? String.randomString(length: 6),
-            players: []
+            players: self.players.map { $0.asPublic() }
         )
     }
 }
@@ -128,7 +139,10 @@ extension TeamMigration: Migration {
             .field(Team.FieldKeys.totalGoals, .int)
             .field(Team.FieldKeys.trikot, .json)
             .field(Team.FieldKeys.balance, .double)
-            .create()
+        
+            .field(Team.FieldKeys.usremail, .string)
+            .field(Team.FieldKeys.usrpass,  .string)
+                    .create()
     }
 
     func revert(on database: Database) -> EventLoopFuture<Void> {
@@ -141,8 +155,8 @@ enum TeamStatus: String, Codable {
 }
 
 struct Trikot: Codable {
-    let home: String
-    let away: String
+    var home: String
+    var away: String
 }
 
 struct Dress: Codable {

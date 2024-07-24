@@ -180,7 +180,7 @@ final class TeamRegistrationController: RouteCollection {
                     firstName: primary?.first ?? "",
                     lastName: primary?.last ?? "",
                     email: primary?.email ?? "",
-                    passwordHash: try! Bcrypt.hash(password)
+                    passwordHash: try! Bcrypt.hash(registration.initialPassword ?? password)
                 )
 
                 return user.save(on: req.db).flatMap {
@@ -198,7 +198,9 @@ final class TeamRegistrationController: RouteCollection {
                         averageAge: "",
                         trikot: Trikot(home: "",
                                        away: ""),
-                        referCode: registration.refereerLink
+                        referCode: registration.refereerLink,
+                        usremail: registration.primary?.email,
+                        usrpass: registration.initialPassword
                     )
 
                     // MARK: SEND EMAIL WITH THE LOGIN DATA

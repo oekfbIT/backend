@@ -130,6 +130,8 @@ extension Team: Mergeable {
         merged.captain = other.captain
         merged.trikot = other.trikot
         merged.balance = other.balance
+        merged.usremail = usremail
+        merged.usrpass = usrpass
         return merged
     }
 }

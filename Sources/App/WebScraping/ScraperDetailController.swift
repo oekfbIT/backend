@@ -283,71 +283,36 @@ final class ScraperDetailController: RouteCollection {
         }
 
         let url = "https://oekfb.com/?action=showTeam&data=\(id)"
-        return req.client.get(URI(string: url)).flatMapThrowing { response -> (Team, [String]) in
+        return req.client.get(URI(string: url)).flatMapThrowing { response -> (Team, [String], String, String) in
             guard let body = response.body else { throw Abort(.badRequest, reason: "No response body") }
             let html = String(buffer: body)
 
             let doc: Document = try SwiftSoup.parse(html)
 
-            // Extract team name
+            // Extract team details
             let teamName = try doc.select("div.MainFrameTopic").first()?.text() ?? "Unknown Team"
-            print("Extracted team name: \(teamName)")
-
-            // Extract captain image URL
             let captainImageURL = try doc.select("table:contains(Kapitän) img").first()?.attr("src") ?? "Unknown Captain"
-            print("Extracted Captain image URL: \(captainImageURL)")
-
-            // Extract coach name and image URL
             let coachImageURL = try doc.select("table:contains(Trainer) img").first()?.attr("src") ?? "Unknown Coach"
             let coachName = try doc.select("table:contains(Trainer) div font.largeWhite").first()?.text() ?? "Unknown Coach"
             let coach = Trainer(name: coachName, imageURL: self.baseUrl + coachImageURL)
-            print("Extracted Coach name: \(coachName), image URL: \(coachImageURL)")
-
-            // Extract league name
             let leagueName = try doc.select("div.MainFrameTopicDown").first()?.text() ?? "Unknown League"
-            print("Extracted league name: \(leagueName)")
-
-            // Extract cover image
             let coverImg = try doc.select("div.cutedImage img").first()?.attr("src") ?? "https://oekfb.com/images/mannschaften/0.jpg"
-            print("Extracted cover image: \(coverImg)")
-
-            // Extract logo
             let logo = try doc.select("table[width='594'] img").first()?.attr("src") ?? "Nothing found"
-            print("Extracted logo: \(logo)")
-
-            // Extract foundation year and membership since
-            let foundationYearText = try doc.select("font:contains(Gründungsjahr:)").first()?.text() ?? "Unknown"
-            let foundationYear = foundationYearText.replacingOccurrences(of: "Gründungsjahr: ", with: "")
-            print("Extracted foundation year: \(foundationYear)")
-
-            let membershipSinceText = try doc.select("font:contains(Im Verband seit:)").first()?.text() ?? "Unknown"
-            let membershipSince = membershipSinceText.replacingOccurrences(of: "Im Verband seit: ", with: "")
-            print("Extracted membership since: \(membershipSince)")
-
-            // Extract average age
-            let averageAgeText = try doc.select("font:contains(Altersdurchschn.:)").first()?.text() ?? "Unknown"
-            let averageAge = averageAgeText.replacingOccurrences(of: "Altersdurchschn.: ", with: "")
-            print("Extracted average age: \(averageAge)")
-
-            // Extract player links
-            let playerLinks: [String] = try doc.select("a[href^='?action=showPlayer']").map { try $0.attr("href") }
-            let uniquePlayerLinks = playerLinks.unique()
-            print("Extracted player links: \(uniquePlayerLinks)")
-
-            // Extract home and away jersey image URLs
+            let foundationYear = (try doc.select("font:contains(Gründungsjahr:)").first()?.text() ?? "Unknown").replacingOccurrences(of: "Gründungsjahr: ", with: "")
+            let membershipSince = (try doc.select("font:contains(Im Verband seit:)").first()?.text() ?? "Unknown").replacingOccurrences(of: "Im Verband seit: ", with: "")
+            let averageAge = (try doc.select("font:contains(Altersdurchschn.:)").first()?.text() ?? "Unknown").replacingOccurrences(of: "Altersdurchschn.: ", with: "")
+            let playerLinks: [String] = try doc.select("a[href^='?action=showPlayer']").map { try $0.attr("href") }.unique()
             let jerseyImages = try doc.select("img[src^='images/png/TR/']").map { try $0.attr("src") }
             let trikotHome = jerseyImages.first ?? "Unknown Home Jersey"
             let trikotAway = jerseyImages.last ?? "Unknown Away Jersey"
-            print("Extracted home jersey: \(trikotHome), away jersey: \(trikotAway)")
-
-            // Construct the Trikot object
             let trikot = Trikot(home: self.baseUrl + trikotHome, away: self.baseUrl + trikotAway)
-            print("Constructed trikot: \(trikot)")
 
-            // Create and return the Team object
+            let randomemail =  String.randomString(length: 6) + "@oekfb.eu"
+            let randompass =  String.randomString(length: 8)
+
             let team = Team(sid: String(id),
-                            userId: nil,
-                            leagueId: leagueID, // I want to use it here
+                            userId: nil, // This will be set after user creation
+                            leagueId: leagueID,
                             leagueCode: leagueName,
                             points: 0,
                             coverimg: self.baseUrl + coverImg,
@@ -359,21 +324,31 @@ final class ScraperDetailController: RouteCollection {
                             coach: coach,
                             captain: self.baseUrl + captainImageURL,
                             trikot: trikot,
-                            balance: 0.0, referCode: String.randomString(length: 6))
+                            balance: 0.0,
+                            referCode: String.randomString(length: 6),
+                            usremail: randomemail,
+                            usrpass: randompass
+            )
             
-            return (team, uniquePlayerLinks)
+            return (team, playerLinks, randomemail, randompass)
+        }.flatMap { (team, playerLinks, email, password) in
+            // Create user for the team
+            return self.createUser(req: req, email: email, password: password).map { user in
+                team.$user.id = user.id
+                team.usremail = user.email
+                team.usrpass = password
+                
+                return (team, playerLinks)
+            }
         }.flatMap { (team, playerLinks) in
             // Save the team to the database
             return team.save(on: req.db).map { (team, playerLinks) }
         }.flatMap { (team, playerLinks) in
             // Run player scraping tasks in the background
-            print("Player Link Count: ", playerLinks.count)
-            print("Player Links: ", playerLinks)
             if let teamID = team.id {
                 req.eventLoop.execute {
                     playerLinks.forEach { link in
                         let text = link.replacingOccurrences(of: "?action=showPlayer&id=", with: "")
-                        print(text)
                         do {
                             try self.scrapePlayer(req: req, id: Int(text) ?? 0, teamId: teamID).whenComplete { result in
                                 switch result {
@@ -393,7 +368,22 @@ final class ScraperDetailController: RouteCollection {
         }
     }
 
-
+    private func createUser(req: Request, email: String, password: String) -> EventLoopFuture<User> {
+        let userSignup = UserSignup(id: UUID().uuidString,
+                                    firstName: "Team",
+                                    lastName: "User",
+                                    email: email,
+                                    password: password,
+                                    type: .team)
+        let user: User
+        do {
+            user = try User.create(from: userSignup)
+        } catch {
+            return req.eventLoop.makeFailedFuture(error)
+        }
+        
+        return user.save(on: req.db).map { user }
+    }
 }
 
 extension Array where Element == String {

@@ -86,6 +86,9 @@ final class ScraperController {
                     
                     let trikot = Trikot(home: "", away: "")
                     
+                    let randomMail = String.randomString(length: 5) + "@oekfb.eu"
+                    let randomPass = String.randomString(length: 8)
+                    
                     let team = Team(
                         sid: String(id),
                         userId: nil,
@@ -101,7 +104,9 @@ final class ScraperController {
                         coach: coach,
                         captain: self.baseUrl + captainImageURL,
                         trikot: trikot,
-                        balance: 0.0, referCode: String.randomString(length: 6)
+                        balance: 0.0, referCode: String.randomString(length: 6),
+                        usremail: randomMail,
+                        usrpass: randomPass
                     )
                     
                     print("Saving team: \(teamName)")
