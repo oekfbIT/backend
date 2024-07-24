@@ -49,6 +49,17 @@ public func configure(_ app: Application) throws {
     let corsMiddleware = CORSMiddleware(configuration: corsConfiguration)
     app.middleware.use(corsMiddleware, at: .beginning) // Ensure it's the first middleware to run
 
+    
+    let firebaseManager = FirebaseManager(
+        client: app.client,
+        apiKey: "AIzaSyBHum43yMHxKE15ctAI54LSCmiJ-6uDI8I",
+        email: "admin@oekfb.eu",
+        password: "hY-q2Giapxzng",
+        projectId: "oekfbbucket"
+    )
+    
+    app.firebaseManager = firebaseManager
+
     // register routes
     try routes(app)
 }

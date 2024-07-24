@@ -84,7 +84,7 @@ final class ScraperController {
                     let averageAgeText = try doc.select("font:contains(Altersdurchschn.:)").first()?.text() ?? "Unknown"
                     let averageAge = averageAgeText.replacingOccurrences(of: "Altersdurchschn.: ", with: "")
                     
-                    let trikot = Trikot(home: Dress(image: "none", color: .light), away: Dress(image: "none", color: .dark))
+                    let trikot = Trikot(home: "", away: "")
                     
                     let team = Team(
                         sid: String(id),

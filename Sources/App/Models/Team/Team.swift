@@ -141,8 +141,8 @@ enum TeamStatus: String, Codable {
 }
 
 struct Trikot: Codable {
-    let home: Dress
-    let away: Dress
+    let home: String
+    let away: String
 }
 
 struct Dress: Codable {

@@ -196,8 +196,9 @@ final class TeamRegistrationController: RouteCollection {
                         foundationYear: "",
                         membershipSince: "",
                         averageAge: "",
-                        trikot: Trikot(home: Dress(image: "", color: .dark),
-                                       away: Dress(image: "", color: .light)), referCode: registration.refereerLink
+                        trikot: Trikot(home: "",
+                                       away: ""),
+                        referCode: registration.refereerLink
                     )
 
                     // MARK: SEND EMAIL WITH THE LOGIN DATA

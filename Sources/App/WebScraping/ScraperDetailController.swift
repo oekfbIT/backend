@@ -219,7 +219,9 @@ final class ScraperDetailController: RouteCollection {
             let registerDate = try doc.select("font:contains(Angemeldet seit:)").first()?.nextElementSibling()?.text()
             let teamOeidHref = try doc.select("font:contains(Mannschaft:)").first()?.nextElementSibling()?.select("a").attr("href")
             let teamOeid = teamOeidHref?.split(separator: "=").last.map(String.init)
-            let imageUrl = try doc.select("img[src*=images/player/]").first()?.attr("src")
+            let imageUrl = try doc.select("img[src*=images/player]").first()?.attr("src")
+            // https://www.oekfb.com/images/player-png/14191.png
+            // https://www.oekfb.com/images/player/14201.jpg
 
             // Print statements for debugging
             print("SID: \(String(describing: sid))")
@@ -273,7 +275,7 @@ final class ScraperDetailController: RouteCollection {
     
     func scrapeTeam(req: Request) throws -> EventLoopFuture<Team> {
         guard let id = req.parameters.get("id", as: Int.self) else {
-            throw Abort(.badRequest, reason: "Missing or invalid league ID")
+            throw Abort(.badRequest, reason: "Missing or invalid team ID")
         }
 
         guard let leagueID = req.parameters.get("leagueID", as: UUID.self) else {
@@ -329,10 +331,17 @@ final class ScraperDetailController: RouteCollection {
 
             // Extract player links
             let playerLinks: [String] = try doc.select("a[href^='?action=showPlayer']").map { try $0.attr("href") }
-            print("Extracted player links:")
+            let uniquePlayerLinks = playerLinks.unique()
+            print("Extracted player links: \(uniquePlayerLinks)")
+
+            // Extract home and away jersey image URLs
+            let jerseyImages = try doc.select("img[src^='images/png/TR/']").map { try $0.attr("src") }
+            let trikotHome = jerseyImages.first ?? "Unknown Home Jersey"
+            let trikotAway = jerseyImages.last ?? "Unknown Away Jersey"
+            print("Extracted home jersey: \(trikotHome), away jersey: \(trikotAway)")
 
             // Construct the Trikot object
-            let trikot = Trikot(home: Dress(image: "none", color: .light), away: Dress(image: "none", color: .dark)) // Use this hardcoded value
+            let trikot = Trikot(home: self.baseUrl + trikotHome, away: self.baseUrl + trikotAway)
             print("Constructed trikot: \(trikot)")
 
             // Create and return the Team object
@@ -352,12 +361,14 @@ final class ScraperDetailController: RouteCollection {
                             trikot: trikot,
                             balance: 0.0, referCode: String.randomString(length: 6))
             
-            return (team, playerLinks)
+            return (team, uniquePlayerLinks)
         }.flatMap { (team, playerLinks) in
             // Save the team to the database
             return team.save(on: req.db).map { (team, playerLinks) }
         }.flatMap { (team, playerLinks) in
             // Run player scraping tasks in the background
+            print("Player Link Count: ", playerLinks.count)
+            print("Player Links: ", playerLinks)
             if let teamID = team.id {
                 req.eventLoop.execute {
                     playerLinks.forEach { link in
@@ -381,284 +392,20 @@ final class ScraperDetailController: RouteCollection {
             return req.eventLoop.makeSucceededFuture(team)
         }
     }
+
+
 }
 
-/* import Vapor
-//import Fluent
-//import SwiftSoup
-//
-//final class ScraperDetailController: RouteCollection {
-//    let baseUrl = "https://oekfb.com/"
-//    
-//    func boot(routes: RoutesBuilder) throws {
-//        let scraperRoutes = routes.grouped("scrape")
-//        scraperRoutes.get("player", ":id", use: scrapePlayer)
-//        scraperRoutes.get("league", ":id", use: scrapeLeagueDetails)
-//        scraperRoutes.get("team", ":id", use: scrapeTeam)
-//    }
-//    
-//    // MARK: Scrape Player Function
-//    func scrapePlayer(req: Request) throws -> EventLoopFuture<Player> {
-//        guard let id = req.parameters.get("id", as: Int.self) else {
-//            throw Abort(.badRequest, reason: "Missing or invalid player ID")
-//        }
-//        return fetchPlayerHTML(req: req, playerId: id).flatMapThrowing { html in
-//            try self.parsePlayerHTML(html: html, playerId: id)
-//        }.flatMap { player in
-//            player.save(on: req.db).map { player }
-//        }
-//    }
-//    
-//    // Helper function to fetch player HTML
-//    private func fetchPlayerHTML(req: Request, playerId: Int) -> EventLoopFuture<String> {
-//        let url = "https://oekfb.com/index.php?action=showPlayer&id=\(playerId)"
-//        return req.client.get(URI(string: url)).flatMapThrowing { response in
-//            guard let body = response.body else {
-//                throw Abort(.badRequest, reason: "No response body")
-//            }
-//            return String(buffer: body)
-//        }
-//    }
-//    
-//    // Helper function to parse player HTML
-//    private func parsePlayerHTML(html: String, playerId: Int) throws -> Player {
-//        let doc = try SwiftSoup.parse(html)
-//        
-//        let sid = String(playerId)
-//        let name = try doc.select("div[style*='position:absolute; margin-top:-150px;'] font.megaLargeWhite").first()?.text()
-//        let number = try doc.select("font:contains(Rückennummer:)").first()?.nextElementSibling()?.text()
-//        let birthday = try doc.select("font:contains(Jahrgang:)").first()?.nextElementSibling()?.text()
-//        let nationality = try doc.select("font:contains(Nationalität:)").first()?.nextElementSibling()?.text()
-//        let eligibilityText = try doc.select("font:contains(Status:)").first()?.nextElementSibling()?.text()
-//        let registerDate = try doc.select("font:contains(Angemeldet seit:)").first()?.nextElementSibling()?.text()
-//        let teamOeidHref = try doc.select("font:contains(Mannschaft:)").first()?.nextElementSibling()?.select("a").attr("href")
-//        let teamOeid = teamOeidHref?.split(separator: "=").last.map(String.init)
-//        let imageUrl = try doc.select("td[style*=background-image:url('images/bg/player_bg.png')] img").first()?.attr("src")
-//        
-//        guard
-//            let name = name,
-//            let number = number,
-//            let birthday = birthday,
-//            let nationality = nationality,
-//            let eligibilityText = eligibilityText,
-//            let registerDate = registerDate,
-//            let teamOeid = teamOeid
-//        else {
-//            throw Abort(.badRequest, reason: "Failed to parse player data")
-//        }
-//        
-//        let eligibility = PlayerEligibility(rawValue: eligibilityText) ?? .blocked
-//        
-//        return Player(
-//            sid: sid,
-//            image: self.baseUrl + (imageUrl ?? ""),
-//            team_oeid: teamOeid,
-//            name: name,
-//            number: number,
-//            birthday: birthday,
-//            teamID: UUID(), // Placeholder for the team ID, you'll need to fetch or determine this based on your data
-//            nationality: nationality,
-//            position: "field", // Assuming 'field' as the default position, adjust as necessary
-//            eligibility: eligibility,
-//            registerDate: registerDate
-//        )
-//    }
-//    
-//    // MARK: Scrape League Details Function
-//    func scrapeLeagueDetails(req: Request) throws -> EventLoopFuture<League> {
-//        guard let id = req.parameters.get("id", as: String.self) else {
-//            throw Abort(.badRequest, reason: "Missing or invalid league ID")
-//        }
-//        return fetchLeagueHTML(req: req, leagueId: id).flatMapThrowing { html in
-//            try self.parseLeagueHTML(html: html, leagueId: id)
-//        }
-//    }
-//    
-//    // Helper function to fetch league HTML
-//    private func fetchLeagueHTML(req: Request, leagueId: String) -> EventLoopFuture<String> {
-//        let url = "https://oekfb.com/?action=mannschaften&liga=\(leagueId)"
-//        return req.client.get(URI(string: url)).flatMapThrowing { response in
-//            guard let body = response.body else {
-//                throw Abort(.badRequest, reason: "No response body")
-//            }
-//            return String(buffer: body)
-//        }
-//    }
-//    
-//    // Helper function to parse league HTML
-//    private func parseLeagueHTML(html: String, leagueId: String) throws -> League {
-//        let doc = try SwiftSoup.parse(html)
-//        
-//        let leagueNameElement = try doc.select("div.MainFrameTopic").first()
-//        let leagueName = try leagueNameElement?.text() ?? "Unknown League"
-//        
-//        let teamElements = try doc.select("div.stat_name a[href^=\"?action=showTeam&data=\"]")
-//        var teamLinks: [String] = []
-//        for team in teamElements {
-//            let link = try team.attr("href")
-//            teamLinks.append("https://oekfb.com/\(link)")
-//        }
-//        
-//        // Print each team link on a new line
-//        print("Extracted team links:")
-//        for link in teamLinks {
-//            print(link)
-//        }
-//        
-//        return League(
-//            state: .auszuwerten,
-//            code: leagueId,
-//            name: leagueName
-//        )
-//    }
-//    
-//    // MARK: Scrape Team Function
-//    func scrapeTeam(req: Request) throws -> EventLoopFuture<Team> {
-//        guard let id = req.parameters.get("id", as: Int.self) else {
-//            throw Abort(.badRequest, reason: "Missing or invalid team ID")
-//        }
-//        return fetchTeamHTML(req: req, teamId: id).flatMapThrowing { html in
-//            try self.parseTeamHTML(html: html, teamId: id)
-//        }.flatMap { (team, playerLinks) in
-//            self.saveTeamAndScrapePlayers(req: req, team: team, playerLinks: playerLinks)
-//        }
-//    }
-//    
-//    // Helper function to fetch team HTML
-//    private func fetchTeamHTML(req: Request, teamId: Int) -> EventLoopFuture<String> {
-//        let url = "https://oekfb.com/?action=showTeam&data=\(teamId)"
-//        return req.client.get(URI(string: url)).flatMapThrowing { response in
-//            guard let body = response.body else {
-//                throw Abort(.badRequest, reason: "No response body")
-//            }
-//            return String(buffer: body)
-//        }
-//    }
-//    
-//    // Helper function to parse team HTML
-//    private func parseTeamHTML(html: String, teamId: Int) throws -> (Team, [String]) {
-//        let doc = try SwiftSoup.parse(html)
-//        
-//        let teamName = try doc.select("div.MainFrameTopic").first()?.text() ?? "Unknown Team"
-//        let captainImageURL = try doc.select("table:contains(Kapitän) img").first()?.attr("src") ?? "Unknown Captain"
-//        let coachImageURL = try doc.select("table:contains(Trainer) img").first()?.attr("src") ?? "Unknown Coach"
-//        let coachName = try doc.select("table:contains(Trainer) div font.largeWhite").first()?.text() ?? "Unknown Coach"
-//        let coach = Trainer(name: coachName, imageURL: self.baseUrl + coachImageURL)
-//        let leagueName = try doc.select("div.MainFrameTopicDown").first()?.text() ?? "Unknown League"
-//        let coverImg = try doc.select("div.cutedImage img").first()?.attr("src") ?? "https://oekfb.com/images/mannschaften/0.jpg"
-//        let logo = try doc.select("table[width='594'] img").first()?.attr("src") ?? "Nothing found"
-//        let foundationYearText = try doc.select("font:contains(Gründungsjahr:)").first()?.text() ?? "Unknown"
-//        let foundationYear = foundationYearText.replacingOccurrences(of: "Gründungsjahr: ", with: "")
-//        let membershipSinceText = try doc.select("font:contains(Im Verband seit:)").first()?.text() ?? "Unknown"
-//        let membershipSince = membershipSinceText.replacingOccurrences(of: "Im Verband seit: ", with: "")
-//        let averageAgeText = try doc.select("font:contains(Altersdurchschn.:)").first()?.text() ?? "Unknown"
-//        let averageAge = averageAgeText.replacingOccurrences(of: "Altersdurchschn.: ", with: "")
-//        let playerLinks = try doc.select("a[href^='?action=showPlayer']").map { try $0.attr("href") }
-//        
-//        print("Extracted team name: \(teamName)")
-//        print("Extracted Captain image URL: \(captainImageURL)")
-//        print("Extracted Coach name: \(coachName), image URL: \(coachImageURL)")
-//        print("Extracted league name: \(leagueName)")
-//        print("Extracted cover image: \(coverImg)")
-//        print("Extracted logo: \(logo)")
-//        print("Extracted foundation year: \(foundationYear)")
-//        print("Extracted membership since: \(membershipSince)")
-//        print("Extracted average age: \(averageAge)")
-//        print("Extracted player links:")
-//        for link in playerLinks {
-//            print(link)
-//        }
-//        
-//        let trikot = Trikot(home: Dress(image: "none", color: .light), away: Dress(image: "none", color: .dark))
-//        
-//        let team = Team(
-//            sid: String(teamId),
-//            userId: nil,
-//            leagueId: nil,
-//            leagueCode: leagueName,
-//            points: 0,
-//            coverimg: self.baseUrl + coverImg,
-//            logo: logo,
-//            teamName: teamName,
-//            foundationYear: foundationYear,
-//            membershipSince: membershipSince,
-//            averageAge: averageAge,
-//            coach: coach,
-//            captain: self.baseUrl + captainImageURL,
-//            trikot: trikot,
-//            balance: 0.0
-//        )
-//        
-//        return (team, playerLinks)
-//    }
-//    
-//    // Helper function to save team and scrape players
-//    private func saveTeamAndScrapePlayers(req: Request, team: Team, playerLinks: [String]) -> EventLoopFuture<Team> {
-//        return team.save(on: req.db).flatMap { savedTeam in
-//            let futures = playerLinks.map { link -> EventLoopFuture<Void> in
-//                let text = link.replacingOccurrences(of: "?action=showPlayer&id=", with: "")
-//                if let playerId = Int(text) {
-//                    return self.scrapePlayer(req: req, playerId: playerId).transform(to: ())
-//                } else {
-//                    return req.eventLoop.makeSucceededFuture(())
-//                }
-//            }
-//            return EventLoopFuture.andAllSucceed(futures, on: req.eventLoop).map { savedTeam }
-//        }
-//    }
-//    
-//    // Added this function to use the existing scrapePlayer logic
-//    func scrapePlayer(req: Request, playerId: Int) -> EventLoopFuture<Player> {
-//        let url = "https://oekfb.com/index.php?action=showPlayer&id=\(playerId)"
-//        return req.client.get(URI(string: url)).flatMapThrowing { response in
-//            guard let body = response.body else {
-//                throw Abort(.badRequest, reason: "No response body")
-//            }
-//            
-//            let html = String(buffer: body)
-//            let doc = try SwiftSoup.parse(html)
-//            
-//            let sid = String(playerId)
-//            let name = try doc.select("div[style*='position:absolute; margin-top:-150px;'] font.megaLargeWhite").first()?.text()
-//            let number = try doc.select("font:contains(Rückennummer:)").first()?.nextElementSibling()?.text()
-//            let birthday = try doc.select("font:contains(Jahrgang:)").first()?.nextElementSibling()?.text()
-//            let nationality = try doc.select("font:contains(Nationalität:)").first()?.nextElementSibling()?.text()
-//            let eligibilityText = try doc.select("font:contains(Status:)").first()?.nextElementSibling()?.text()
-//            let registerDate = try doc.select("font:contains(Angemeldet seit:)").first()?.nextElementSibling()?.text()
-//            let teamOeidHref = try doc.select("font:contains(Mannschaft:)").first()?.nextElementSibling()?.select("a").attr("href")
-//            let teamOeid = teamOeidHref?.split(separator: "=").last.map(String.init)
-//            let imageUrl = try doc.select("td[style*=background-image:url('images/bg/player_bg.png')] img").first()?.attr("src")
-//            
-//            guard
-//                let name = name,
-//                let number = number,
-//                let birthday = birthday,
-//                let nationality = nationality,
-//                let eligibilityText = eligibilityText,
-//                let registerDate = registerDate,
-//                let teamOeid = teamOeid
-//            else {
-//                throw Abort(.badRequest, reason: "Failed to parse player data")
-//            }
-//            
-//            let eligibility = PlayerEligibility(rawValue: eligibilityText) ?? .blocked
-//            
-//            let player = Player(
-//                sid: sid,
-//                image: self.baseUrl + (imageUrl ?? ""),
-//                team_oeid: teamOeid,
-//                name: name,
-//                number: number,
-//                birthday: birthday,
-//                teamID: UUID(), // Placeholder for the team ID, you'll need to fetch or determine this based on your data
-//                nationality: nationality,
-//                position: "field", // Assuming 'field' as the default position, adjust as necessary
-//                eligibility: eligibility,
-//                registerDate: registerDate
-//            )
-//            
-//            return player.save(on: req.db).flatMap { player }
-//        }
-//    }
-//}
-*/
+extension Array where Element == String {
+    /// Returns an array with unique strings by preserving the order of the first occurrence.
+    func unique() -> [String] {
+        var seen: Set<String> = []
+        return self.filter { element in
+            guard !seen.contains(element) else {
+                return false
+            }
+            seen.insert(element)
+            return true
+        }
+    }
+}
