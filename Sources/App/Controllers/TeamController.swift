@@ -34,6 +34,7 @@ final class TeamController: RouteCollection {
         try setupRoutes(on: routes)
     }
     
+    
     // Function to get a team with all its players
     func getTeamWithPlayers(req: Request) throws -> EventLoopFuture<Team.Public> {
         guard let teamID = req.parameters.get("id", as: UUID.self) else {
@@ -122,6 +123,8 @@ extension Team: Mergeable {
         merged.id = other.id
         merged.points = other.points
         merged.logo = other.logo
+        merged.league?.id = other.league?.id
+        merged.user?.id = other.user?.id
         merged.teamName = other.teamName
         merged.foundationYear = other.foundationYear
         merged.membershipSince = other.membershipSince

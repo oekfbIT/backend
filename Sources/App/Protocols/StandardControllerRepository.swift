@@ -94,7 +94,6 @@ class StandardControllerRepository<T: Model & Content & Mergeable>: DBModelContr
     ///
     /// Example: PATCH "localhost:8080/api/users/1" with JSON body {"name": "John"}
     func updateID(req: Request) throws -> EventLoopFuture<T> {
-        
         guard let id = req.parameters.get("id", as: T.IDValue.self) else {
             throw Abort(.badRequest)
         }
@@ -104,11 +103,11 @@ class StandardControllerRepository<T: Model & Content & Mergeable>: DBModelContr
         return T.find(id, on: req.db)
             .unwrap(or: Abort(.notFound))
             .flatMap { item in
-                let mergedItem = item.merge(from: updatedItem)
-                return mergedItem.update(on: req.db).map { mergedItem }
+                item.merge(from: updatedItem)
+                return item.update(on: req.db).map { item }
             }
     }
-    
+
     /// Updates multiple items of type T.
     ///
     /// Example: PATCH "localhost:8080/api/users/batch" with JSON body [{"id": 1, "name": "John"}, {"id": 2, "name": "Jane"}]

@@ -33,6 +33,7 @@ final class TeamRegistration: Model, Content, Mergeable {
     @OptionalField(key: FieldKeys.team) var team: UUID?
     @OptionalField(key: FieldKeys.isWelcomeEmailSent) var isWelcomeEmailSent: Bool?
     @OptionalField(key: FieldKeys.isLoginDataSent) var isLoginDataSent: Bool?
+    @OptionalField(key: FieldKeys.dateCreated) var dateCreated: Date?
 
     struct FieldKeys {
         static var id: FieldKey { "id" }
@@ -53,11 +54,12 @@ final class TeamRegistration: Model, Content, Mergeable {
         static var teamLogo: FieldKey { "teamLogo" }
         static var isWelcomeEmailSent: FieldKey { "isWelcomeEmailSent" }
         static var isLoginDataSent: FieldKey { "isLoginDataSent" }
+        static var dateCreated: FieldKey { "dateCreated" }
     }
     
     init() {}
     
-    init(id: UUID? = nil, primary: ContactPerson? = nil, secondary: ContactPerson? = nil, verein: String? = nil, teamName: String, status: TeamRegistrationStatus, bundesland: Bundesland, initialPassword: String? , refereerLink: String? = nil, assignedLeague: UUID? = nil, customerSignedContract: String? = nil, adminSignedContract: String? = nil, teamLogo: String?, paidAmount: Double? = nil, user: UUID? = nil, team: UUID? = nil, isWelcomeEmailSent: Bool? = nil, isLoginDataSent: Bool? = nil) {
+    init(id: UUID? = nil, primary: ContactPerson? = nil, secondary: ContactPerson? = nil, verein: String? = nil, teamName: String, status: TeamRegistrationStatus, bundesland: Bundesland, initialPassword: String? , refereerLink: String? = nil, assignedLeague: UUID? = nil, customerSignedContract: String? = nil, adminSignedContract: String? = nil, teamLogo: String?, paidAmount: Double? = nil, user: UUID? = nil, team: UUID? = nil, isWelcomeEmailSent: Bool? = nil, isLoginDataSent: Bool? = nil, dateCreated: Date? = Date()) {
         self.id = id
         self.primary = primary
         self.secondary = secondary
@@ -76,6 +78,7 @@ final class TeamRegistration: Model, Content, Mergeable {
         self.team = team
         self.isWelcomeEmailSent = isWelcomeEmailSent
         self.isLoginDataSent = isLoginDataSent
+        self.dateCreated = dateCreated
     }
 }
 
@@ -100,6 +103,7 @@ extension TeamRegistrationMigration: Migration {
             .field(TeamRegistration.FieldKeys.team, .uuid)
             .field(TeamRegistration.FieldKeys.isWelcomeEmailSent, .bool)
             .field(TeamRegistration.FieldKeys.isLoginDataSent, .bool)
+            .field(TeamRegistration.FieldKeys.dateCreated, .date)
             .create()
     }
 
@@ -140,6 +144,7 @@ extension TeamRegistration {
         merged.team = other.team
         merged.isWelcomeEmailSent = other.isWelcomeEmailSent
         merged.isLoginDataSent = other.isLoginDataSent
+        merged.dateCreated = other.dateCreated
         return merged
     }
 }
