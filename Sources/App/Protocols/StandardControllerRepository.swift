@@ -103,8 +103,9 @@ class StandardControllerRepository<T: Model & Content & Mergeable>: DBModelContr
         return T.find(id, on: req.db)
             .unwrap(or: Abort(.notFound))
             .flatMap { item in
-                item.merge(from: updatedItem)
-                return item.update(on: req.db).map { item }
+                let merged = item.merge(from: updatedItem)
+                print("Updated body: ", merged)
+                return item.update(on: req.db).map { merged }
             }
     }
 

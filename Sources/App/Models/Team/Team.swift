@@ -39,6 +39,7 @@ final class Team: Model, Content {
     // Hidden Values
     @OptionalField(key: FieldKeys.usremail) var usremail: String?
     @OptionalField(key: FieldKeys.usrpass) var usrpass: String?
+    @OptionalField(key: FieldKeys.usrtel) var usrtel: String?
 
     struct FieldKeys {
         static var id: FieldKey { "id" }
@@ -64,11 +65,12 @@ final class Team: Model, Content {
 
         static var usremail: FieldKey { "usremail" }
         static var usrpass: FieldKey { "usrpass" }
+        static var usrtel: FieldKey { "usrtel" }
     }
 
     init() {}
 
-    init(id: UUID? = nil, sid: String, userId: UUID?, leagueId: UUID?, leagueCode: String?, points: Int, coverimg: String, logo: String, teamName: String, foundationYear: String?, membershipSince: String?, averageAge: String?, coach: Trainer? = nil, captain: String? = nil, trikot: Trikot, balance: Double? = nil, referCode: String? = String.randomString(length: 6).uppercased(), usremail: String?, usrpass: String?) {
+    init(id: UUID? = nil, sid: String, userId: UUID?, leagueId: UUID?, leagueCode: String?, points: Int, coverimg: String, logo: String, teamName: String, foundationYear: String?, membershipSince: String?, averageAge: String?, coach: Trainer? = nil, captain: String? = nil, trikot: Trikot, balance: Double? = nil, referCode: String? = String.randomString(length: 6).uppercased(), usremail: String?, usrpass: String?, usrtel: String?) {
         self.id = id
         self.sid = sid
         self.$user.id = userId
@@ -89,6 +91,7 @@ final class Team: Model, Content {
         
         self.usremail = usrpass
         self.usrpass = usrpass
+        self.usrtel = usrtel
     }
     
     struct Public: Codable, Content {

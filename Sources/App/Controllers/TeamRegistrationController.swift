@@ -200,7 +200,8 @@ final class TeamRegistrationController: RouteCollection {
                                        away: ""),
                         referCode: registration.refereerLink,
                         usremail: registration.primary?.email,
-                        usrpass: registration.initialPassword
+                        usrpass: registration.initialPassword,
+                        usrtel: registration.primary?.phone
                     )
 
                     // MARK: SEND EMAIL WITH THE LOGIN DATA

@@ -120,11 +120,10 @@ final class TeamController: RouteCollection {
 extension Team: Mergeable {
     func merge(from other: Team) -> Team {
         var merged = self
-        merged.id = other.id
         merged.points = other.points
         merged.logo = other.logo
-        merged.league?.id = other.league?.id
-        merged.user?.id = other.user?.id
+        merged.$league.id = other.$league.id
+        merged.$user.id = other.$user.id
         merged.teamName = other.teamName
         merged.foundationYear = other.foundationYear
         merged.membershipSince = other.membershipSince
@@ -133,8 +132,10 @@ extension Team: Mergeable {
         merged.captain = other.captain
         merged.trikot = other.trikot
         merged.balance = other.balance
-        merged.usremail = usremail
-        merged.usrpass = usrpass
+        merged.usremail = other.usremail
+        merged.usrpass = other.usrpass
+        merged.usrtel = other.usrtel
         return merged
     }
 }
+

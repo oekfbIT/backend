@@ -327,7 +327,7 @@ final class ScraperDetailController: RouteCollection {
                             balance: 0.0,
                             referCode: String.randomString(length: 6),
                             usremail: randomemail,
-                            usrpass: randompass
+                            usrpass: randompass, usrtel: ""
             )
             
             return (team, playerLinks, randomemail, randompass)

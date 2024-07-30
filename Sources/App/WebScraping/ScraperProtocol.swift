@@ -106,7 +106,7 @@ final class ScraperController {
                         trikot: trikot,
                         balance: 0.0, referCode: String.randomString(length: 6),
                         usremail: randomMail,
-                        usrpass: randomPass
+                        usrpass: randomPass, usrtel: ""
                     )
                     
                     print("Saving team: \(teamName)")
