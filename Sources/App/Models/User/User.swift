@@ -19,6 +19,8 @@ final class User: Model, Content, Codable {
     @Field(key: FieldKeys.lastName) var lastName: String
     @Field(key: FieldKeys.email) var email: String
     @Field(key: FieldKeys.passwordHash) var passwordHash: String
+    @Children(for: \.$user) var teams: [Team]
+
     
     struct Public: Content, Codable {
         let id: UUID

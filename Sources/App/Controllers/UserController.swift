@@ -24,7 +24,9 @@ final class UserController: RouteCollection {
         route.grouped(User.authenticator()).post("login", use: login)
         
         route.get(use: repository.index)
+        route.get("teams", use: getTeamUserIndex)
         route.get(":id", use: repository.getbyID)
+        route.get("team", ":id", use: getUserWithTeam)
         route.delete(":id", use: repository.deleteID)
         
         route.patch(":id", use: repository.updateID)
@@ -40,6 +42,27 @@ final class UserController: RouteCollection {
             .filter(\.$email == email)
             .first()
             .map { $0 != nil }
+    }
+    
+    
+    func getTeamUserIndex(req: Request) throws -> EventLoopFuture<[User]> {
+        User.query(on: req.db)
+            .filter(\.$type == .team)
+            .with(\.$teams)
+            .all()
+    }
+
+    // Function to get a team with all its players
+    func getUserWithTeam(req: Request) throws -> EventLoopFuture<User> {
+        guard let teamID = req.parameters.get("id", as: UUID.self) else {
+            throw Abort(.badRequest)
+        }
+
+        return User.query(on: req.db)
+            .filter(\.$id == teamID)
+            .with(\.$teams)
+            .first()
+            .unwrap(or: Abort(.notFound))
     }
 
     func signup(req: Request) throws -> EventLoopFuture<NewSession> {

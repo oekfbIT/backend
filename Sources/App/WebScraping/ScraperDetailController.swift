@@ -335,7 +335,6 @@ final class ScraperDetailController: RouteCollection {
             // Create user for the team
             return self.createUser(req: req, email: email, password: password).map { user in
                 team.$user.id = user.id
-                team.usremail = user.email
                 team.usrpass = password
                 
                 return (team, playerLinks)
