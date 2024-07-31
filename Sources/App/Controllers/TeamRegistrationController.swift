@@ -91,9 +91,51 @@ final class TeamRegistrationController: RouteCollection {
     // Confirm
     func confirm(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let id = try req.parameters.require("id", as: UUID.self)
-        return TeamRegistration.find(id, on: req.db).unwrap(or: Abort(.notFound)).flatMap { registration in
+
+        return TeamRegistration.find(id, on: req.db).flatMap { optionalRegistration in
+            guard let registration = optionalRegistration else {
+                return req.eventLoop.makeFailedFuture(Abort(.notFound))
+            }
+
             registration.status = .approved
-            return registration.save(on: req.db).transform(to: .ok)
+
+            let userSignup = UserSignup(
+                id: UUID().uuidString,
+                firstName: registration.primary?.first ?? "",
+                lastName: registration.primary?.last ?? "",
+                email: registration.primary?.email ?? "",
+                password: registration.initialPassword ?? String.randomString(length: 8),
+                type: .team
+            )
+
+            do {
+                let user = try User.create(from: userSignup)
+                return user.save(on: req.db).flatMap {
+                    let team = Team(
+                        sid: String.randomNum(length: 5),
+                        userId: user.id,
+                        leagueId: registration.assignedLeague,
+                        leagueCode: registration.assignedLeague?.uuidString,
+                        points: 0,
+                        coverimg: "",
+                        logo: registration.teamLogo ?? "",
+                        teamName: registration.teamName,
+                        foundationYear: Date().yearString, // Assuming you want the current year
+                        membershipSince: Date().yearString, // Assuming you want the current year
+                        averageAge: "0",
+                        trikot: Trikot(home: "", away: ""),
+                        usremail: registration.primary?.email,
+                        usrpass: registration.initialPassword,
+                        usrtel: registration.primary?.phone
+                    )
+
+                    return team.save(on: req.db).flatMap {
+                        return registration.save(on: req.db).transform(to: .ok)
+                    }
+                }
+            } catch {
+                return req.eventLoop.makeFailedFuture(error)
+            }
         }
     }
 
@@ -218,5 +260,14 @@ final class TeamRegistrationController: RouteCollection {
                 return req.eventLoop.future(error: Abort(.notFound))
             }
         }
+    }
+}
+
+
+extension Date {
+    var yearString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy"
+        return formatter.string(from: self)
     }
 }

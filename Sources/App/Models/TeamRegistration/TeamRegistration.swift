@@ -117,6 +117,12 @@ extension String {
         let letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
         return String((0..<length).map{ _ in letters.randomElement()! })
     }
+
+    static func randomNum(length: Int) -> String {
+        let letters = "0123456789"
+        return String((0..<length).map{ _ in letters.randomElement()! })
+    }
+
 }
 
 
