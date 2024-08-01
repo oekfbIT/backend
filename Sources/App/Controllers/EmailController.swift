@@ -9,7 +9,7 @@ import Vapor
 import Smtp
 import NIO
 
-let vertragLink = "https://firebasestorage.googleapis.com/v0/b/oekfbbucket.appspot.com/o/adminfiles%2FOEKFB%20Anmelde%20Vertrag.pdf?alt=media&token=59cb8260-db03-488d-9a8c-a2e17e81f54f"
+let vertragLink = "https://firebasestorage.googleapis.com/v0/b/oekfbbucket.appspot.com/o/adminfiles%2FOEKFB%20Anmelde%20Vertrag.pdf.pdf?alt=media&token=23ab12e2-f360-48f5-b4f9-aa1cb3d64305"
 
 final class EmailController {
     
