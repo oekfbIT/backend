@@ -158,14 +158,26 @@ final class TeamRegistrationController: RouteCollection {
                 return League.find(leagueID, on: req.db)
                     .unwrap(or: Abort(.notFound))
                     .flatMap { league in
-                        let topayAmount = ((league.teamcount ?? 0) - 1) * 70
+                        let teamCount = league.teamcount ?? 0
+                        let topayAmount: Double  // Use Double for all calculations to maintain consistency
+                        switch teamCount {
+                        case 0...6:
+                            topayAmount = Double((teamCount - 1) * 2) * 70.0
+                        case 7...9:
+                            topayAmount = Double(teamCount - 1) * 1.5 * 70.0
+                        case 10...:
+                            topayAmount = Double(teamCount - 1) * 70.0
+                        default:
+                            topayAmount = 0.0 // This can be adjusted if needed
+                        }
+
                         registration.assignedLeague = leagueID
                         if let currentPaidAmount = registration.paidAmount {
-                            registration.paidAmount = currentPaidAmount - Double(topayAmount)
+                            registration.paidAmount = currentPaidAmount - topayAmount
                         } else {
-                            registration.paidAmount = -Double(topayAmount)
+                            registration.paidAmount = -topayAmount
                         }
-                        
+
                         let primaryContactEmail = registration.primary?.email
                         self.sendPaymentInstructionsInBackground(req: req, recipient: primaryContactEmail ?? "", registration: registration)
                         return registration.save(on: req.db).transform(to: .ok)

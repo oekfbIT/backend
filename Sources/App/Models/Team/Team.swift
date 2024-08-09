@@ -88,11 +88,13 @@ final class Team: Model, Content {
     struct Public: Codable, Content {
         var id: UUID?
         var sid: String?
+        var logo: String?
         var teamName: String
         var foundationYear: String?
         var membershipSince: String?
         var averageAge: String?
         var referCode: String
+        var trikot: Trikot?
         var players: [Player.Public]
     }
 
@@ -100,11 +102,13 @@ final class Team: Model, Content {
         return Public(
             id: self.id,
             sid: self.sid,
+            logo: self.logo,
             teamName: self.teamName,
             foundationYear: self.foundationYear,
             membershipSince: self.membershipSince,
             averageAge: self.averageAge,
             referCode: self.referCode ?? String.randomString(length: 6),
+            trikot: self.trikot,
             players: self.players.map { $0.asPublic() }
         )
     }

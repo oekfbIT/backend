@@ -1,9 +1,3 @@
-//
-//
-//  Copyright © 2023.
-//  Alon Yakobichvili
-//  All rights reserved.
-
 import Vapor
 import Fluent
 
@@ -32,8 +26,11 @@ final class LeagueController: RouteCollection {
 
         // Add the new route to get league with seasons
         route.get(":id", "seasons", use: getLeagueWithSeasons)
+        route.get("code", ":code", use: getLeaguebyCode)
         route.get(":id", "teamCount", use: getNumberOfTeams)
 
+        // Add the new route to get leagues by state
+        route.get("state", ":state", use: getLeaguesForState)
     }
 
     func boot(routes: RoutesBuilder) throws {
@@ -46,7 +43,6 @@ final class LeagueController: RouteCollection {
             return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing parameters"))
         }
 
-
         return League.find(leagueID, on: req.db)
             .unwrap(or: Abort(.notFound, reason: "League not found"))
             .flatMap { league in
@@ -56,6 +52,18 @@ final class LeagueController: RouteCollection {
             }
     }
     
+    func getLeaguebyCode(req: Request) -> EventLoopFuture<League> {
+        guard let leagueCode = req.parameters.get("code", as: String.self) else {
+            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league Code"))
+        }
+
+        return League.query(on: req.db)
+            .filter(\.$code == leagueCode)
+            .with(\.$teams)
+            .first()
+            .unwrap(or: Abort(.notFound, reason: "League not found"))
+    }
+
     func getLeagueWithSeasons(req: Request) -> EventLoopFuture<LeagueWithSeasons> {
         guard let leagueID = req.parameters.get("id", as: UUID.self) else {
             return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league ID"))
@@ -82,6 +90,16 @@ final class LeagueController: RouteCollection {
             .flatMap { league in
                 league.$teams.query(on: req.db).count()
             }
+    }
+    
+    func getLeaguesForState(req: Request) -> EventLoopFuture<[League]> {
+        guard let state = req.parameters.get("state", as: Bundesland.self) else {
+            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing state parameter"))
+        }
+
+        return League.query(on: req.db)
+            .filter(\.$state == state)
+            .all()
     }
 
     struct LeagueWithSeasons: Content {
