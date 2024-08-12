@@ -35,10 +35,16 @@ public func configure(_ app: Application) throws {
     app.passwords.use(.bcrypt)
 
     // Configure multiple allowed origins
-    let allowedOrigins: [String] = ["http://localhost:3000",
+    let allowedOrigins: [String] = [
                                     "http://localhost:4000",
+                                    "http://localhost:3000",
+                                    
+                                    "http://localhost",
                                     "https://admin.oekfb.eu",
                                     "https://oekfb.eu",
+                                    "https://oekfb.eu:4000",
+                                    "http://oekfb.eu:4000",
+                                    "http://oekfb.eu",
                                     "https://team.oekfb.eu",
                                     "https://ref.oekfb.eu",
                                     "http://84.115.221.22:3000",

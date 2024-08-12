@@ -88,7 +88,6 @@ final class TeamRegistrationController: RouteCollection {
         }
     }
 
-    // Confirm
     func confirm(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let id = try req.parameters.require("id", as: UUID.self)
 
@@ -100,7 +99,7 @@ final class TeamRegistrationController: RouteCollection {
             registration.status = .approved
 
             let userSignup = UserSignup(
-                id: UUID().uuidString,
+                id: String.randomString(length: 5),
                 firstName: registration.primary?.first ?? "",
                 lastName: registration.primary?.last ?? "",
                 email: registration.primary?.email ?? "",
@@ -110,33 +109,45 @@ final class TeamRegistrationController: RouteCollection {
 
             do {
                 let user = try User.create(from: userSignup)
-                return user.save(on: req.db).flatMap {
-                    let team = Team(
-                        sid: String.randomNum(length: 5),
-                        userId: user.id,
-                        leagueId: registration.assignedLeague,
-                        leagueCode: registration.assignedLeague?.uuidString,
-                        points: 0,
-                        coverimg: "",
-                        logo: registration.teamLogo ?? "",
-                        teamName: registration.teamName,
-                        foundationYear: Date().yearString, // Assuming you want the current year
-                        membershipSince: Date().yearString, // Assuming you want the current year
-                        averageAge: "0",
-                        trikot: Trikot(home: "", away: ""),
-                        usremail: registration.primary?.email,
-                        usrpass: registration.initialPassword,
-                        usrtel: registration.primary?.phone
-                    )
+                print("User to be saved: \(user)")
 
-                    return team.save(on: req.db).flatMap {
-                        return registration.save(on: req.db).transform(to: .ok)
+                return self.findLeague(id: registration.assignedLeague!, req: req).flatMap { league in
+                    return user.save(on: req.db).flatMap {
+                        let team = Team(
+                            sid: String.randomNum(length: 5),
+                            userId: user.id,
+                            leagueId: registration.assignedLeague,
+                            leagueCode: league.code,
+                            points: 0,
+                            coverimg: "",
+                            logo: registration.teamLogo ?? "",
+                            teamName: registration.teamName,
+                            foundationYear: Date().yearString,
+                            membershipSince: Date().yearString,
+                            averageAge: "0",
+                            trikot: Trikot(home: "", away: ""),
+                            usremail: registration.primary?.email,
+                            usrpass: registration.initialPassword,
+                            usrtel: registration.primary?.phone
+                        )
+
+                        print("Team to be saved: \(team)")
+
+                        return team.save(on: req.db).flatMap {
+                            return registration.save(on: req.db).transform(to: .ok)
+                        }
                     }
                 }
-            } catch {
+            } catch let error {
+                print("Error occurred during user creation or saving: \(error)")
                 return req.eventLoop.makeFailedFuture(error)
             }
         }
+    }
+
+    func findLeague(id: UUID, req: Request) -> EventLoopFuture<League> {
+        return League.find(id, on: req.db)
+            .unwrap(or: Abort(.notFound, reason: "League with ID \(id) not found"))
     }
 
     // Reject
