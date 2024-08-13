@@ -50,6 +50,7 @@ public func configure(_ app: Application) throws {
         "http://oekfb.eu:3000",
         "http://oekfb.eu:4000",
         "http://oekfb.eu",
+        "http://www.oekfb.eu",
 
         "https://team.oekfb.eu",
         "https://ref.oekfb.eu",
