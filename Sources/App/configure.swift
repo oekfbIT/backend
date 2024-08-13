@@ -50,7 +50,9 @@ public func configure(_ app: Application) throws {
         "http://oekfb.eu:3000",
         "http://oekfb.eu:4000",
         "http://oekfb.eu",
-        "http://www.oekfb.eu",
+        
+        "https://www.oekfb.eu",  // Add this line for www
+        "http://www.oekfb.eu",   // Add this line for www
 
         "https://team.oekfb.eu",
         "https://ref.oekfb.eu",
@@ -68,8 +70,6 @@ public func configure(_ app: Application) throws {
         "http://192.168.0.144:4000",
         "http://192.168.0.144:3000",
         "http://192.168.0.242"
-
-        
     ]
 
     // CORS configuration
