@@ -36,30 +36,28 @@ public func configure(_ app: Application) throws {
 
     // Configure multiple allowed origins
     let allowedOrigins: [String] = [
-                                    "http://localhost:4000",
-                                    "http://localhost:3000",
-                                    
-                                    "http://localhost",
-                                    "https://admin.oekfb.eu",
-                                    "https://oekfb.eu",
-                                    "https://oekfb.eu:4000",
-                                    "http://oekfb.eu:4000",
-                                    "http://oekfb.eu",
-                                    "https://team.oekfb.eu",
-                                    "https://ref.oekfb.eu",
-                                    "http://84.115.221.22:3000",
-                                    "http://84.115.221.22:4000",
-                                    "http://84.115.221.22:5000",
-                                    "http://165.232.91.105:3000",
-                                    "http://165.232.91.105:4000",
-                                    "http://165.232.91.105:5000"
-]
+        "http://localhost:3000",
+        "https://admin.oekfb.eu",
+        "https://oekfb.eu",
+        "https://team.oekfb.eu",
+        "https://ref.oekfb.eu",
+        "http://165.232.91.105:3000",
+        "http://84.115.221.22",
+        "http://84.115.221.22:3000",
+        "http://localhost:4000",
+        "http://84.115.221.22:4000",
+        
+        "http://192.168.0.144:4000",
+        "http://192.168.0.242:4000"
+
+        
+    ]
 
     // CORS configuration
     let corsConfiguration = CORSMiddleware.Configuration(
         allowedOrigin: .any(allowedOrigins),
         allowedMethods: [.GET, .POST, .PUT, .OPTIONS, .DELETE, .PATCH],
-        allowedHeaders: [.authorization, .contentType, .accept, .origin, .xRequestedWith],
+        allowedHeaders: [.authorization, .contentType, .accept, .origin, .xRequestedWith, .userAgent, .init("sec-ch-ua"), .init("sec-ch-ua-mobile"), .init("sec-ch-ua-platform")],
         allowCredentials: true,
         exposedHeaders: [.authorization, .contentType]
     )
