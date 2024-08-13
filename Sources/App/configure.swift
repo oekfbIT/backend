@@ -72,16 +72,8 @@ public func configure(_ app: Application) throws {
     ]
 
     // CORS configuration
-//    let corsConfiguration = CORSMiddleware.Configuration(
-//        allowedOrigin: .any(allowedOrigins),
-//        allowedMethods: [.GET, .POST, .PUT, .OPTIONS, .DELETE, .PATCH],
-//        allowedHeaders: [.authorization, .contentType, .accept, .origin, .xRequestedWith, .userAgent, .init("sec-ch-ua"), .init("sec-ch-ua-mobile"), .init("sec-ch-ua-platform")],
-//        allowCredentials: true,
-//        exposedHeaders: [.authorization, .contentType]
-//    )
-
     let corsConfiguration = CORSMiddleware.Configuration(
-        allowedOrigin: .all,
+        allowedOrigin: .any(allowedOrigins),
         allowedMethods: [.GET, .POST, .PUT, .OPTIONS, .DELETE, .PATCH],
         allowedHeaders: [.authorization, .contentType, .accept, .origin, .xRequestedWith, .userAgent, .init("sec-ch-ua"), .init("sec-ch-ua-mobile"), .init("sec-ch-ua-platform")],
         allowCredentials: true,
