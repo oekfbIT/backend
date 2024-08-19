@@ -51,8 +51,8 @@ public func configure(_ app: Application) throws {
         "http://oekfb.eu:4000",
         "http://oekfb.eu",
         
-        "https://www.oekfb.eu",  // Add this line for www
-        "http://www.oekfb.eu",   // Add this line for www
+        "https://www.oekfb.eu",
+        "http://www.oekfb.eu",
 
         "https://team.oekfb.eu",
         "https://ref.oekfb.eu",
@@ -62,10 +62,20 @@ public func configure(_ app: Application) throws {
         "http://165.232.91.105:5000/",
         "http://165.232.91.105/",
         
+        "https://165.232.91.105:3000",
+        "https://165.232.91.105:4000/",
+        "https://165.232.91.105:5000/",
+        "https://165.232.91.105/",
+
         "http://84.115.221.22",
         "http://84.115.221.22:3000",
         "http://84.115.221.22:4000",
         "http://84.115.221.22:5000",
+        
+        "https://84.115.221.22",
+        "https://84.115.221.22:3000",
+        "https://84.115.221.22:4000",
+        "https://84.115.221.22:5000",
         
         "http://192.168.0.144:4000",
         "http://192.168.0.144:3000",

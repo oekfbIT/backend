@@ -4,6 +4,7 @@ import Fluent
 enum PlayerEligibility: String, Codable {
     case Spielberechtigt = "Spielberechtigt"
     case Gesperrt = "Gesperrt"
+    case Warten = "Warten"
 }
 
 final class Player: Model, Content, Codable {
