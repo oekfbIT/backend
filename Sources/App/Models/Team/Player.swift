@@ -24,6 +24,7 @@ final class Player: Model, Content, Codable {
     @Field(key: FieldKeys.registerDate) var registerDate: String
     @OptionalField(key: FieldKeys.identification) var identification: String?
     @OptionalField(key: FieldKeys.status) var status: Bool?
+    @OptionalField(key: FieldKeys.isCaptain) var isCaptain: Bool?
 
     struct FieldKeys {
         static var id: FieldKey { "id" }
@@ -40,11 +41,12 @@ final class Player: Model, Content, Codable {
         static var registerDate: FieldKey { "registerDate" }
         static var identification: FieldKey { "identification" }
         static var status: FieldKey { "status" }
+        static var isCaptain: FieldKey { "isCaptain" }
     }
 
     init() {}
 
-    init(id: UUID? = nil, sid: String, image: String?, team_oeid: String?, name: String, number: String, birthday: String, teamID: UUID?, nationality: String, position: String, eligibility: PlayerEligibility, registerDate: String, identification: String?, status: Bool?) {
+    init(id: UUID? = nil, sid: String, image: String?, team_oeid: String?, name: String, number: String, birthday: String, teamID: UUID?, nationality: String, position: String, eligibility: PlayerEligibility, registerDate: String, identification: String?, status: Bool?, isCaptain: Bool? = false) {
         self.id = id
         self.sid = sid
         self.image = image
@@ -59,6 +61,7 @@ final class Player: Model, Content, Codable {
         self.registerDate = registerDate
         self.identification = identification
         self.status = status
+        self.isCaptain = isCaptain
     }
 }
 // Player Migration
@@ -78,6 +81,7 @@ extension PlayerMigration: Migration {
             .field(Player.FieldKeys.registerDate, .string)
             .field(Player.FieldKeys.identification, .string)
             .field(Player.FieldKeys.status, .bool)
+            .field(Player.FieldKeys.isCaptain, .bool)
             .create()
     }
 
@@ -102,6 +106,7 @@ extension Player {
         var eligibility: PlayerEligibility
         var registerDate: String
         var status: Bool?
+        var isCaptain: Bool?
     }
     
     func asPublic() -> Public {
@@ -118,7 +123,29 @@ extension Player {
             position: self.position,
             eligibility: self.eligibility,
             registerDate: self.registerDate,
-            status: self.status
+            status: self.status,
+            isCaptain: self.isCaptain
         )
+    }
+}
+
+extension Player: Mergeable {
+    func merge(from other: Player) -> Player {
+        var merged = self
+        merged.id = other.id
+        merged.sid = other.sid
+        merged.name = other.name
+        merged.image = other.image
+        merged.number = other.number
+        merged.birthday = other.birthday
+        merged.$team.id = other.$team.id
+        merged.nationality = other.nationality
+        merged.position = other.position
+        merged.eligibility = other.eligibility
+        merged.registerDate = other.registerDate
+        merged.identification = other.identification
+        merged.status = other.status
+        merged.isCaptain = other.isCaptain
+        return merged
     }
 }

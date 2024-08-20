@@ -78,21 +78,3 @@ final class PlayerController: RouteCollection {
     }
 }
 
-extension Player: Mergeable {
-    func merge(from other: Player) -> Player {
-        var merged = self
-        merged.id = other.id
-        merged.sid = other.sid
-        merged.name = other.name
-        merged.number = other.number
-        merged.birthday = other.birthday
-        merged.$team.id = other.$team.id
-        merged.nationality = other.nationality
-        merged.position = other.position
-        merged.eligibility = other.eligibility
-        merged.registerDate = other.registerDate
-        merged.identification = other.identification
-        merged.status = other.status
-        return merged
-    }
-}

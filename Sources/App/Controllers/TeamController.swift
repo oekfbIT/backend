@@ -28,6 +28,9 @@ final class TeamController: RouteCollection {
         
         route.get(":id", "topup", ":amount", use: topUpBalance)
         route.post(":id", "league", ":leagueID", use: assignNewLeague) 
+        
+        route.get("updateUser", ":teamID", ":newEmailAdress", use: updateUserEmail) // New route
+
     }
 
     func boot(routes: RoutesBuilder) throws {
@@ -114,6 +117,37 @@ final class TeamController: RouteCollection {
                     }
             }
     }
+    
+    func updateUserEmail(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        guard let teamID = req.parameters.get("teamID", as: UUID.self),
+              let newEmail = req.parameters.get("newEmailAdress") else {
+            throw Abort(.badRequest)
+        }
+
+        return Team.find(teamID, on: req.db)
+            .unwrap(or: Abort(.notFound))
+            .flatMapThrowing { team in
+                guard let userId = team.$user.id else {
+                    throw Abort(.badRequest, reason: "No associated user found for this team.")
+                }
+                
+                team.usremail = newEmail
+                
+                return (team, userId)
+            }
+            .flatMap { (team, userId) in
+                
+                return User.find(userId, on: req.db)
+                    .unwrap(or: Abort(.notFound))
+                    .flatMap { user in
+                        user.email = newEmail
+                        return user.save(on: req.db)
+                            .and(team.save(on: req.db))
+                            .transform(to: .ok)
+                    }
+            }
+    }
+
 
 }
 
@@ -133,6 +167,7 @@ extension Team: Mergeable {
         merged.trikot = other.trikot
         merged.balance = other.balance
         merged.usrpass = other.usrpass
+        merged.usremail = other.usremail
         return merged
     }
 }

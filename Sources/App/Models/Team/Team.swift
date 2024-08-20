@@ -38,6 +38,7 @@ final class Team: Model, Content {
     
     // Hidden Values
     @OptionalField(key: FieldKeys.usrpass) var usrpass: String?
+    @OptionalField(key: FieldKeys.usrpass) var usremail: String?
 
     struct FieldKeys {
         static var id: FieldKey { "id" }
@@ -60,6 +61,7 @@ final class Team: Model, Content {
         static var balance: FieldKey { "balance" }
         static var referCode: FieldKey { "referCode" }
         static var usrpass: FieldKey { "usrpass" }
+        static var usremail: FieldKey { "usremail" }
     }
 
     init() {}
@@ -83,6 +85,7 @@ final class Team: Model, Content {
         self.balance = balance
         self.referCode = referCode
         self.usrpass = usrpass
+        self.usremail = usremail
     }
     
     struct Public: Codable, Content {
@@ -138,6 +141,7 @@ extension TeamMigration: Migration {
             .field(Team.FieldKeys.trikot, .json)
             .field(Team.FieldKeys.balance, .double)
             .field(Team.FieldKeys.usrpass,  .string)
+            .field(Team.FieldKeys.usremail,  .string)
                     .create()
     }
 
