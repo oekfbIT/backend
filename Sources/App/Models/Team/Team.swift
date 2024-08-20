@@ -39,6 +39,9 @@ final class Team: Model, Content {
     // Hidden Values
     @OptionalField(key: FieldKeys.usrpass) var usrpass: String?
     @OptionalField(key: FieldKeys.usrpass) var usremail: String?
+    
+    @Children(for: \.$team) var rechnungen: [Rechnung]
+
 
     struct FieldKeys {
         static var id: FieldKey { "id" }

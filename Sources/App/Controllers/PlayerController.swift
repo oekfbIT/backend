@@ -29,6 +29,9 @@ final class PlayerController: RouteCollection {
         
         // New route for getting a normal player with identification
         route.get("internal", ":id", use: getPlayerWithIdentification)
+        
+        route.get("pending", use: getPlayersWithPendingEligibility)
+
     }
 
     func boot(routes: RoutesBuilder) throws {
@@ -76,5 +79,15 @@ final class PlayerController: RouteCollection {
         return Player.find(playerID, on: req.db)
             .unwrap(or: Abort(.notFound))
     }
+    
+    func getPlayersWithPendingEligibility(req: Request) -> EventLoopFuture<[Player.Public]> {
+        return Player.query(on: req.db)
+            .filter(\.$eligibility == .Warten)
+            .all()
+            .map { players in
+                players.map { $0.asPublic() }
+            }
+    }
+
 }
 

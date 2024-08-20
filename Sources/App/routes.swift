@@ -23,6 +23,7 @@ func routes(_ app: Application) throws {
         TeamRegistrationController(path: "registrations"),
         ConversationController(path: "chat"),
         NewsController(path: "news"),
+        RechnungsController(path: "finanzen"),
         ScraperDetailController()
     ]
     

@@ -14,7 +14,8 @@ let app_migrations: [Migration] = [
     UserVerificationTokenMigration(),
     TokenMigration(),
     ConversationMigration(),
-    NewsItemMigration()
+    NewsItemMigration(),
+    RechnungMigration()
 ]
 
 struct UserMigration { }
@@ -28,3 +29,4 @@ struct TokenMigration { }
 struct TeamRegistrationMigration { }
 struct ConversationMigration { }
 struct NewsItemMigration {}
+struct RechnungMigration { }
