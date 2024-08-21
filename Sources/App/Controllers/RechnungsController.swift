@@ -15,7 +15,7 @@ final class RechnungsController: RouteCollection {
 
         route.get(use: repository.index)
         route.get(":id", use: repository.getbyID)
-        route.get("complete", ":id", use: complete)  // Add the new route here
+        route.get("complete", ":id", use: complete)
         route.delete(":id", use: repository.deleteID)
 
         route.patch(":id", use: repository.updateID)
