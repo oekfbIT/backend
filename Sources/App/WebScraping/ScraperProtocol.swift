@@ -186,6 +186,7 @@ final class ScraperController {
                     sid: sid,
                     image: self.baseUrl + (imageUrl ?? ""),
                     team_oeid: teamOeid,
+                    email: "",
                     name: name,
                     number: number,
                     birthday: birthday,

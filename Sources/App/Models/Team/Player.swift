@@ -14,6 +14,7 @@ final class Player: Model, Content, Codable {
     @Field(key: FieldKeys.sid) var sid: String
     @OptionalField(key: FieldKeys.image) var image: String?
     @OptionalField(key: FieldKeys.team_oeid) var team_oeid: String?
+    @OptionalField(key: FieldKeys.email) var email: String?
     @Field(key: FieldKeys.name) var name: String
     @Field(key: FieldKeys.number) var number: String
     @Field(key: FieldKeys.birthday) var birthday: String
@@ -25,11 +26,13 @@ final class Player: Model, Content, Codable {
     @OptionalField(key: FieldKeys.identification) var identification: String?
     @OptionalField(key: FieldKeys.status) var status: Bool?
     @OptionalField(key: FieldKeys.isCaptain) var isCaptain: Bool?
-
+    @OptionalField(key: FieldKeys.bank) var bank: Bool?
+    
     struct FieldKeys {
         static var id: FieldKey { "id" }
         static var sid: FieldKey { "sid" }
         static var image: FieldKey { "image" }
+        static var email: FieldKey { "email" }
         static var team_oeid: FieldKey { "team_oeid" }
         static var name: FieldKey { "name" }
         static var number: FieldKey { "number" }
@@ -42,14 +45,16 @@ final class Player: Model, Content, Codable {
         static var identification: FieldKey { "identification" }
         static var status: FieldKey { "status" }
         static var isCaptain: FieldKey { "isCaptain" }
+        static var bank: FieldKey { "bank" }
     }
 
     init() {}
 
-    init(id: UUID? = nil, sid: String, image: String?, team_oeid: String?, name: String, number: String, birthday: String, teamID: UUID?, nationality: String, position: String, eligibility: PlayerEligibility, registerDate: String, identification: String?, status: Bool?, isCaptain: Bool? = false) {
+    init(id: UUID? = nil, sid: String, image: String?, team_oeid: String?, email: String?, name: String, number: String, birthday: String, teamID: UUID?, nationality: String, position: String, eligibility: PlayerEligibility, registerDate: String, identification: String?, status: Bool?, isCaptain: Bool? = false, bank: Bool? = true) {
         self.id = id
         self.sid = sid
         self.image = image
+        self.email = email
         self.team_oeid = team_oeid
         self.name = name
         self.number = number
@@ -62,6 +67,7 @@ final class Player: Model, Content, Codable {
         self.identification = identification
         self.status = status
         self.isCaptain = isCaptain
+        self.bank = bank
     }
 }
 // Player Migration
@@ -72,6 +78,7 @@ extension PlayerMigration: Migration {
             .field(Player.FieldKeys.name, .string, .required)
             .field(Player.FieldKeys.image, .string)
             .field(Player.FieldKeys.team_oeid, .string)
+            .field(Player.FieldKeys.email, .string)
             .field(Player.FieldKeys.number, .string, .required)
             .field(Player.FieldKeys.birthday, .string, .required)
             .field(Player.FieldKeys.teamID, .uuid, .required, .references(Team.schema, Team.FieldKeys.id))
@@ -82,6 +89,7 @@ extension PlayerMigration: Migration {
             .field(Player.FieldKeys.identification, .string)
             .field(Player.FieldKeys.status, .bool)
             .field(Player.FieldKeys.isCaptain, .bool)
+            .field(Player.FieldKeys.bank, .bool)
             .create()
     }
 
@@ -107,6 +115,7 @@ extension Player {
         var registerDate: String
         var status: Bool?
         var isCaptain: Bool?
+        var bank: Bool?
     }
     
     func asPublic() -> Public {
@@ -124,7 +133,8 @@ extension Player {
             eligibility: self.eligibility,
             registerDate: self.registerDate,
             status: self.status,
-            isCaptain: self.isCaptain
+            isCaptain: self.isCaptain,
+            bank: self.bank
         )
     }
 }
@@ -136,6 +146,7 @@ extension Player: Mergeable {
         merged.sid = other.sid
         merged.name = other.name
         merged.image = other.image
+        merged.email = other.email
         merged.number = other.number
         merged.birthday = other.birthday
         merged.$team.id = other.$team.id
@@ -146,6 +157,7 @@ extension Player: Mergeable {
         merged.identification = other.identification
         merged.status = other.status
         merged.isCaptain = other.isCaptain
+        merged.bank = other.bank
         return merged
     }
 }

@@ -171,7 +171,7 @@ final class ScraperDetailController: RouteCollection {
                 let birthday = birthday,
                 let nationality = nationality,
                 let eligibilityText = eligibilityText,
-                let registerDate = registerDate,
+                                                                                                                                                                                                                                                                               let registerDate = registerDate,
                 let teamOeid = teamOeid
             else {
                 throw Abort(.badRequest, reason: "Failed to parse player data")
@@ -183,7 +183,7 @@ final class ScraperDetailController: RouteCollection {
                 sid: sid,
                 image: self.baseUrl + (imageUrl ?? ""),
                 team_oeid: teamOeid,
-                name: name,
+                email: "", name: name,
                 number: number,
                 birthday: birthday,
                 teamID: UUID(), // Placeholder for the team ID, you'll need to fetch or determine this based on your data
@@ -253,7 +253,7 @@ final class ScraperDetailController: RouteCollection {
                 sid: sid,
                 image: self.baseUrl + (imageUrl ?? ""),
                 team_oeid: teamOeid ?? "N/A",
-                name: name ?? "N/A",
+                email: "", name: name ?? "N/A",
                 number: number  ?? "N/A",
                 birthday: birthday  ?? "N/A",
                 teamID: teamId, // Placeholder for the team ID, you'll need to fetch or determine this based on your data

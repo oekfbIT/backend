@@ -47,7 +47,6 @@ final class UserController: RouteCollection {
     
     func getTeamUserIndex(req: Request) throws -> EventLoopFuture<[User]> {
         User.query(on: req.db)
-            .filter(\.$type == .team)
             .with(\.$teams)
             .all()
     }

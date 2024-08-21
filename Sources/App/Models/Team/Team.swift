@@ -12,6 +12,7 @@ import Vapor
 struct Trainer: Codable {
     var name: String
     var imageURL: String?
+    var email: String?
 }
 
 final class Team: Model, Content {

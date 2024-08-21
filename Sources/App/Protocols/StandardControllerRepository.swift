@@ -99,7 +99,6 @@ class StandardControllerRepository<T: Model & Content & Mergeable>: DBModelContr
         }
         
         let updatedItem = try req.content.decode(T.self)
-        
         return T.find(id, on: req.db)
             .unwrap(or: Abort(.notFound))
             .flatMap { item in
