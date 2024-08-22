@@ -20,11 +20,11 @@ final class PlayerController: RouteCollection {
 
         route.patch(":id", use: repository.updateID)
         route.patch("batch", use: repository.updateBatch)
-
+        
         route.patch(":id", "number", ":number", use: updatePlayerNumber)
         route.get("name", ":search", use: searchByName)
         route.get("internal", ":id", use: getPlayerWithIdentification)
-        route.get("pending", use: getPlayersWithPendingEligibility)
+        route.get("pending", use: getPlayersWithEmail)
     }
 
     func boot(routes: RoutesBuilder) throws {
@@ -132,4 +132,16 @@ final class PlayerController: RouteCollection {
                 players.map { $0.asPublic() }
             }
     }
+    
+    func getPlayersWithEmail(req: Request) throws -> EventLoopFuture<[Player.Public]> {
+        return Player.query(on: req.db)
+            .filter(\.$email != nil)
+            .filter(\.$email != "")
+            .filter(\.$eligibility == .Warten)
+            .all()
+            .map { players in
+                players.map { $0.asPublic() }
+            }
+    }
+
 }

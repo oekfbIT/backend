@@ -53,7 +53,8 @@ public func configure(_ app: Application) throws {
         
         "https://www.oekfb.eu",
         "http://www.oekfb.eu",
-
+        
+        "http://team.oekfb.eu",
         "https://team.oekfb.eu",
         "https://ref.oekfb.eu",
         

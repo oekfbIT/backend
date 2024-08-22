@@ -24,7 +24,9 @@ func routes(_ app: Application) throws {
         ConversationController(path: "chat"),
         NewsController(path: "news"),
         RechnungsController(path: "finanzen"),
-        ScraperDetailController()
+        ScraperDetailController(),
+        TransferController(path: "transfers"),
+        TransferSettingsController(path: "transferSettings")
     ]
     
     app.get("status") { req async -> String in
