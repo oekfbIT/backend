@@ -63,7 +63,7 @@ final class PlayerController: RouteCollection {
                         teamName: team.teamName,
                         number: invoiceNumber,
                         summ: rechnungAmount,
-                        kennzeichen: team.teamName + " " + savedPlayer.sid + ": Anmeldung"
+                        topay: nil, kennzeichen: team.teamName + " " + savedPlayer.sid + ": Anmeldung"
                     )
 
                     // Save the Rechnung and update the team's balance

@@ -94,8 +94,32 @@ final class TeamController: RouteCollection {
         return Team.find(teamID, on: req.db)
             .unwrap(or: Abort(.notFound))
             .flatMap { team in
-                team.balance = (team.balance ?? 0) + amount
-                return team.save(on: req.db).transform(to: .ok)
+                // Get the current year and generate a random 5-digit number
+                let currentYear = Calendar.current.component(.year, from: Date())
+                let randomNumber = String.randomNum(length: 5)
+                let number = "\(currentYear)-\(randomNumber)"
+                
+                // Format the current date to "dd.MM.yyyy"
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateFormat = "dd.MM.yyyy"
+                let currentDate = dateFormatter.string(from: Date())
+                
+                // Set the kennzeichen
+                let kennzeichen = "\(currentDate) Guthaben Einzahlung"
+                
+                let rechnung = Rechnung(team: teamID,
+                                        teamName: team.teamName,
+                                        number: number,
+                                        summ: amount,
+                                        topay: nil,
+                                        kennzeichen: kennzeichen)
+                                        
+                team.balance = (team.balance ?? 0) + rechnung.summ
+                
+                return team.save(on: req.db).flatMap {
+                    // Save the new Rechnung to the database
+                    return rechnung.create(on: req.db).transform(to: HTTPStatus.ok)
+                }
             }
     }
 

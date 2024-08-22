@@ -34,12 +34,8 @@ final class RechnungsController: RouteCollection {
         return Team.find(rechnung.$team.id, on: req.db)
             .unwrap(or: Abort(.notFound, reason: "Team not found"))
             .flatMap { team in
-                // Subtract the summ from the team's balance
-                if let currentBalance = team.balance {
-                    team.balance = currentBalance - rechnung.summ
-                } else {
-                    team.balance = -rechnung.summ
-                }
+                team.balance = (team.balance ?? 0) + rechnung.summ
+                print(team.balance)
                 
                 // Save the updated team
                 return team.save(on: req.db).flatMap {

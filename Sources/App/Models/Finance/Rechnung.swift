@@ -15,6 +15,7 @@ final class Rechnung: Model, Content, Codable {
     @Field(key: FieldKeys.teamName) var teamName: String
     @Field(key: FieldKeys.number) var number: String
     @Field(key: FieldKeys.summ) var summ: Double
+    @Field(key: FieldKeys.topay) var topay: Double?
     @Field(key: FieldKeys.kennzeichen) var kennzeichen: String
     @Field(key: FieldKeys.dueDate) var dueDate: String?
     @Timestamp(key: FieldKeys.created, on: .create) var created: Date?
@@ -26,6 +27,7 @@ final class Rechnung: Model, Content, Codable {
         static var teamName: FieldKey { "teamName" }
         static var number: FieldKey { "number" }
         static var summ: FieldKey { "summ" }
+        static var topay: FieldKey { "topay" }
         static var kennzeichen: FieldKey { "kennzeichen" }
         static var dueDate: FieldKey { "due_date" }
         static var created: FieldKey { "created" }
@@ -40,6 +42,7 @@ final class Rechnung: Model, Content, Codable {
         status: RechnungStatus = .offen,
         number: String,
         summ: Double,
+        topay: Double?,
         kennzeichen: String,
         created: Date? = nil
     ) {
@@ -49,6 +52,7 @@ final class Rechnung: Model, Content, Codable {
         self.status = status
         self.number = number
         self.summ = summ
+        self.topay = topay ?? summ
         self.kennzeichen = kennzeichen
         self.created = created ?? Date() // Set the created date to the current date if not provided
         
