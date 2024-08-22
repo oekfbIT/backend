@@ -10,7 +10,7 @@ final class Rechnung: Model, Content, Codable {
     static let schema = "rechnungen"
 
     @ID(custom: .id) var id: UUID?
-    @Parent(key: FieldKeys.team) var team: Team
+    @OptionalParent(key: FieldKeys.teamID) var team: Team?
     @Field(key: FieldKeys.status) var status: RechnungStatus
     @Field(key: FieldKeys.teamName) var teamName: String
     @Field(key: FieldKeys.number) var number: String
@@ -22,7 +22,7 @@ final class Rechnung: Model, Content, Codable {
 
     struct FieldKeys {
         static var id: FieldKey { "id" }
-        static var team: FieldKey { "team_id" }
+        static var teamID: FieldKey { "teamID" }
         static var status: FieldKey { "status" }
         static var teamName: FieldKey { "teamName" }
         static var number: FieldKey { "number" }
@@ -37,7 +37,7 @@ final class Rechnung: Model, Content, Codable {
 
     init(
         id: UUID? = nil,
-        team: Team.IDValue,
+        team: UUID?,
         teamName: String,
         status: RechnungStatus = .offen,
         number: String,
@@ -99,7 +99,7 @@ extension RechnungMigration: Migration {
     func prepare(on database: Database) -> EventLoopFuture<Void> {
         database.schema(Rechnung.schema)
             .id()
-            .field(Rechnung.FieldKeys.team, .uuid, .required, .references(Team.schema, .id))
+            .field(Rechnung.FieldKeys.teamID, .uuid, .required, .references(Team.schema, .id))
             .field(Rechnung.FieldKeys.status, .string, .required)
             .field(Rechnung.FieldKeys.teamName, .string, .required)
             .field(Rechnung.FieldKeys.number, .string, .required)

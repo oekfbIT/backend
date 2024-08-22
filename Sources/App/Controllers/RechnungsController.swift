@@ -15,6 +15,7 @@ final class RechnungsController: RouteCollection {
 
         route.get(use: repository.index)
         route.get(":id", use: repository.getbyID)
+        
         route.get("complete", ":id", use: complete)
         route.delete(":id", use: repository.deleteID)
 
@@ -25,7 +26,7 @@ final class RechnungsController: RouteCollection {
     func boot(routes: RoutesBuilder) throws {
         try setupRoutes(on: routes)
     }
-    
+        
     func create(req: Request) throws -> EventLoopFuture<Rechnung> {
         // Decode the incoming Rechnung from the request body
         let rechnung = try req.content.decode(Rechnung.self)

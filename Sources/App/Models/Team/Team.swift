@@ -32,7 +32,6 @@ final class Team: Model, Content {
     @Field(key: FieldKeys.averageAge) var averageAge: String
     @OptionalField(key: FieldKeys.coach) var coach: Trainer?
     @OptionalField(key: FieldKeys.captain) var captain: String?
-    @Children(for: \.$team) var players: [Player]
     @Field(key: FieldKeys.trikot) var trikot: Trikot
     @OptionalField(key: FieldKeys.balance) var balance: Double?
     @OptionalField(key: FieldKeys.referCode) var referCode: String?
@@ -42,6 +41,7 @@ final class Team: Model, Content {
     @OptionalField(key: FieldKeys.usrpass) var usremail: String?
     
     @Children(for: \.$team) var rechnungen: [Rechnung]
+    @Children(for: \.$team) var players: [Player]
 
 
     struct FieldKeys {

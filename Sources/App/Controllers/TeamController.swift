@@ -22,8 +22,10 @@ final class TeamController: RouteCollection {
         route.patch("batch", use: repository.updateBatch)
         
         route.get(":id", "players", use: getTeamWithPlayers)
-        route.get("withPlayers", use: getAllTeamsWithPlayers)
+        route.get(":id", "rechungen", use: getTeamWithRechnungen)
         
+        route.get("withPlayers", use: getAllTeamsWithPlayers)
+
         route.get("search", ":value", use: searchByTeamName)
         
         route.get(":id", "topup", ":amount", use: topUpBalance)
@@ -56,6 +58,20 @@ final class TeamController: RouteCollection {
             }
     }
 
+    // Function to get a team with all its players
+    func getTeamWithRechnungen(req: Request) throws -> EventLoopFuture<Team> {
+        guard let teamID = req.parameters.get("id", as: UUID.self) else {
+            throw Abort(.badRequest)
+        }
+        
+        return Team.query(on: req.db)
+            .filter(\.$id == teamID)
+            .with(\.$rechnungen)
+            .first()
+            .unwrap(or: Abort(.notFound))
+    }
+
+    
     // Function to get all teams with their players
     func getAllTeamsWithPlayers(req: Request) throws -> EventLoopFuture<[Team.Public]> {
         return Team.query(on: req.db)
