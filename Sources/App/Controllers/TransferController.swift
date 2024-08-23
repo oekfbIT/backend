@@ -82,6 +82,7 @@ final class TransferController: RouteCollection {
                         return req.eventLoop.makeFailedFuture(Abort(.notFound, reason: "Player not found."))
                     }
                     
+                    transfer.origin = player.$team.id
                     transfer.status = .angenommen
                     transfer.save(on: req.db)
                     
