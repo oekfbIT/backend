@@ -8,6 +8,11 @@
 import Vapor
 import Fluent
 
+struct PasswordUpdateRequest: Content {
+    let currentPassword: String
+    let newPassword: String
+}
+
 final class UserController: RouteCollection {
     let repository: StandardControllerRepository<User>
     let emailController: EmailController  // Add this line
@@ -31,6 +36,10 @@ final class UserController: RouteCollection {
         
         route.patch(":id", use: repository.updateID)
         route.patch("batch", use: repository.updateBatch)
+
+        // Add this line for password update
+        route.patch("password", ":id", use: updatePassword)
+
     }
     
     func boot(routes: RoutesBuilder) throws {
@@ -143,7 +152,6 @@ final class UserController: RouteCollection {
         return EventLoopFuture.whenAllSucceed(signupFutures, on: req.eventLoop)
     }
 
-    
     func login(req: Request) throws -> EventLoopFuture<NewSession> {
         let user = try req.auth.require(User.self)
         let token = try user.createToken(source: .login)
@@ -153,6 +161,54 @@ final class UserController: RouteCollection {
         }
     }
     
+    func updatePassword(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        // Extract the user ID from the request parameters
+        guard let userID = req.parameters.get("id", as: UUID.self) else {
+            throw Abort(.badRequest, reason: "User ID is missing or invalid")
+        }
+
+        // Decode the password update request body
+        let updateRequest = try req.content.decode(PasswordUpdateRequest.self)
+
+        // Fetch the user from the database using the user ID
+        return User.find(userID, on: req.db).flatMap { user in
+            guard let user = user else {
+                return req.eventLoop.future(error: Abort(.notFound, reason: "User not found"))
+            }
+
+            // Verify the current password
+            do {
+                guard try user.verify(password: updateRequest.currentPassword) else {
+                    return req.eventLoop.future(error: Abort(.unauthorized, reason: "Current password is incorrect"))
+                }
+
+                // Hash the new password and update the user's password
+                user.passwordHash = try Bcrypt.hash(updateRequest.newPassword)
+            } catch {
+                return req.eventLoop.future(error: error)
+            }
+
+            // Fetch the team associated with the user
+            return Team.query(on: req.db).filter(\.$user.$id == userID).first().flatMap { team in
+                if let team = team {
+                    // Update the team's usrpass field
+                    team.usrpass = updateRequest.newPassword
+                    
+                    // Save both the user and the team
+                    return team.save(on: req.db).flatMap {
+                        return user.save(on: req.db).transform(to: .ok)
+                    }
+                } else {
+                    // If no team is found, just save the user
+                    return user.save(on: req.db).transform(to: .ok)
+                }
+            }
+        }
+    }
+
+
+
+
     /*
      TODO: [X]
      [] USER WITH TEAM LIST
