@@ -15,6 +15,7 @@ final class Transfer: Model, Content, Codable {
     @OptionalField(key: FieldKeys.status) var status: TransferStatus?
     @Timestamp(key: FieldKeys.created, on: .create) var created: Date?
 
+    @OptionalField(key: FieldKeys.origin) var origin: UUID?
     @Field(key: FieldKeys.playerName) var playerName: String
     @Field(key: FieldKeys.teamName) var teamName: String
     @Field(key: FieldKeys.playerImage) var playerImage: String
@@ -25,6 +26,7 @@ final class Transfer: Model, Content, Codable {
         static var id: FieldKey { "id" }
         static var team: FieldKey { "team"}
         static var player: FieldKey { "player"}
+        static var origin: FieldKey { "origin"}
         static var status: FieldKey { "status"}
         static var created: FieldKey { "created"}
 
@@ -45,7 +47,8 @@ final class Transfer: Model, Content, Codable {
         playerName: String,
         teamName: String,
         playerImage: String,
-        teamImage: String
+        teamImage: String,
+        origin: UUID?
     ) {
         self.id = id
         self.team = team
@@ -56,7 +59,7 @@ final class Transfer: Model, Content, Codable {
         self.teamName = teamName
         self.playerImage = playerImage
         self.teamImage = teamImage
-        
+        self.origin = origin
     }
 }
 
@@ -87,6 +90,7 @@ extension Transfer: Mergeable {
         merged.teamName = other.teamName
         merged.playerImage = other.playerImage
         merged.teamImage = other.teamImage
+        merged.origin = other.origin
         return merged
     }
 }
@@ -104,6 +108,7 @@ extension TransferMigration: Migration {
             .field(Transfer.FieldKeys.teamName, .string, .required)
             .field(Transfer.FieldKeys.playerImage, .string, .required)
             .field(Transfer.FieldKeys.teamImage, .string, .required)
+            .field(Transfer.FieldKeys.origin, .string)
             .create()
     }
 
