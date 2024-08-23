@@ -173,6 +173,7 @@ final class TeamController: RouteCollection {
                 
                 team.usremail = newEmail
                 
+                
                 return (team, userId)
             }
             .flatMap { (team, userId) in

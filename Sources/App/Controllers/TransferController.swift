@@ -81,14 +81,17 @@ final class TransferController: RouteCollection {
                     guard let player = player else {
                         return req.eventLoop.makeFailedFuture(Abort(.notFound, reason: "Player not found."))
                     }
-
+                    
+                    transfer.status = .angenommen
+                    transfer.save(on: req.db)
+                    
                     player.$team.id = transfer.team
                     return player.save(on: req.db).map { player }
                 }
             }
         }
     }
-    
+
     // Route to get all transfers by team ID
     func getTransfersByTeam(req: Request) -> EventLoopFuture<[Transfer]> {
         guard let teamID = req.parameters.get("teamID", as: UUID.self) else {
