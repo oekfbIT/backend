@@ -38,7 +38,7 @@ final class Team: Model, Content {
     
     // Hidden Values
     @OptionalField(key: FieldKeys.usrpass) var usrpass: String?
-    @OptionalField(key: FieldKeys.usrpass) var usremail: String?
+    @OptionalField(key: FieldKeys.usremail) var usremail: String?
     
     @Children(for: \.$team) var rechnungen: [Rechnung]
     @Children(for: \.$team) var players: [Player]
