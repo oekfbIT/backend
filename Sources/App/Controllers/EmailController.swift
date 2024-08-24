@@ -229,4 +229,51 @@ final class EmailController {
             }
         }
     }
+    
+    func sendTransferRequest(req: Request, recipient: String, transfer: Transfer) throws -> EventLoopFuture<HTTPStatus> {
+        // Apply the SMTP configuration
+        req.application.smtp.configuration = smtpConfig
+
+        // Print the SMTP configuration for debugging
+        print("SMTP Configuration: \(req.application.smtp.configuration)")
+
+        // Prepare the email content in German with a button
+        let emailBody = """
+        <html>
+        <body style="font-family: Arial, sans-serif; font-size: 14px; color: #333;">
+            <p>Hallo \(transfer.playerName),</p>
+
+            <p>Die Mannschaft <strong>\(transfer.teamName)</strong> hat dir eine Anfrage geschickt, ihrer Mannschaft beizutreten und deine derzeitige zu verlassen. Willst du diese Anfrage annehmen?</p>
+
+            <p>Um diese Anfrage anzunehmen oder abzulehnen, klicken Sie bitte auf den folgenden Button:</p>
+
+            <a href="https://oekfb.eu/transfer/\(transfer.id)" style="display: inline-block; padding: 10px 20px; font-size: 16px; color: white; background-color: #007bff; text-align: center; text-decoration: none; border-radius: 5px;">Transfer Anfrage beantworten</a>
+            
+            <p>Wir freuen uns über Ihre baldige Rückmeldung und verbleiben.</p>
+
+            <p>Mit freundlichen Grüßen,<br>Österreichische Kleinfeld Fußball Bund</p>
+        </body>
+        </html>
+        """
+
+        let email = try Email(
+            from: EmailAddress(address: "admin@oekfb.eu", name: "Admin"),
+            to: [EmailAddress(address: recipient)],
+            subject: "OEKFB Anmeldung - Transfer Anfrage",
+            body: emailBody,
+            isBodyHtml: true // Indicate that the body contains HTML content
+        )
+
+        return req.smtp.send(email).flatMapThrowing { result in
+            switch result {
+            case .success:
+                return .ok
+            case .failure(let error):
+                print("Email failed to send: \(error)")
+                throw Abort(.internalServerError, reason: "Failed to send email")
+            }
+        }
+    }
+
+    
 }
