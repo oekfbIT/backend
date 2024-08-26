@@ -65,10 +65,9 @@ final class TransferController: RouteCollection {
             return Transfer.query(on: req.db)
                 .filter(\.$player == transfer.player)
                 .filter(\.$team == transfer.team)
-                .group(.or) { group in
-                    group.filter(\.$status == .angenommen)
-                    group.filter(\.$status == .warten)
-                }
+//                .group(.or) { group in
+//                    group.filter(\.$status == .warten)
+//                }
                 .first()
                 .flatMap { existingTransfer -> EventLoopFuture<Transfer> in
                     if let _ = existingTransfer {
@@ -93,11 +92,11 @@ final class TransferController: RouteCollection {
                                         try self.emailcontroller.sendTransferRequest(req: req, recipient: recipientEmail, transfer: newTransfer)
                                     } catch {
                                         // Handle the error if email sending fails
-                                        return req.eventLoop.makeFailedFuture(Abort(.internalServerError, reason: "Failed to send transfer email."))
+//                                        return req.eventLoop.makeFailedFuture(Abort(.internalServerError, reason: "Failed to send transfer email."))
                                     }
                                 } else {
                                     // Handle the case where the player does not have an email
-                                    return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Player does not have an email address."))
+//                                    return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Player does not have an email address."))
                                 }
 
                                 // Return the saved transfer
