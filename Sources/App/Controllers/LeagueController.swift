@@ -141,6 +141,7 @@ extension League {
                 var matches: [Match] = []
                 let totalGameDays = (teamCount - 1) * numberOfRounds
                 var gameDay = 1
+                var homeAwaySwitch = false
 
                 for round in 0..<numberOfRounds {
                     for roundIndex in 0..<(teamCount - 1) {
@@ -151,8 +152,13 @@ extension League {
                                 awayTeamIndex = teamCount - 1
                             }
 
-                            let homeTeam = teams[homeTeamIndex]
-                            let awayTeam = teams[awayTeamIndex]
+                            var homeTeam = teams[homeTeamIndex]
+                            var awayTeam = teams[awayTeamIndex]
+
+                            // Switch home and away teams based on the homeAwaySwitch flag
+                            if homeAwaySwitch {
+                                swap(&homeTeam, &awayTeam)
+                            }
 
                             // Create match
                             let match = Match(
@@ -170,6 +176,9 @@ extension League {
                             gameDay = 1
                         }
                     }
+
+                    // Toggle the homeAwaySwitch after each round
+                    homeAwaySwitch.toggle()
                 }
 
                 // Ensure we have the correct number of matches and game days
@@ -184,5 +193,4 @@ extension League {
             }
         }
     }
-
 }
