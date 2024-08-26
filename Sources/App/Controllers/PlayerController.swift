@@ -22,7 +22,10 @@ final class PlayerController: RouteCollection {
         route.patch("batch", use: repository.updateBatch)
         
         route.patch(":id", "number", ":number", use: updatePlayerNumber)
+
+        route.get("transfer", "name", ":search", use: searchTransferByName)
         route.get("name", ":search", use: searchByName)
+
         route.get("internal", ":id", use: getPlayerWithIdentification)
         route.get("pending", use: getPlayersWithEmail)
     }
@@ -99,6 +102,24 @@ final class PlayerController: RouteCollection {
             }
     }
 
+    func searchTransferByName(req: Request) -> EventLoopFuture<[Player.Public]> {
+        guard let searchValue = req.parameters.get("search") else {
+            return req.eventLoop.future(error: Abort(.badRequest, reason: "Missing search parameter"))
+        }
+
+        return Player.query(on: req.db)
+            .group(.or) { group in
+                group.filter(\.$name ~~ searchValue)
+                group.filter(\.$sid ~~ searchValue)
+            }
+            .filter(\.$email != nil) // Ensure email is not nil
+            .filter(\.$email != "") // Ensure email is not empty
+            .all()
+            .map { players in
+                players.map { $0.asPublic() }
+            }
+    }
+
     func searchByName(req: Request) -> EventLoopFuture<[Player.Public]> {
         guard let searchValue = req.parameters.get("search") else {
             return req.eventLoop.future(error: Abort(.badRequest, reason: "Missing search parameter"))
@@ -114,6 +135,7 @@ final class PlayerController: RouteCollection {
                 players.map { $0.asPublic() }
             }
     }
+
 
     func getPlayerWithIdentification(req: Request) -> EventLoopFuture<Player> {
         guard let playerID = req.parameters.get("id", as: UUID.self) else {
