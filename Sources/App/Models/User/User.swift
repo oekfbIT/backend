@@ -20,6 +20,7 @@ final class User: Model, Content, Codable {
     @Field(key: FieldKeys.email) var email: String
     @Field(key: FieldKeys.passwordHash) var passwordHash: String
     @Children(for: \.$user) var teams: [Team]
+    @Children(for: \.$user) var referees: [Referee]
 
     
     struct Public: Content, Codable {
@@ -77,12 +78,14 @@ enum UserType: String, Codable {
     case admin
     case referee
     case team
-    
+    case manager
+
     var position: String {
         switch self {
             case .admin: return "Admin"
             case .referee: return "Schiedrichter"
             case .team: return "Mannschaft"
+            case .manager: return "Manager"
         }
     }
 }

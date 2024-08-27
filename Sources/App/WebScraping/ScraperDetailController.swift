@@ -385,6 +385,7 @@ final class ScraperDetailController: RouteCollection {
     }
 }
 
+
 extension Array where Element == String {
     /// Returns an array with unique strings by preserving the order of the first occurrence.
     func unique() -> [String] {

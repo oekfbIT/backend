@@ -40,7 +40,7 @@ final class Match: Model, Content, Codable {
     @Field(key: FieldKeys.score) var score: Score
     @Field(key: FieldKeys.status) var status: GameStatus
     
-    // MID GAME
+    // MID GAME TO DETERMINE THE TIMER
     @OptionalField(key: FieldKeys.firstHalfStartDate) var firstHalfStartDate: Date?
     @OptionalField(key: FieldKeys.secondHalfStartDate) var secondHalfStartDate: Date?
     

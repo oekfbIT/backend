@@ -230,6 +230,47 @@ final class EmailController {
         }
     }
     
+    
+    func sendRefLogin(req: Request, recipient: String, email: String, password: String) throws -> EventLoopFuture<HTTPStatus> {
+        // Apply the SMTP configuration
+        req.application.smtp.configuration = smtpConfig
+
+        // Print the SMTP configuration for debugging
+        print("SMTP Configuration: \(req.application.smtp.configuration)")
+
+        // Prepare the email content in German
+        let emailBody = """
+        Sehr geehrter Schiedsrichter,
+
+        Herzlich Willkommen bei der Österreichischen Kleinfeld Fußball Bund.
+        
+        Anbei sind ihre Login Daten:
+        
+        Email: \(email)
+        Passwort: \(password)
+        
+        Sie können sich einlogen unter https://ref.oekfb.eu.
+        """
+
+        let email = try Email(
+            from: EmailAddress(address: "admin@oekfb.eu", name: "Admin"),
+            to: [EmailAddress(address: recipient)],
+            subject: "OEKFB Anmeldung - Willkommen",
+            body: emailBody
+        )
+
+        return req.smtp.send(email).flatMapThrowing { result in
+            switch result {
+            case .success:
+                return .ok
+            case .failure(let error):
+                print("Email failed to send: \(error)")
+                throw Abort(.internalServerError, reason: "Failed to send email")
+            }
+        }
+    }
+
+    
     func sendTransferRequest(req: Request, recipient: String, transfer: Transfer) throws -> EventLoopFuture<HTTPStatus> {
         // Apply the SMTP configuration
         req.application.smtp.configuration = smtpConfig
