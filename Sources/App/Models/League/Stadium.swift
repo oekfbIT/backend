@@ -17,12 +17,12 @@ final class Stadium: Model, Content, Codable {
     @Field(key: FieldKeys.code) var code: String
     @Field(key: FieldKeys.name) var name: String
     @Field(key: FieldKeys.address) var address: String
-    @Field(key: FieldKeys.type) var type: Belag
-    @Field(key: FieldKeys.schuhwerk) var schuhwerk: Schuhwerk
+    @Field(key: FieldKeys.type) var type: String
+    @Field(key: FieldKeys.schuhwerk) var schuhwerk: String
     @Field(key: FieldKeys.flutlicht) var flutlicht: Bool
     @Field(key: FieldKeys.parking) var parking: Bool
-    @Field(key: FieldKeys.homeTeam) var homeTeam: String
-    @Field(key: FieldKeys.partnerSince) var partnerSince: String
+    @Field(key: FieldKeys.homeTeam) var homeTeam: String?
+    @Field(key: FieldKeys.partnerSince) var partnerSince: String?
 
     enum FieldKeys {
         static var id: FieldKey { "id" }
@@ -40,7 +40,7 @@ final class Stadium: Model, Content, Codable {
 
     init() {}
 
-    init(id: UUID? = nil, bundesland: Bundesland, code: String, name: String, address: String, type: Belag, schuhwerk: Schuhwerk, flutlicht: Bool, parking: Bool, homeTeam: String, partnerSince: String) {
+    init(id: UUID? = nil, bundesland: Bundesland, code: String, name: String, address: String, type: String, schuhwerk: String, flutlicht: Bool, parking: Bool, homeTeam: String?, partnerSince: String?) {
         self.id = id
         self.bundesland = bundesland
         self.code = code
@@ -64,36 +64,16 @@ extension StadiumMigration: Migration {
             .field(Stadium.FieldKeys.code, .string, .required)
             .field(Stadium.FieldKeys.name, .string, .required)
             .field(Stadium.FieldKeys.address, .string, .required)
-            .field(Stadium.FieldKeys.type, .string, .required)
-            .field(Stadium.FieldKeys.schuhwerk, .string, .required)
-            .field(Stadium.FieldKeys.flutlicht, .bool, .required)
-            .field(Stadium.FieldKeys.parking, .bool, .required)
-            .field(Stadium.FieldKeys.homeTeam, .string, .required)
-            .field(Stadium.FieldKeys.partnerSince, .string, .required)
+            .field(Stadium.FieldKeys.type, .string)
+            .field(Stadium.FieldKeys.schuhwerk, .string)
+            .field(Stadium.FieldKeys.flutlicht, .bool)
+            .field(Stadium.FieldKeys.parking, .bool)
+            .field(Stadium.FieldKeys.homeTeam, .string)
+            .field(Stadium.FieldKeys.partnerSince, .string)
             .create()
     }
 
     func revert(on database: Database) -> EventLoopFuture<Void> {
         database.schema(Stadium.schema).delete()
-    }
-}
-
-enum Belag: String, Codable {
-    case kunstrasen
-    
-    var value: String {
-        switch self {
-            case .kunstrasen: return "Kunstrasen"
-        }
-    }
-}
-
-enum Schuhwerk: String, Codable {
-    case kunstrasen
-    
-    var value: String {
-        switch self {
-            case .kunstrasen: return "Kunstrasen"
-        }
     }
 }
