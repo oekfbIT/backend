@@ -35,11 +35,12 @@ final class Team: Model, Content {
     @Field(key: FieldKeys.trikot) var trikot: Trikot
     @OptionalField(key: FieldKeys.balance) var balance: Double?
     @OptionalField(key: FieldKeys.referCode) var referCode: String?
-    
+
     // Hidden Values
     @OptionalField(key: FieldKeys.usrpass) var usrpass: String?
     @OptionalField(key: FieldKeys.usremail) var usremail: String?
-    
+    @OptionalField(key: FieldKeys.usrtel) var usrtel: String?
+
     @Children(for: \.$team) var rechnungen: [Rechnung]
     @Children(for: \.$team) var players: [Player]
 
@@ -66,6 +67,7 @@ final class Team: Model, Content {
         static var referCode: FieldKey { "referCode" }
         static var usrpass: FieldKey { "usrpass" }
         static var usremail: FieldKey { "usremail" }
+        static var usrtel: FieldKey { "usrtel" }
     }
 
     init() {}
@@ -90,6 +92,7 @@ final class Team: Model, Content {
         self.referCode = referCode
         self.usrpass = usrpass
         self.usremail = usremail
+        self.usrtel = usrtel
     }
     
     struct Public: Codable, Content {
@@ -122,6 +125,28 @@ final class Team: Model, Content {
 }
 
 
+extension Team: Mergeable {
+    func merge(from other: Team) -> Team {
+        var merged = self
+        merged.points = other.points
+        merged.logo = other.logo
+        merged.$league.id = other.$league.id
+        merged.$user.id = other.$user.id
+        merged.teamName = other.teamName
+        merged.foundationYear = other.foundationYear
+        merged.membershipSince = other.membershipSince
+        merged.averageAge = other.averageAge
+        merged.coach = other.coach
+        merged.captain = other.captain
+        merged.trikot = other.trikot
+        merged.balance = other.balance
+        merged.usrpass = other.usrpass
+        merged.usremail = other.usremail
+        merged.usrtel = other.usrtel
+        return merged
+    }
+}
+
 
 
 // Team Migration
@@ -146,6 +171,7 @@ extension TeamMigration: Migration {
             .field(Team.FieldKeys.balance, .double)
             .field(Team.FieldKeys.usrpass,  .string)
             .field(Team.FieldKeys.usremail,  .string)
+            .field(Team.FieldKeys.usrtel,  .string)
                     .create()
     }
 
