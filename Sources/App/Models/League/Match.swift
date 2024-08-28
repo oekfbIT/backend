@@ -48,7 +48,7 @@ final class Match: Model, Content, Codable {
     @OptionalField(key: FieldKeys.bericht) var bericht: String?
     
     enum GameStatus: String, Codable {
-        case pending, first, second, halftime, completed
+        case pending, first, second, halftime, completed, cancelled
     }
 
     enum FieldKeys {

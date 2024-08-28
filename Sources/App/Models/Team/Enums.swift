@@ -13,6 +13,7 @@ enum MatchEventType: String, Codable {
     case goal
     case redCard
     case yellowCard
+    case yellowRedCard
     case freeKick
     case penalty
 }
