@@ -115,25 +115,21 @@ extension League {
             return db.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "League ID is required"))
         }
 
-        // Generate the season name based on the current year
         let currentYear = Calendar.current.component(.year, from: Date())
         let nextYear = currentYear + 1
         let seasonName = "\(currentYear)/\(nextYear)"
 
-        // Create a new season
         let season = Season(name: seasonName, details: 0)
         season.$league.id = leagueID
 
-        return season.save(on: db).flatMap {
-            // Fetch all teams in the league
-            self.$teams.query(on: db).all().flatMap { teams in
+        return season.save(on: db).flatMap { _ in
+            return self.$teams.query(on: db).all().flatMap { teams in
                 guard teams.count > 1 else {
                     return db.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "League must have more than one team"))
                 }
 
                 let teamCount = teams.count
 
-                // Ensure the number of teams is even
                 guard teamCount % 2 == 0 else {
                     return db.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "League must have an even number of teams"))
                 }
@@ -155,16 +151,16 @@ extension League {
                             var homeTeam = teams[homeTeamIndex]
                             var awayTeam = teams[awayTeamIndex]
 
-                            // Switch home and away teams based on the homeAwaySwitch flag
                             if homeAwaySwitch {
                                 swap(&homeTeam, &awayTeam)
                             }
 
-                            // Create match
                             let match = Match(
-                                details: MatchDetails(gameday: gameDay, date: nil, stadium: nil),
+                                details: MatchDetails(gameday: gameDay, date: nil, stadium: nil, location: "Nicht Zugeornet"),
                                 homeTeamId: homeTeam.id!,
                                 awayTeamId: awayTeam.id!,
+                                homeBlanket: Blankett(name: homeTeam.teamName, dress: homeTeam.trikot.home, logo: homeTeam.logo, players: [], starters: [], complete: false),
+                                awayBlanket: Blankett(name: awayTeam.teamName, dress: awayTeam.trikot.away, logo: awayTeam.logo, players: [], starters: [], complete: false),
                                 score: Score(home: 0, away: 0),
                                 status: .pending
                             )
@@ -177,18 +173,14 @@ extension League {
                         }
                     }
 
-                    // Toggle the homeAwaySwitch after each round
                     homeAwaySwitch.toggle()
                 }
 
-                // Ensure we have the correct number of matches and game days
                 let expectedMatches = (teamCount / 2) * (teamCount - 1) * numberOfRounds
-                print("Expected matches: \(expectedMatches) vs Actual matches: \(matches.count)")
                 guard matches.count == expectedMatches else {
                     return db.eventLoop.makeFailedFuture(Abort(.internalServerError, reason: "Incorrect match calculation"))
                 }
 
-                // Save all matches to the database
                 return matches.create(on: db)
             }
         }

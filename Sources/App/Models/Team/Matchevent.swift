@@ -28,8 +28,9 @@ final class MatchEvent: Model, Content, Codable {
 
     init() {}
 
-    init(id: UUID? = nil, type: MatchEventType, playerId: UUID, minute: Int) {
+    init(id: UUID? = nil, match: Match.IDValue, type: MatchEventType, playerId: UUID, minute: Int) {
         self.id = id
+        self.$match.id = match
         self.type = type
         self.minute = minute
         self.$player.id = playerId
@@ -37,7 +38,7 @@ final class MatchEvent: Model, Content, Codable {
 }
 
 // MatchEvent Migration
-extension MatchEvent: Migration {
+extension MatchEventMigration: Migration {
     func prepare(on database: Database) -> EventLoopFuture<Void> {
         database.schema(MatchEvent.schema)
             .field(MatchEvent.FieldKeys.id, .uuid, .identifier(auto: true))

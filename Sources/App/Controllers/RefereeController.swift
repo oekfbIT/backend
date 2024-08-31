@@ -26,6 +26,7 @@ final class RefereeController: RouteCollection {
 
         route.get(use: repository.index)
         route.get(":id", use: getbyID)
+        route.get("user",":id", use: getbyUserID)
         route.delete(":id", use: repository.deleteID)
 
         route.patch(":id", use: repository.updateID)
@@ -99,6 +100,20 @@ final class RefereeController: RouteCollection {
             .unwrap(or: Abort(.notFound))
 
     }
+    
+    func getbyUserID(req: Request) throws -> EventLoopFuture<Referee> {
+        guard let id = req.parameters.get("id", as: UUID.self) else {
+            throw Abort(.badRequest)
+        }
+        
+        return Referee.query(on: req.db)
+            .filter(\.$user.$id == id)
+            .with(\.$assignments)
+            .first()
+            .unwrap(or: Abort(.notFound))
+
+    }
+
 }
 
 struct RefereeSignUpRequest: Codable {

@@ -7,6 +7,15 @@ enum PlayerEligibility: String, Codable {
     case Warten = "Warten"
 }
 
+struct PlayerStats: Codable {
+    var games: Int
+    var goals: Int
+    var yellow: Int
+    var yellowRed: Int
+    var red: Int
+    
+}
+
 final class Player: Model, Content, Codable {
     static let schema = "players"
 
