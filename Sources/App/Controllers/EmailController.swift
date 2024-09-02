@@ -270,6 +270,60 @@ final class EmailController {
         }
     }
 
+    func sendUpdatePlayerData(req: Request, recipient: String, player: Player) throws -> EventLoopFuture<HTTPStatus> {
+        // Apply the SMTP configuration
+        req.application.smtp.configuration = smtpConfig
+
+        // Print the SMTP configuration for debugging
+        print("SMTP Configuration: \(req.application.smtp.configuration)")
+
+        // Prepare the email content in German
+        // Prepare the email content in German with HTML formatting
+        let emailBody = """
+        <!DOCTYPE html>
+        <html lang="de">
+        <head>
+            <meta charset="UTF-8">
+            <title>Spielerdaten Update</title>
+        </head>
+        <body>
+            <p>Sehr geehrter Mannschaftsleiter,</p>
+            
+            <p>bitte überprüfen Sie erneut die hochgeladenen Daten Ihres Spielers <strong>\(player.name)</strong> mit der SID Nummer <strong>\(player.sid)</strong>. Anscheinend fehlen bei der Anmeldung:</p>
+            
+            <ul>
+                <li>Das Profilbild des Spielers</li>
+                <li>Die E-Mail-Adresse des Spielers</li>
+                <li>Die Lesbarkeit des Ausweises des Spielers</li>
+            </ul>
+            
+            <p>Sie können sich auf <a href="https://team.oekfb.eu">team.oekfb.eu</a> einloggen und die fehlenden Informationen Ihres Spielers ergänzen. Diese Änderung ist mit keinen weiteren Kosten verbunden.</p>
+            
+            <p>Mit freundlichen Grüßen,<br>
+            Der Österreichischer Kleinfeld Fußball Bund</p>
+        </body>
+        </html>
+        """
+
+        let email = try Email(
+            from: EmailAddress(address: "admin@oekfb.eu", name: "Admin"),
+            to: [EmailAddress(address: recipient)],
+            subject: "OEKFB Spieleranmeldung: \(player.sid)",
+            body: emailBody,
+            isBodyHtml: true
+        )
+
+        return req.smtp.send(email).flatMapThrowing { result in
+            switch result {
+            case .success:
+                return .ok
+            case .failure(let error):
+                print("Email failed to send: \(error)")
+                throw Abort(.internalServerError, reason: "Failed to send email")
+            }
+        }
+    }
+
     
     func sendTransferRequest(req: Request, recipient: String, transfer: Transfer) throws -> EventLoopFuture<HTTPStatus> {
         // Apply the SMTP configuration

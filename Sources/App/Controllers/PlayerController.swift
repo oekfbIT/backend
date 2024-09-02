@@ -3,9 +3,11 @@ import Fluent
 
 final class PlayerController: RouteCollection {
     let repository: StandardControllerRepository<Player>
-
+    let emailController: EmailController
+    
     init(path: String) {
         self.repository = StandardControllerRepository<Player>(path: path)
+        self.emailController = EmailController()
     }
 
     func setupRoutes(on app: RoutesBuilder) throws {
@@ -27,6 +29,7 @@ final class PlayerController: RouteCollection {
         route.get("name", ":search", use: searchByName)
 
         route.get("internal", ":id", use: getPlayerWithIdentification)
+        route.get("reject", ":id", use: sendUpdatePlayerEmail)
         route.get("pending", use: getPlayersWithEmail)
     }
 
@@ -85,6 +88,61 @@ final class PlayerController: RouteCollection {
                 }
             }
         }
+    }
+
+
+    func sendUpdatePlayerEmail(req: Request) -> EventLoopFuture<HTTPStatus> {
+        // Extract player ID from request parameters
+        guard let playerID = req.parameters.get("id", as: UUID.self) else {
+            req.logger.error("Invalid or missing player ID parameter")
+            return req.eventLoop.future(error: Abort(.badRequest, reason: "Invalid or missing parameters"))
+        }
+
+        // Find the player with the given ID
+        return Player.find(playerID, on: req.db)
+            .unwrap(or: {
+                req.logger.error("Player with ID \(playerID) not found")
+                return Abort(.notFound, reason: "Player not found")
+            }())
+            .flatMap { (player: Player) in
+                // Update player information
+                player.eligibility = .Warten
+                player.image = ""
+                player.identification = ""
+
+                // Save the updated player
+                return player.save(on: req.db).flatMap {
+                    // Find the team associated with the player
+                    return Team.find(player.$team.id, on: req.db)
+                        .unwrap(or: {
+                            req.logger.error("Team not found for player ID \(playerID)")
+                            return Abort(.notFound, reason: "Team not found for player")
+                        }())
+                }.flatMap { (team: Team) -> EventLoopFuture<User> in
+                    // Find the user associated with the team
+                    return User.find(team.$user.id, on: req.db)
+                        .unwrap(or: {
+                            req.logger.error("User not found for team ID \(team.id?.uuidString ?? "unknown")")
+                            return Abort(.notFound, reason: "User not found for team")
+                        }())
+                }.flatMap { (user: User) -> EventLoopFuture<HTTPStatus> in
+                    // Log the user details
+                    req.logger.info("Sending update player email to user \(user.email) for player ID \(playerID)")
+                    // Send the update player email
+                    do {
+                        let emailFuture = try self.emailController.sendUpdatePlayerData(req: req, recipient: user.email, player: player)
+                        return emailFuture.transform(to: .ok) // Transform the result to HTTPStatus.ok after email is sent
+                    } catch {
+                        req.logger.error("Error sending email: \(error.localizedDescription)")
+                        return req.eventLoop.makeFailedFuture(error)
+                    }
+                }
+            }
+            .flatMapErrorThrowing { error in
+                // Log the error or handle it appropriately
+                req.logger.error("Failed to send email for player ID \(playerID): \(error.localizedDescription)")
+                throw Abort(.internalServerError, reason: "Failed to send email")
+            }
     }
 
 
