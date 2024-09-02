@@ -33,16 +33,12 @@ struct Blankett: Codable {
     var dress: String
     var logo: String?
     var players: [PlayerOverview] // max. 5 Players
-    var starters: [PlayerOverview] // max. 5 Players
-    var complete: Bool
     
-    init(name: String, dress: String, logo: String?, players: [PlayerOverview]?, starters: [PlayerOverview]?, complete: Bool?) {
+    init(name: String, dress: String, logo: String?, players: [PlayerOverview]?) {
         self.name = name
         self.dress = dress
         self.logo = logo
         self.players = players ?? []
-        self.starters = starters ?? []
-        self.complete = complete ?? false
     }
 }
 
@@ -77,12 +73,22 @@ final class Match: Model, Content, Codable {
     // MID GAME TO DETERMINE THE TIMER
     @OptionalField(key: FieldKeys.firstHalfStartDate) var firstHalfStartDate: Date?
     @OptionalField(key: FieldKeys.secondHalfStartDate) var secondHalfStartDate: Date?
+
+    @OptionalField(key: FieldKeys.firstHalfEndDate) var firstHalfEndDate: Date?
+    @OptionalField(key: FieldKeys.secondHalfEndDate) var secondHalfEndDate: Date?
+
     
     // POST GAME
     @OptionalField(key: FieldKeys.bericht) var bericht: String?
     
     enum GameStatus: String, Codable {
-        case pending, first, second, halftime, completed, cancelled
+        case pending, 
+             first,
+             second, 
+             halftime,
+             completed,
+             submitted,
+             cancelled
     }
 
     enum FieldKeys {
@@ -97,6 +103,8 @@ final class Match: Model, Content, Codable {
         static var referee: FieldKey { "referee" }
         static var firstHalfStartDate: FieldKey { "firstHalfStartDate" }
         static var secondHalfStartDate: FieldKey { "secondHalfStartDate" }
+        static var firstHalfEndDate: FieldKey { "firstHalfEndDate" }
+        static var secondHalfEndDate: FieldKey { "secondHalfEndDate" }
         static var homeBlanket: FieldKey { "homeBlanket" }
         static var awayBlanket: FieldKey { "awayBlanket" }
     }
@@ -114,6 +122,8 @@ final class Match: Model, Content, Codable {
          bericht: String? = nil,
          refereeId: UUID? = nil,
          seasonId: UUID? = nil,
+         firstHalfEndDate: Date? = nil,
+         secondHalfEndDate: Date? = nil,
          firstHalfStartDate: Date? = nil,
          secondHalfStartDate: Date? = nil) {
         self.id = id
@@ -129,6 +139,8 @@ final class Match: Model, Content, Codable {
         self.bericht = bericht
         self.firstHalfStartDate = firstHalfStartDate
         self.secondHalfStartDate = secondHalfStartDate
+        self.firstHalfEndDate = firstHalfEndDate
+        self.secondHalfEndDate = secondHalfEndDate
     }
 }
 
@@ -146,6 +158,8 @@ extension MatchMigration: Migration {
             .field(Match.FieldKeys.status, .string, .required)
             .field(Match.FieldKeys.firstHalfStartDate, .date)
             .field(Match.FieldKeys.secondHalfStartDate, .date)
+            .field(Match.FieldKeys.firstHalfEndDate, .date)
+            .field(Match.FieldKeys.secondHalfEndDate, .date)
             .field(Match.FieldKeys.bericht, .string)
             .create()
     }
@@ -169,6 +183,9 @@ extension Match: Mergeable {
         merged.$season.id = other.$season.id
         merged.firstHalfStartDate = other.firstHalfStartDate
         merged.secondHalfStartDate = other.secondHalfStartDate
+        merged.firstHalfEndDate = other.firstHalfEndDate
+        merged.secondHalfEndDate = other.secondHalfEndDate
+        
         return merged
     }
 }

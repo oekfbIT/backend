@@ -174,7 +174,7 @@ final class MatchController: RouteCollection {
                     .flatMap { player in
                         // Check if homeBlankett exists, otherwise initialize it
                         if match.homeBlanket == nil {
-                            match.homeBlanket = Blankett(name: match.$homeTeam.name, dress: match.homeTeam.trikot.home, logo: nil, players: [], starters: [], complete: false)
+                            match.homeBlanket = Blankett(name: match.$homeTeam.name, dress: match.homeTeam.trikot.home, logo: nil, players: [])
                         }
                         
                         // Add the player to the homeBlanket's players list
@@ -212,7 +212,7 @@ final class MatchController: RouteCollection {
                     .flatMap { player in
                         // Check if awayBlankett exists, otherwise initialize it
                         if match.awayBlanket == nil {
-                            match.awayBlanket = Blankett(name: match.$awayTeam.name, dress: match.homeTeam.trikot.home, logo: nil, players: [], starters: [], complete: false)
+                            match.awayBlanket = Blankett(name: match.$awayTeam.name, dress: match.homeTeam.trikot.home, logo: nil, players: [])
                         }
                         
                         // Add the player to the awayBlanket's players list
@@ -249,6 +249,7 @@ final class MatchController: RouteCollection {
             .unwrap(or: Abort(.notFound))
             .flatMap { match in
                 match.status = .halftime
+                match.firstHalfEndDate = Date()
                 return match.save(on: req.db).transform(to: .ok)
             }
     }
