@@ -129,6 +129,7 @@ extension Team: Mergeable {
     func merge(from other: Team) -> Team {
         var merged = self
         merged.points = other.points
+        merged.coverimg = other.coverimg
         merged.logo = other.logo
         merged.$league.id = other.$league.id
         merged.$user.id = other.$user.id
