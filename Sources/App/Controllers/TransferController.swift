@@ -177,6 +177,8 @@ final class TransferController: RouteCollection {
                     
                     
                     player.$team.id = transfer.team
+                    player.transferred = true
+                    
                     return player.save(on: req.db).map { player }
                 }
             }
@@ -206,6 +208,7 @@ final class TransferController: RouteCollection {
                 group.filter(\.$eligibility == .Spielberechtigt)
             }
             .filter(\.$email != nil )
+            .filter(\.$transferred != true)
             .limit(200)
             .all()
         

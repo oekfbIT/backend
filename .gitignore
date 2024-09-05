@@ -1,9 +1,67 @@
-Packages
-.build
-xcuserdata
-*.xcodeproj
-DerivedData/
-.DS_Store
-db.sqlite
-.swiftpm
+# Dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# Yarn integrity and log files
+.yarn-integrity
+yarn-error.log
+
+# npm log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Next.js build output
+.next
+out
+
+# Build output
+/build
+/dist
+
+# Static build output
+/static
+
+# Cache files
+.cache
+/.parcel-cache
+/.next/cache
+/.eslintcache
+/.jest/cache
+/.jest/test-results
+/.nuxt
+
+# Coverage directory used by tools like istanbul
+coverage
+
+# Misc
+.DS_Store
+*.pem
+*.log
+.vscode
+.idea
+
+# Optional npm cache directory
+.npm
+
+# Optional REACT-NATIVE
+.expo
+
+# Local IDE files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Mac system files
+.DS_Store

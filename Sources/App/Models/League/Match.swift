@@ -87,6 +87,7 @@ final class Match: Model, Content, Codable {
              second, 
              halftime,
              completed,
+             abbgebrochen,
              submitted,
              cancelled
     }

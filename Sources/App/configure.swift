@@ -40,8 +40,9 @@ public func configure(_ app: Application) throws {
         "http://localhost:3000",
         "http://localhost:4000",
         "http://localhost:4001",
-        "http://localhost:5000",
-        
+        "http://localhost:5500",
+        "http://localhost:4500",
+
         "https://admin.oekfb.eu",
         
         "https://oekfb.eu:3000",

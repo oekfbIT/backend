@@ -55,6 +55,7 @@ final class MatchController: RouteCollection {
         route.patch(":id", "startSecondHalf", use: startSecondHalf)
         route.patch(":id", "endGame", use: endGame)
         route.patch(":id", "noShowGame", use: noShowGame)
+        route.patch(":id", "spielabbruch", use: spielabbruch)
 
     }
 
@@ -295,6 +296,17 @@ final class MatchController: RouteCollection {
                 }
 
                 match.status = .completed
+                return match.save(on: req.db).transform(to: .ok)
+            }
+    }
+    
+    func spielabbruch(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        let matchId = try req.parameters.require("id", as: UUID.self)
+        
+        return Match.find(matchId, on: req.db)
+            .unwrap(or: Abort(.notFound))
+            .flatMap { match in
+                match.status = .abbgebrochen
                 return match.save(on: req.db).transform(to: .ok)
             }
     }

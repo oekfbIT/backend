@@ -138,57 +138,87 @@ final class EmailController {
         }
     }
 
-    // UPDATE THIS MAIL TEMPLATE
     func sendPaymentMail(req: Request, recipient: String, registration: TeamRegistration?) throws -> EventLoopFuture<HTTPStatus> {
         // Apply the SMTP configuration
         req.application.smtp.configuration = smtpConfig
-        guard let registrationID = registration?.id else {
-            throw Abort(.notFound)
-
+        
+        // Ensure registration and registration ID exist
+        guard let registration = registration, let registrationID = registration.id else {
+            throw Abort(.notFound, reason: "Team registration not found")
         }
-        // Print the SMTP configuration for debugging
+
+        // Calculate the amount
+        let amount: Double = abs(Double(String(format: "%.2f", registration.paidAmount ?? 0.0)) ?? 0.0)
+
+        // Total amount to be paid including deposit
+        var positivAmount: Double {
+            return amount
+        }
+
+        // Calculate the year for the deposit return
+        let year = Calendar.current.component(.year, from: Date()) + 3
+
+        // Debugging: Print the SMTP configuration
         print("SMTP Configuration: \(req.application.smtp.configuration)")
 
+        // Email content
         let emailBody = """
         <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; }
+                p { margin-bottom: 10px; }
+                ul { padding-left: 20px; }
+                li { margin-bottom: 8px; }
+                a { font-size: 16px; color: #007bff; text-decoration: none; }
+            </style>
+        </head>
         <body>
-        <p>Sehr geehrter Mannschaftsleiter,</p>
-        <p></p>
-        <p>Ihre Unterlagen haben gepasst und anbei ist die Zahlungsanforderung</p>
-
-        <ul>
-          <li>Ausweiskopie beider Personen am Vertrag (<a href="\(vertragLink)" style="font-size: 16px; color: #007bff; text-decoration: none;">Vertrag Downloaden</a>)</li>
-          <li>Logo des Teams</li>
-          <li>Bilder der Trikots (Heim und Auswärts komplett inklusive Stutzen)</li>
-          <li>Sie können diese Dokumente über diesen link Hochladen (<a href="https://oekfb.eu/team/upload/\(registrationID)" style="font-size: 16px; color: #007bff; text-decoration: none;">Upload Page</a>)</li>
-        </ul>
-
-        <p>Falls Sie Trikots benötigen und noch keine haben, können Sie sich über die Angebote für ÖKFB Mannschaften hier erkundigen: <a href="https://www.kaddur.at">www.kaddur.at</a></p>
-
-        <p>Wir freuen uns über Ihre baldige Rückmeldung und verbleiben.</p>
+            <p>Sehr geehrter Mannschaftsleiter,</p>
+            
+            <p>Wir haben ihre korrekten Unterlagen erhalten. Anbei ist die Zahlungsaufforderung:</p>
+            
+            <ul>
+                <li>Teilbetrag der Saison: € \(amount)</li>
+                <li>Kaution: € 300.00 (Diese Kaution wird ihnen zur Saison \(year) auf ihr Guthaben dazugerechnet.)</li>
+            </ul>
+            
+            <p>Bitte überweisen Sie die Summe von <strong>€ \(positivAmount)</strong> und verwenden Sie als Zahlungsreferenz bitte <strong>\(registration.teamName.uppercased())</strong>.</p>
+            
+            <p>Kontodaten:</p>
+            <p>Österreichischer Kleinfeld Fußball Bund<br>
+            AT26 2011 1829 7052 4200<br>
+            GIBAATWWXXX</p>
+                                    
+            <p>Mit freundlichen Grüßen,<br>
+            Österreichischer Kleinfeld Fußball Bund</p>
         </body>
         </html>
         """
 
+        // Creating the email object
         let email = try Email(
             from: EmailAddress(address: "admin@oekfb.eu", name: "Admin"),
             to: [EmailAddress(address: recipient)],
-            subject: "OEKFB Anmeldung - Willkommen",
+            subject: "OEKFB Anmeldung - Zahlungsanforderung",
             body: emailBody,
             isBodyHtml: true
         )
 
+        // Sending the email
         return req.smtp.send(email).flatMapThrowing { result in
             switch result {
             case .success:
                 return .ok
             case .failure(let error):
-                print("Email failed to send: \(error)")
-                throw Abort(.internalServerError, reason: "Failed to send email")
+                print("Email failed to send: \(error.localizedDescription)")
+                throw Abort(.internalServerError, reason: "Failed to send email: \(error.localizedDescription)")
             }
         }
     }
-    
+
+
+
     func sendPaymentInstruction(req: Request, recipient: String, due: Double) throws -> EventLoopFuture<HTTPStatus> {
         // Apply the SMTP configuration
         req.application.smtp.configuration = smtpConfig
@@ -270,7 +300,7 @@ final class EmailController {
         }
     }
 
-    func sendUpdatePlayerData(req: Request, recipient: String, player: Player) throws -> EventLoopFuture<HTTPStatus> {
+    func sendTeamLogin(req: Request, recipient: String, email: String, password: String) throws -> EventLoopFuture<HTTPStatus> {
         // Apply the SMTP configuration
         req.application.smtp.configuration = smtpConfig
 
@@ -278,13 +308,82 @@ final class EmailController {
         print("SMTP Configuration: \(req.application.smtp.configuration)")
 
         // Prepare the email content in German
-        // Prepare the email content in German with HTML formatting
+        let emailBody = """
+        Sehr geehrter Mannschaftsleiter,
+
+        Herzlich Willkommen bei der Österreichischen Kleinfeld Fußball Bund.
+        
+        Anbei sind ihre Login Daten:
+        
+        Email: \(email)
+        Passwort: \(password)
+        
+        Sie können sich einlogen unter https://team.oekfb.eu.
+        """
+
+        let email = try Email(
+            from: EmailAddress(address: "admin@oekfb.eu", name: "Admin"),
+            to: [EmailAddress(address: recipient)],
+            subject: "OEKFB Anmeldung - Mannschaft Login Daten",
+            body: emailBody
+        )
+
+        return req.smtp.send(email).flatMapThrowing { result in
+            switch result {
+            case .success:
+                return .ok
+            case .failure(let error):
+                print("Email failed to send: \(error)")
+                throw Abort(.internalServerError, reason: "Failed to send email")
+            }
+        }
+    }
+
+    func sendUpdatePlayerData(req: Request, recipient: String, player: Player) throws -> EventLoopFuture<HTTPStatus> {
+        // Apply the SMTP configuration
+        req.application.smtp.configuration = smtpConfig
+
+        // Print the SMTP configuration for debugging
+        print("SMTP Configuration: \(req.application.smtp.configuration)")
+
+        // Prepare the email content in German with HTML formatting and styling
         let emailBody = """
         <!DOCTYPE html>
         <html lang="de">
         <head>
             <meta charset="UTF-8">
             <title>Spielerdaten Update</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    margin: 0;
+                    padding: 20px;
+                    background-color: #f8f9fa;
+                }
+                p {
+                    margin: 0 0 15px 0;
+                }
+                ul {
+                    margin: 0 0 15px 20px;
+                    padding: 0;
+                    list-style-type: disc;
+                }
+                li {
+                    margin-bottom: 10px;
+                }
+                a {
+                    color: #007bff;
+                    text-decoration: none;
+                }
+                a:hover {
+                    text-decoration: underline;
+                }
+                .signature {
+                    margin-top: 30px;
+                }
+            </style>
         </head>
         <body>
             <p>Sehr geehrter Mannschaftsleiter,</p>
@@ -297,9 +396,11 @@ final class EmailController {
                 <li>Die Lesbarkeit des Ausweises des Spielers</li>
             </ul>
             
-            <p>Sie können sich auf <a href="https://team.oekfb.eu">team.oekfb.eu</a> einloggen und die fehlenden Informationen Ihres Spielers ergänzen. Diese Änderung ist mit keinen weiteren Kosten verbunden.</p>
+            <p>Bitte beachten Sie, dass sowohl das Profilbild als auch eine lesbare Kopie des Ausweises des Spielers erneut hochgeladen werden müssen. Alle Dokumente müssen gemäß der Ligaordnung hochgeladen und überprüft werden, bevor der Spieler zugelassen werden kann. Bis zur Überprüfung bleibt der Status des Spielers auf „WARTEN“ und es wird kein Bild angezeigt.</p>
+
+            <p>Sie können sich auf <a href="https://team.oekfb.eu">team.oekfb.eu</a> einloggen, auf "Spieler bearbeiten" klicken und dort die fehlenden Dokumente hochladen. Diese Änderung ist mit keinen weiteren Kosten verbunden.</p>
             
-            <p>Mit freundlichen Grüßen,<br>
+            <p class="signature">Mit freundlichen Grüßen,<br>
             Der Österreichischer Kleinfeld Fußball Bund</p>
         </body>
         </html>
@@ -324,6 +425,7 @@ final class EmailController {
         }
     }
 
+
     
     func sendTransferRequest(req: Request, recipient: String, transfer: Transfer) throws -> EventLoopFuture<HTTPStatus> {
         // Apply the SMTP configuration
@@ -342,7 +444,7 @@ final class EmailController {
 
             <p>Um diese Anfrage anzunehmen oder abzulehnen, klicken Sie bitte auf den folgenden Button:</p>
 
-            <a href="https://oekfb.eu/transfer/\(transfer.id)" style="display: inline-block; padding: 10px 20px; font-size: 16px; color: white; background-color: #007bff; text-align: center; text-decoration: none; border-radius: 5px;">Transfer Anfrage beantworten</a>
+            <a href="https://oekfb.eu/transfer/\(transfer.id ?? UUID())" style="display: inline-block; padding: 10px 20px; font-size: 16px; color: white; background-color: #007bff; text-align: center; text-decoration: none; border-radius: 5px;">Transfer Anfrage beantworten</a>
             
             <p>Wir freuen uns über Ihre baldige Rückmeldung und verbleiben.</p>
 

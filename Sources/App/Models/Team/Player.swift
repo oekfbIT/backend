@@ -36,6 +36,7 @@ final class Player: Model, Content, Codable {
     @OptionalField(key: FieldKeys.status) var status: Bool?
     @OptionalField(key: FieldKeys.isCaptain) var isCaptain: Bool?
     @OptionalField(key: FieldKeys.bank) var bank: Bool?
+    @OptionalField(key: FieldKeys.transferred) var transferred: Bool?
     
     struct FieldKeys {
         static var id: FieldKey { "id" }
@@ -55,6 +56,7 @@ final class Player: Model, Content, Codable {
         static var status: FieldKey { "status" }
         static var isCaptain: FieldKey { "isCaptain" }
         static var bank: FieldKey { "bank" }
+        static var transferred: FieldKey { "transferred" }
     }
 
     init() {}

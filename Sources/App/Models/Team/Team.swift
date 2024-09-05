@@ -40,6 +40,7 @@ final class Team: Model, Content {
     @OptionalField(key: FieldKeys.usrpass) var usrpass: String?
     @OptionalField(key: FieldKeys.usremail) var usremail: String?
     @OptionalField(key: FieldKeys.usrtel) var usrtel: String?
+    @OptionalField(key: FieldKeys.kaution) var kaution: Double?
 
     @Children(for: \.$team) var rechnungen: [Rechnung]
     @Children(for: \.$team) var players: [Player]
@@ -68,11 +69,12 @@ final class Team: Model, Content {
         static var usrpass: FieldKey { "usrpass" }
         static var usremail: FieldKey { "usremail" }
         static var usrtel: FieldKey { "usrtel" }
+        static var kaution: FieldKey { "kaution" }
     }
 
     init() {}
 
-    init(id: UUID? = nil, sid: String, userId: UUID?, leagueId: UUID?, leagueCode: String?, points: Int, coverimg: String, logo: String, teamName: String, foundationYear: String?, membershipSince: String?, averageAge: String?, coach: Trainer? = nil, captain: String? = nil, trikot: Trikot, balance: Double? = nil, referCode: String? = String.randomString(length: 6).uppercased(), usremail: String?, usrpass: String?, usrtel: String?) {
+    init(id: UUID? = nil, sid: String, userId: UUID?, leagueId: UUID?, leagueCode: String?, points: Int, coverimg: String, logo: String, teamName: String, foundationYear: String?, membershipSince: String?, averageAge: String?, coach: Trainer? = nil, captain: String? = nil, trikot: Trikot, balance: Double? = nil, referCode: String? = String.randomString(length: 6).uppercased(), usremail: String?, usrpass: String?, usrtel: String?, kaution: Double? = nil) {
         self.id = id
         self.sid = sid
         self.$user.id = userId
@@ -93,6 +95,8 @@ final class Team: Model, Content {
         self.usrpass = usrpass
         self.usremail = usremail
         self.usrtel = usrtel
+        self.kaution = kaution
+
     }
     
     struct Public: Codable, Content {
@@ -144,6 +148,7 @@ extension Team: Mergeable {
         merged.usrpass = other.usrpass
         merged.usremail = other.usremail
         merged.usrtel = other.usrtel
+        merged.kaution = other.kaution
         return merged
     }
 }
@@ -173,6 +178,8 @@ extension TeamMigration: Migration {
             .field(Team.FieldKeys.usrpass,  .string)
             .field(Team.FieldKeys.usremail,  .string)
             .field(Team.FieldKeys.usrtel,  .string)
+            .field(Team.FieldKeys.kaution, .double)
+
                     .create()
     }
 

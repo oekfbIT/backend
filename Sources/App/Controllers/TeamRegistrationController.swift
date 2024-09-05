@@ -87,6 +87,27 @@ final class TeamRegistrationController: RouteCollection {
             }
         }
     }
+    
+    private func sendTeamLogin(req: Request, recipient: String, email: String, password: String) {
+        // Run the email sending on the request's event loop
+        req.eventLoop.execute {
+            do {
+                try emailController.sendTeamLogin(req: req, recipient: recipient,
+                                                  email: email,
+                                                  password: password)
+                .whenComplete { result in
+                    switch result {
+                    case .success:
+                        print("Welcome email sent successfully to \(recipient)")
+                    case .failure(let error):
+                        print("Failed to send welcome email to \(recipient): \(error)")
+                    }
+                }
+            } catch {
+                print("Failed to initiate sending welcome email to \(recipient): \(error)")
+            }
+        }
+    }
 
     func confirm(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let id = try req.parameters.require("id", as: UUID.self)
@@ -126,14 +147,18 @@ final class TeamRegistrationController: RouteCollection {
                             membershipSince: Date().yearString,
                             averageAge: "0",
                             trikot: Trikot(home: "", away: ""),
+                            balance: registration.paidAmount ?? 0.0,
                             usremail: registration.primary?.email,
                             usrpass: registration.initialPassword,
-                            usrtel: registration.primary?.phone
+                            usrtel: registration.primary?.phone,
+                            kaution: registration.kaution
                         )
 
                         print("Team to be saved: \(team)")
 
                         return team.save(on: req.db).flatMap {
+                            
+                            self.sendTeamLogin(req: req, recipient: userSignup.email, email: userSignup.email, password: userSignup.password)
                             return registration.save(on: req.db).transform(to: .ok)
                         }
                     }
@@ -183,10 +208,11 @@ final class TeamRegistrationController: RouteCollection {
                         }
 
                         registration.assignedLeague = leagueID
+                        registration.kaution = 300.00
                         if let currentPaidAmount = registration.paidAmount {
                             registration.paidAmount = currentPaidAmount - topayAmount
                         } else {
-                            registration.paidAmount = -topayAmount
+                            registration.paidAmount = -(topayAmount + (registration.kaution ?? 0))
                         }
 
                         let primaryContactEmail = registration.primary?.email

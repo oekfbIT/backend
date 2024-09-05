@@ -122,18 +122,27 @@ extension League {
         let season = Season(name: seasonName, details: 0)
         season.$league.id = leagueID
 
+        // Save the season first
         return season.save(on: db).flatMap { _ in
-            return self.$teams.query(on: db).all().flatMap { teams in
-                guard teams.count > 1 else {
+            // Query all teams in the league
+            self.$teams.query(on: db).all().flatMap { teamsArray in
+                // Here, teamsArray is an array of Team objects
+                
+                guard teamsArray.count > 1 else {
                     return db.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "League must have more than one team"))
                 }
 
-                let teamCount = teams.count
+                var teams = teamsArray  // Now teams is correctly recognized as an array
+                let isOddTeamCount = teams.count % 2 != 0
 
-                guard teamCount % 2 == 0 else {
-                    return db.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "League must have an even number of teams"))
+                // If odd number of teams, add a "bye" team
+                if isOddTeamCount {
+                    let byeTeam = Team(id: UUID(),
+                                       sid: "", userId: nil, leagueId: nil, leagueCode: nil, points: 0, coverimg: "", logo: "", teamName: "Bye", foundationYear: "", membershipSince: "", averageAge: "", coach: nil, captain: "", trikot: Trikot(home: "", away: ""), balance: 0.0, referCode: "", usremail: "", usrpass: "", usrtel: "")
+                    teams.append(byeTeam)
                 }
 
+                let teamCount = teams.count
                 var matches: [Match] = []
                 let totalGameDays = (teamCount - 1) * numberOfRounds
                 var gameDay = 1
@@ -144,12 +153,18 @@ extension League {
                         for matchIndex in 0..<(teamCount / 2) {
                             let homeTeamIndex = (roundIndex + matchIndex) % (teamCount - 1)
                             var awayTeamIndex = (teamCount - 1 - matchIndex + roundIndex) % (teamCount - 1)
+
                             if matchIndex == 0 {
                                 awayTeamIndex = teamCount - 1
                             }
 
                             var homeTeam = teams[homeTeamIndex]
                             var awayTeam = teams[awayTeamIndex]
+
+                            // Skip creating a match if either team is the "bye" team
+                            if homeTeam.teamName == "Bye" || awayTeam.teamName == "Bye" {
+                                continue
+                            }
 
                             if homeAwaySwitch {
                                 swap(&homeTeam, &awayTeam)
@@ -176,12 +191,14 @@ extension League {
                     homeAwaySwitch.toggle()
                 }
 
-                let expectedMatches = (teamCount / 2) * (teamCount - 1) * numberOfRounds
-                guard matches.count == expectedMatches else {
-                    return db.eventLoop.makeFailedFuture(Abort(.internalServerError, reason: "Incorrect match calculation"))
-                }
+                // Validate the number of matches
+//                let expectedMatches = isOddTeamCount ? (teamCount - 1) * numberOfRounds : (teamCount / 2) * (teamCount - 1) * numberOfRounds
+//                guard matches.count == expectedMatches else {
+//                    return db.eventLoop.makeFailedFuture(Abort(.internalServerError, reason: "Incorrect match calculation"))
+//                }
 
-                return matches.create(on: db)
+                // Save all matches to the database
+                return matches.create(on: db).transform(to: ())
             }
         }
     }
