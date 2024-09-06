@@ -115,6 +115,7 @@ final class EmailController {
         <p>Falls Sie Trikots benötigen und noch keine haben, können Sie sich über die Angebote für ÖKFB Mannschaften hier erkundigen: <a href="https://www.kaddur.at">www.kaddur.at</a></p>
 
         <p>Wir freuen uns über Ihre baldige Rückmeldung und verbleiben.</p>
+        <p>Dies ist eine automatisch generierte E-Mail. Sollten Sie Fragen haben oder Unterstützung benötigen, zögern Sie bitte nicht, uns unter support@oekfb.eu zu kontaktieren. Wir stehen Ihnen gerne zur Verfügung.</p>
         </body>
         </html>
         """
@@ -192,6 +193,7 @@ final class EmailController {
                                     
             <p>Mit freundlichen Grüßen,<br>
             Österreichischer Kleinfeld Fußball Bund</p>
+            <p>Dies ist eine automatisch generierte E-Mail. Sollten Sie Fragen haben oder Unterstützung benötigen, zögern Sie bitte nicht, uns unter support@oekfb.eu zu kontaktieren. Wir stehen Ihnen gerne zur Verfügung.</p>
         </body>
         </html>
         """
@@ -240,6 +242,8 @@ final class EmailController {
         Falls Sie Trikots benötigen und noch keine haben, können Sie sich über die Angebote für ÖKFB Mannschaften hier erkundigen: www.kaddur.at
 
         Wir freuen uns über Ihre baldige Rückmeldung und verbleiben.
+        
+        Dies ist eine automatisch generierte E-Mail. Sollten Sie Fragen haben oder Unterstützung benötigen, zögern Sie bitte nicht, uns unter support@oekfb.eu zu kontaktieren. Wir stehen Ihnen gerne zur Verfügung.
         """
 
         let email = try Email(
@@ -280,6 +284,8 @@ final class EmailController {
         Passwort: \(password)
         
         Sie können sich einlogen unter https://ref.oekfb.eu.
+        
+        Dies ist eine automatisch generierte E-Mail. Sollten Sie Fragen haben oder Unterstützung benötigen, zögern Sie bitte nicht, uns unter support@oekfb.eu zu kontaktieren. Wir stehen Ihnen gerne zur Verfügung.
         """
 
         let email = try Email(
@@ -319,6 +325,8 @@ final class EmailController {
         Passwort: \(password)
         
         Sie können sich einlogen unter https://team.oekfb.eu.
+        
+        Dies ist eine automatisch generierte E-Mail. Sollten Sie Fragen haben oder Unterstützung benötigen, zögern Sie bitte nicht, uns unter support@oekfb.eu zu kontaktieren. Wir stehen Ihnen gerne zur Verfügung.
         """
 
         let email = try Email(
@@ -402,6 +410,7 @@ final class EmailController {
             
             <p class="signature">Mit freundlichen Grüßen,<br>
             Der Österreichischer Kleinfeld Fußball Bund</p>
+            <p>Dies ist eine automatisch generierte E-Mail. Sollten Sie Fragen haben oder Unterstützung benötigen, zögern Sie bitte nicht, uns unter support@oekfb.eu zu kontaktieren. Wir stehen Ihnen gerne zur Verfügung.</p>
         </body>
         </html>
         """
@@ -449,6 +458,8 @@ final class EmailController {
             <p>Wir freuen uns über Ihre baldige Rückmeldung und verbleiben.</p>
 
             <p>Mit freundlichen Grüßen,<br>Österreichische Kleinfeld Fußball Bund</p>
+            <p>Dies ist eine automatisch generierte E-Mail. Sollten Sie Fragen haben oder Unterstützung benötigen, zögern Sie bitte nicht, uns unter support@oekfb.eu zu kontaktieren. Wir stehen Ihnen gerne zur Verfügung.</p>
+
         </body>
         </html>
         """
