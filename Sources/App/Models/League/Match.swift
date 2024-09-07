@@ -64,7 +64,9 @@ final class Match: Model, Content, Codable {
     // User Updated
     @OptionalField(key: FieldKeys.homeBlanket) var homeBlanket: Blankett?
     @OptionalField(key: FieldKeys.awayBlanket) var awayBlanket: Blankett?
-    
+
+    @OptionalField(key: FieldKeys.paid) var paid: Bool?
+
     // Children
     @Children(for: \.$match) var events: [MatchEvent]
     
@@ -96,6 +98,7 @@ final class Match: Model, Content, Codable {
     enum FieldKeys {
         static var id: FieldKey { "id" }
         static var bericht: FieldKey { "bericht" }
+        static var paid: FieldKey { "paid" }
         static var homeTeam: FieldKey { "homeTeam" }
         static var awayTeam: FieldKey { "awayTeam" }
         static var season: FieldKey { "season" }
@@ -127,7 +130,8 @@ final class Match: Model, Content, Codable {
          firstHalfEndDate: Date? = nil,
          secondHalfEndDate: Date? = nil,
          firstHalfStartDate: Date? = nil,
-         secondHalfStartDate: Date? = nil) {
+         secondHalfStartDate: Date? = nil,
+         paid: Bool? = false) {
         self.id = id
         self.$referee.id = refereeId
         self.$season.id = seasonId
@@ -143,6 +147,7 @@ final class Match: Model, Content, Codable {
         self.secondHalfStartDate = secondHalfStartDate
         self.firstHalfEndDate = firstHalfEndDate
         self.secondHalfEndDate = secondHalfEndDate
+        self.paid = paid
     }
 }
 
@@ -162,6 +167,7 @@ extension MatchMigration: Migration {
             .field(Match.FieldKeys.secondHalfStartDate, .date)
             .field(Match.FieldKeys.firstHalfEndDate, .date)
             .field(Match.FieldKeys.secondHalfEndDate, .date)
+            .field(Match.FieldKeys.paid, .bool)
             .field(Match.FieldKeys.bericht, .string)
             .create()
     }

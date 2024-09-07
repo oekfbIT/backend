@@ -323,7 +323,11 @@ final class MatchController: RouteCollection {
             .unwrap(or: Abort(.notFound))
             .flatMap { match in
                 // 1. Set the status of the match to .submitted
-                match.status = .submitted
+                
+                if match.status != .abbgebrochen {
+                    match.status = .submitted
+                }
+
                 match.bericht = berichtRequest.text
 
                 guard let matchID = match.id, let refID = match.$referee.id else {
@@ -347,7 +351,11 @@ final class MatchController: RouteCollection {
                                 return match.$referee.get(on: req.db)
                                     .unwrap(or: Abort(.notFound, reason: "Referee not found"))
                                     .flatMap { referee in
-                                        referee.balance = (referee.balance ?? 0) - hourlyRate
+                                        
+                                        if !(match.paid ?? false) {
+                                            referee.balance = (referee.balance ?? 0) - hourlyRate
+                                            match.paid = true 
+                                        }
                                         
                                         // Save both the match and the updated referee
                                         let saveMatch = match.save(on: req.db)
