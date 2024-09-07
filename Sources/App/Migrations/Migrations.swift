@@ -18,7 +18,8 @@ let app_migrations: [Migration] = [
     RechnungMigration(),
     TransferMigration(),
     TransferSettingsMigration(),
-    MatchEventMigration()
+    MatchEventMigration(),
+    StrafsenatMigration()
 ]
 
 struct UserMigration { }
@@ -36,3 +37,4 @@ struct RechnungMigration { }
 struct TransferMigration { }
 struct TransferSettingsMigration { }
 struct MatchEventMigration { }
+struct StrafsenatMigration { }

@@ -17,6 +17,10 @@ final class MatchEvent: Model, Content, Codable {
     @Parent(key: FieldKeys.playerId) var player: Player
     @Field(key: FieldKeys.minute) var minute: Int
     @Parent(key: FieldKeys.match) var match: Match
+    
+    @OptionalField(key: FieldKeys.name) var name: String?
+    @OptionalField(key: FieldKeys.image) var image: String?
+    @OptionalField(key: FieldKeys.number) var number: String?
 
     enum FieldKeys {
         static let id: FieldKey = "id"
@@ -24,16 +28,23 @@ final class MatchEvent: Model, Content, Codable {
         static let match: FieldKey = "match"
         static let playerId: FieldKey = "playerId"
         static let minute: FieldKey = "minute"
+        
+        static let name: FieldKey = "name"
+        static let image: FieldKey = "image"
+        static let number: FieldKey = "number"
     }
 
     init() {}
 
-    init(id: UUID? = nil, match: Match.IDValue, type: MatchEventType, playerId: UUID, minute: Int) {
+    init(id: UUID? = nil, match: Match.IDValue, type: MatchEventType, playerId: UUID, minute: Int, name: String?, image: String?, number: String?) {
         self.id = id
         self.$match.id = match
         self.type = type
         self.minute = minute
         self.$player.id = playerId
+        self.name = name
+        self.image = image
+        self.number = number
     }
 }
 
@@ -45,6 +56,9 @@ extension MatchEventMigration: Migration {
             .field(MatchEvent.FieldKeys.type, .string, .required)
             .field(MatchEvent.FieldKeys.playerId, .uuid, .required, .references(Player.schema, Player.FieldKeys.id))
             .field(MatchEvent.FieldKeys.minute, .int, .required)
+            .field(MatchEvent.FieldKeys.name, .string)
+            .field(MatchEvent.FieldKeys.image, .string)
+            .field(MatchEvent.FieldKeys.number, .string)
             .create()
     }
 

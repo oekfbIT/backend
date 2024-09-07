@@ -20,6 +20,7 @@ struct Score: Codable {
 
 struct PlayerOverview: Codable {
     let id: UUID
+    let sid: String
     var name: String
     var number: Int
     var image: String?
