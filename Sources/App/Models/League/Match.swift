@@ -92,7 +92,8 @@ final class Match: Model, Content, Codable {
              completed,
              abbgebrochen,
              submitted,
-             cancelled
+             cancelled,
+             done 
     }
 
     enum FieldKeys {

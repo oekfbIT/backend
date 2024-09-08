@@ -57,6 +57,7 @@ final class MatchController: RouteCollection {
         route.patch(":id", "submit", use: completeGame)
         route.patch(":id", "noShowGame", use: noShowGame)
         route.patch(":id", "spielabbruch", use: spielabbruch)
+        route.patch(":id", "done", use: done)
 
     }
 
@@ -322,8 +323,6 @@ final class MatchController: RouteCollection {
         return Match.find(matchId, on: req.db)
             .unwrap(or: Abort(.notFound))
             .flatMap { match in
-                // 1. Set the status of the match to .submitted
-                
                 if match.status != .abbgebrochen {
                     match.status = .submitted
                 }
@@ -334,61 +333,53 @@ final class MatchController: RouteCollection {
                     return req.eventLoop.makeFailedFuture(Abort(.notFound, reason: "Referee not found"))
                 }
 
-                // 2. Only create Strafsenat if the text is not nil or empty
-                if let text = berichtRequest.text, !text.isEmpty {
-                    let strafsenat = Strafsenat(matchID: matchID, refID: refID, text: text, offen: true)
-                    return strafsenat.create(on: req.db).flatMap {
-                        // Proceed to get the league of the match and handle the rest
-                        return match.$homeTeam.get(on: req.db)
-                            .flatMap { homeTeam in
-                                return homeTeam.$league.get(on: req.db)
-                            }.flatMap { league in
-                                guard let hourlyRate = league?.hourly else {
-                                    return req.eventLoop.makeFailedFuture(Abort(.internalServerError, reason: "Hourly rate not found for league"))
-                                }
-
-                                // 3. Get the referee of the match and reduce their balance by the hourly rate
-                                return match.$referee.get(on: req.db)
-                                    .unwrap(or: Abort(.notFound, reason: "Referee not found"))
-                                    .flatMap { referee in
-                                        
-                                        if !(match.paid ?? false) {
-                                            referee.balance = (referee.balance ?? 0) - hourlyRate
-                                            match.paid = true 
-                                        }
-                                        
-                                        // Save both the match and the updated referee
-                                        let saveMatch = match.save(on: req.db)
-                                        let saveReferee = referee.save(on: req.db)
-                                        
-                                        return saveMatch.and(saveReferee).transform(to: .ok)
-                                    }
-                            }
-                    }
-                } else {
-                    // If no text, just proceed without creating Strafsenat
-                    return match.$homeTeam.get(on: req.db)
-                        .flatMap { homeTeam in
-                            return homeTeam.$league.get(on: req.db)
-                        }.flatMap { league in
-                            guard let hourlyRate = league?.hourly else {
-                                return req.eventLoop.makeFailedFuture(Abort(.internalServerError, reason: "Hourly rate not found for league"))
-                            }
-
-                            // 3. Get the referee of the match and reduce their balance by the hourly rate
-                            return match.$referee.get(on: req.db)
-                                .unwrap(or: Abort(.notFound, reason: "Referee not found"))
-                                .flatMap { referee in
-                                    referee.balance = (referee.balance ?? 0) - hourlyRate
-                                    
-                                    // Save both the match and the updated referee
-                                    let saveMatch = match.save(on: req.db)
-                                    let saveReferee = referee.save(on: req.db)
-                                    
-                                    return saveMatch.and(saveReferee).transform(to: .ok)
-                                }
+                // Check if Strafsenat already exists for this match
+                return Strafsenat.query(on: req.db)
+                    .filter(\.$matchID == matchID)
+                    .first()
+                    .flatMap { existingStrafsenat in
+                        // If a Strafsenat already exists, skip creation
+                        if existingStrafsenat != nil {
+                            return self.handleMatchCompletion(req: req, match: match, matchID: matchID)
                         }
+
+                        // Proceed with Strafsenat creation if not found
+                        if let text = berichtRequest.text, !text.isEmpty {
+                            let strafsenat = Strafsenat(matchID: matchID, refID: refID, text: text, offen: true)
+                            return strafsenat.create(on: req.db).flatMap {
+                                return self.handleMatchCompletion(req: req, match: match, matchID: matchID)
+                            }
+                        } else {
+                            // If no text, proceed without creating Strafsenat
+                            return self.handleMatchCompletion(req: req, match: match, matchID: matchID)
+                        }
+                    }
+            }
+    }
+
+    // Helper function to handle the remaining match completion logic
+    private func handleMatchCompletion(req: Request, match: Match, matchID: UUID) -> EventLoopFuture<HTTPStatus> {
+        return match.$homeTeam.get(on: req.db)
+            .flatMap { homeTeam in
+                return homeTeam.$league.get(on: req.db)
+            }.flatMap { league in
+                guard let hourlyRate = league?.hourly else {
+                    return req.eventLoop.makeFailedFuture(Abort(.internalServerError, reason: "Hourly rate not found for league"))
                 }
+
+                return match.$referee.get(on: req.db)
+                    .unwrap(or: Abort(.notFound, reason: "Referee not found"))
+                    .flatMap { referee in
+                        if !(match.paid ?? false) {
+                            referee.balance = (referee.balance ?? 0) - hourlyRate
+                            match.paid = true
+                        }
+
+                        let saveMatch = match.save(on: req.db)
+                        let saveReferee = referee.save(on: req.db)
+
+                        return saveMatch.and(saveReferee).transform(to: .ok)
+                    }
             }
     }
 
@@ -427,7 +418,47 @@ final class MatchController: RouteCollection {
                 return match.save(on: req.db).transform(to: .ok)
             }
     }
+    
+    func done(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        let matchId = try req.parameters.require("id", as: UUID.self)
 
+        return Match.find(matchId, on: req.db)
+            .unwrap(or: Abort(.notFound))
+            .flatMap { match in
+                // Check the final score
+                let homeScore = match.score.home
+                let awayScore = match.score.away
+
+                // Find both home and away teams
+                let homeTeamFuture = match.$homeTeam.get(on: req.db)
+                let awayTeamFuture = match.$awayTeam.get(on: req.db)
+
+                return homeTeamFuture.and(awayTeamFuture).flatMap { homeTeam, awayTeam in
+                    // Update points based on the final score
+                    if homeScore > awayScore {
+                        homeTeam.points += 3 // Home team wins
+                    } else if awayScore > homeScore {
+                        awayTeam.points += 3 // Away team wins
+                    } else {
+                        // It's a draw
+                        homeTeam.points += 1
+                        awayTeam.points += 1
+                    }
+
+                    // Save the updated team points
+                    let saveHomeTeam = homeTeam.save(on: req.db)
+                    let saveAwayTeam = awayTeam.save(on: req.db)
+
+                    return saveHomeTeam.and(saveAwayTeam).flatMap {_ in 
+                        // Update match status to 'done'
+                        match.status = .done
+                        return match.save(on: req.db).transform(to: .ok)
+                    }
+                }
+            }
+    }
+
+    
 }
 
 struct AddPlayersRequest: Content {
