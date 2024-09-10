@@ -33,13 +33,15 @@ struct Blankett: Codable {
     var name: String
     var dress: String
     var logo: String?
-    var players: [PlayerOverview] // max. 5 Players
+    var players: [PlayerOverview]
+    var trainer: Trainer?
     
-    init(name: String, dress: String, logo: String?, players: [PlayerOverview]?) {
+    init(name: String, dress: String, logo: String?, players: [PlayerOverview]?, trainer: Trainer? = nil) {
         self.name = name
         self.dress = dress
         self.logo = logo
         self.players = players ?? []
+        self.trainer = trainer
     }
 }
 

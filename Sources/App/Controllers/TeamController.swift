@@ -16,7 +16,8 @@ final class TeamController: RouteCollection {
 
         route.get(use: repository.index)
         route.get(":id", use: repository.getbyID)
-        route.delete(":id", use: repository.deleteID)
+        route.get(":id",  "matches" , use: getWithMatches)
+        route.delete(":id", use: getWithMatches)
 
         route.patch(":id", use: repository.updateID)
         route.patch("batch", use: repository.updateBatch)
@@ -56,6 +57,20 @@ final class TeamController: RouteCollection {
                 publicTeam.players = team.players.map { $0.asPublic() }
                 return publicTeam
             }
+    }
+
+    
+    func getWithMatches(req: Request) throws -> EventLoopFuture<[Match]> {
+        guard let teamID = req.parameters.get("id", as: UUID.self) else {
+            throw Abort(.badRequest)
+        }
+        
+        return Match.query(on: req.db)
+            .group(.or) { group in
+                group.filter(\Match.$homeTeam.$id == teamID)
+                group.filter(\Match.$awayTeam.$id == teamID)
+            }
+            .all()
     }
 
     // Function to get a team with all its players
