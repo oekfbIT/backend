@@ -174,8 +174,8 @@ extension League {
                                 details: MatchDetails(gameday: gameDay, date: nil, stadium: nil, location: "Nicht Zugeornet"),
                                 homeTeamId: homeTeam.id!,
                                 awayTeamId: awayTeam.id!,
-                                homeBlanket: Blankett(name: homeTeam.teamName, dress: homeTeam.trikot.home, logo: homeTeam.logo, players: []),
-                                awayBlanket: Blankett(name: awayTeam.teamName, dress: awayTeam.trikot.away, logo: awayTeam.logo, players: []),
+                                homeBlanket: Blankett(name: homeTeam.teamName, dress: homeTeam.trikot.home, logo: homeTeam.logo, players: [], coach: homeTeam.coach),
+                                awayBlanket: Blankett(name: awayTeam.teamName, dress: awayTeam.trikot.away, logo: awayTeam.logo, players: [], coach: awayTeam.coach),
                                 score: Score(home: 0, away: 0),
                                 status: .pending
                             )

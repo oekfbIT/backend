@@ -204,7 +204,7 @@ final class MatchController: RouteCollection {
                 .flatMap { match in
                     // Initialize homeBlankett if nil
                     if match.homeBlanket == nil {
-                        match.homeBlanket = Blankett(name: match.$homeTeam.name, dress: match.homeTeam.trikot.home, logo: nil, players: [])
+                        match.homeBlanket = Blankett(name: match.$homeTeam.name, dress: match.homeTeam.trikot.home, logo: nil, players: [], coach: addPlayersRequest.coach)
                     }
 
                     // Iterate over the playerIds and add them to the blanket
@@ -241,7 +241,7 @@ final class MatchController: RouteCollection {
                 .flatMap { match in
                     // Initialize awayBlankett if nil
                     if match.awayBlanket == nil {
-                        match.awayBlanket = Blankett(name: match.$awayTeam.name, dress: match.awayTeam.trikot.away, logo: nil, players: [])
+                        match.awayBlanket = Blankett(name: match.$awayTeam.name, dress: match.awayTeam.trikot.away, logo: nil, players: [], coach: addPlayersRequest.coach)
                     }
 
                     // Iterate over the playerIds and add them to the blanket
@@ -462,5 +462,11 @@ final class MatchController: RouteCollection {
 }
 
 struct AddPlayersRequest: Content {
+    let coach: Trainer?
     let playerIds: [UUID]
+    
+    init(coach: Trainer? = nil, playerIds: [UUID]) {
+        self.coach = coach
+        self.playerIds = playerIds
+    }
 }
