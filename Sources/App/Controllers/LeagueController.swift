@@ -60,6 +60,7 @@ final class LeagueController: RouteCollection {
         return League.query(on: req.db)
             .filter(\.$code == leagueCode)
             .with(\.$teams)
+            .with(\.$seasons)
             .first()
             .unwrap(or: Abort(.notFound, reason: "League not found"))
     }
