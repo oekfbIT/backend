@@ -17,6 +17,7 @@ final class Stadium: Model, Content, Codable {
     @Field(key: FieldKeys.code) var code: String
     @Field(key: FieldKeys.name) var name: String
     @Field(key: FieldKeys.address) var address: String
+    @OptionalField(key: FieldKeys.image) var image: String?
     @Field(key: FieldKeys.type) var type: String
     @Field(key: FieldKeys.schuhwerk) var schuhwerk: String
     @Field(key: FieldKeys.flutlicht) var flutlicht: Bool
@@ -31,6 +32,7 @@ final class Stadium: Model, Content, Codable {
         static let bundesland: FieldKey = "bundesland"
         static let address: FieldKey = "address"
         static let type: FieldKey = "type"
+        static let image: FieldKey = "image"
         static let schuhwerk: FieldKey = "schuhwerk"
         static let flutlicht: FieldKey = "flutlicht"
         static let parking: FieldKey = "parking"
@@ -40,12 +42,13 @@ final class Stadium: Model, Content, Codable {
 
     init() {}
 
-    init(id: UUID? = nil, bundesland: Bundesland, code: String, name: String, address: String, type: String, schuhwerk: String, flutlicht: Bool, parking: Bool, homeTeam: String?, partnerSince: String?) {
+    init(id: UUID? = nil, bundesland: Bundesland, code: String, name: String, address: String, image: String? = nil, type: String, schuhwerk: String, flutlicht: Bool, parking: Bool, homeTeam: String?, partnerSince: String?) {
         self.id = id
         self.bundesland = bundesland
         self.code = code
         self.name = name
         self.address = address
+        self.image = image
         self.type = type
         self.schuhwerk = schuhwerk
         self.flutlicht = flutlicht
@@ -64,6 +67,7 @@ extension StadiumMigration: Migration {
             .field(Stadium.FieldKeys.code, .string, .required)
             .field(Stadium.FieldKeys.name, .string, .required)
             .field(Stadium.FieldKeys.address, .string, .required)
+            .field(Stadium.FieldKeys.image, .string)
             .field(Stadium.FieldKeys.type, .string)
             .field(Stadium.FieldKeys.schuhwerk, .string)
             .field(Stadium.FieldKeys.flutlicht, .bool)

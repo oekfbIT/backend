@@ -58,6 +58,7 @@ extension Stadium: Mergeable {
         merged.code = other.code
         merged.name = other.name
         merged.address = other.address
+        merged.image = other.image
         merged.type = other.type
         merged.schuhwerk = other.schuhwerk
         merged.flutlicht = other.flutlicht
