@@ -305,7 +305,7 @@ final class MatchController: RouteCollection {
 
     func removePlayerFromAwayBlankett(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let matchId = try req.parameters.require("id", as: UUID.self)
-        let playerId = try req.content.decode(UUID.self)
+        let playerId = try req.parameters.require("playerId", as: UUID.self)  // Fix this line to extract from parameters
 
         return Match.find(matchId, on: req.db)
             .unwrap(or: Abort(.notFound))
@@ -325,6 +325,7 @@ final class MatchController: RouteCollection {
                 return match.save(on: req.db).transform(to: .ok)
             }
     }
+
 
     
     func startGame(req: Request) throws -> EventLoopFuture<HTTPStatus> {
