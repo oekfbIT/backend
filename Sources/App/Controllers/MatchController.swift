@@ -463,7 +463,7 @@ final class MatchController: RouteCollection {
                     return req.eventLoop.future(error: Abort(.badRequest, reason: "Invalid winning team specified"))
                 }
 
-                match.status = .completed
+                match.status = .cancelled
                 return match.save(on: req.db).transform(to: .ok)
             }
     }
