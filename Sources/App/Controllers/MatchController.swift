@@ -47,9 +47,12 @@ final class MatchController: RouteCollection {
         route.post(":id", "yellowRedCard", use: addYellowRedCard)
         
         // Routes for adding players to blankets
-        route.post(":id", "homeBlankett", "addPlayer", use: addPlayersToHomeBlankett)
-        route.post(":id", "awayBlankett", "addPlayer", use: addPlayersToAwayBlankett)
+        route.post(":id", "homeBlankett", "addPlayer", use: addPlayerToHomeBlankett)
+        route.post(":id", "awayBlankett", "addPlayer", use: addPlayerToAwayBlankett)
         
+        route.delete(":id", ":playerId", "homeBlankett", "removePlayer", use: removePlayerFromHomeBlankett)
+        route.delete(":id", ":playerId", "awayBlankett", "removePlayer", use: removePlayerFromAwayBlankett)
+
         route.patch(":id", "startGame", use: startGame)
         route.patch(":id", "endFirstHalf", use: endFirstHalf)
         route.patch(":id", "startSecondHalf", use: startSecondHalf)
@@ -194,79 +197,135 @@ final class MatchController: RouteCollection {
             .unwrap(or: Abort(.notFound))
     }
 
-    // Function to add players to the homeBlankett
-        func addPlayersToHomeBlankett(req: Request) throws -> EventLoopFuture<HTTPStatus> {
-            let matchId = try req.parameters.require("id", as: UUID.self)
-            let addPlayersRequest = try req.content.decode(AddPlayersRequest.self)
+    func addPlayerToHomeBlankett(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        let matchId = try req.parameters.require("id", as: UUID.self)
+        
+        struct PlayerRequest: Content {
+            let playerId: UUID
+            let number: Int  // Overridden player number
+            let coach: Trainer?
+        }
+        
+        let playerRequest = try req.content.decode(PlayerRequest.self)
 
-            return Match.find(matchId, on: req.db)
-                .unwrap(or: Abort(.notFound))
-                .flatMap { match in
-                    // Initialize homeBlankett if nil
-                    if match.homeBlanket == nil {
-                        match.homeBlanket = Blankett(name: match.$homeTeam.name, dress: match.homeTeam.trikot.home, logo: nil, players: [], coach: addPlayersRequest.coach)
-                    }
+        return Match.find(matchId, on: req.db)
+            .unwrap(or: Abort(.notFound))
+            .flatMap { match in
+                if match.homeBlanket == nil {
+                    match.homeBlanket = Blankett(name: match.$homeTeam.name, dress: match.homeTeam.trikot.home, logo: nil, players: [], coach: playerRequest.coach)
+                }
 
-                    // Iterate over the playerIds and add them to the blanket
-                    let futures = addPlayersRequest.playerIds.map { playerId in
-                        Player.find(playerId, on: req.db)
-                            .unwrap(or: Abort(.notFound))
-                            .map { player in
-                                match.homeBlanket?.players.append(PlayerOverview(
-                                    id: player.id!,
-                                    sid: player.sid,
-                                    name: player.name,
-                                    number: Int(player.number) ?? 0,
-                                    image: player.image,
-                                    yellowCard: 0,
-                                    redYellowCard: 0,
-                                    redCard: 0
-                                ))
-                            }
-                    }
-
-                    return futures.flatten(on: req.eventLoop).flatMap {_ in 
+                return Player.find(playerRequest.playerId, on: req.db)
+                    .unwrap(or: Abort(.notFound))
+                    .flatMap { player in
+                        if let index = match.homeBlanket?.players.firstIndex(where: { $0.id == player.id! }) {
+                            match.homeBlanket?.players[index].number = playerRequest.number
+                        } else {
+                            match.homeBlanket?.players.append(PlayerOverview(
+                                id: player.id!,
+                                sid: player.sid,
+                                name: player.name,
+                                number: playerRequest.number,
+                                image: player.image,
+                                yellowCard: 0,
+                                redYellowCard: 0,
+                                redCard: 0
+                            ))
+                        }
                         return match.save(on: req.db).transform(to: .ok)
                     }
-                }
+            }
+    }
+
+    func addPlayerToAwayBlankett(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        let matchId = try req.parameters.require("id", as: UUID.self)
+        
+        struct PlayerRequest: Content {
+            let playerId: UUID
+            let number: Int  // Overridden player number
+            let coach: Trainer?
         }
+        
+        let playerRequest = try req.content.decode(PlayerRequest.self)
 
-        // Function to add players to the awayBlankett
-        func addPlayersToAwayBlankett(req: Request) throws -> EventLoopFuture<HTTPStatus> {
-            let matchId = try req.parameters.require("id", as: UUID.self)
-            let addPlayersRequest = try req.content.decode(AddPlayersRequest.self)
+        return Match.find(matchId, on: req.db)
+            .unwrap(or: Abort(.notFound))
+            .flatMap { match in
+                if match.awayBlanket == nil {
+                    match.awayBlanket = Blankett(name: match.$awayTeam.name, dress: match.awayTeam.trikot.away, logo: nil, players: [], coach: playerRequest.coach)
+                }
 
-            return Match.find(matchId, on: req.db)
-                .unwrap(or: Abort(.notFound))
-                .flatMap { match in
-                    // Initialize awayBlankett if nil
-                    if match.awayBlanket == nil {
-                        match.awayBlanket = Blankett(name: match.$awayTeam.name, dress: match.awayTeam.trikot.away, logo: nil, players: [], coach: addPlayersRequest.coach)
-                    }
-
-                    // Iterate over the playerIds and add them to the blanket
-                    let futures = addPlayersRequest.playerIds.map { playerId in
-                        Player.find(playerId, on: req.db)
-                            .unwrap(or: Abort(.notFound))
-                            .map { player in
-                                match.awayBlanket?.players.append(PlayerOverview(
-                                    id: player.id!,
-                                    sid: player.sid,
-                                    name: player.name,
-                                    number: Int(player.number) ?? 0,
-                                    image: player.image,
-                                    yellowCard: 0,
-                                    redYellowCard: 0,
-                                    redCard: 0
-                                ))
-                            }
-                    }
-
-                    return futures.flatten(on: req.eventLoop).flatMap {_ in 
+                return Player.find(playerRequest.playerId, on: req.db)
+                    .unwrap(or: Abort(.notFound))
+                    .flatMap { player in
+                        if let index = match.awayBlanket?.players.firstIndex(where: { $0.id == player.id! }) {
+                            match.awayBlanket?.players[index].number = playerRequest.number
+                        } else {
+                            match.awayBlanket?.players.append(PlayerOverview(
+                                id: player.id!,
+                                sid: player.sid,
+                                name: player.name,
+                                number: playerRequest.number,
+                                image: player.image,
+                                yellowCard: 0,
+                                redYellowCard: 0,
+                                redCard: 0
+                            ))
+                        }
                         return match.save(on: req.db).transform(to: .ok)
                     }
+            }
+    }
+
+
+
+    func removePlayerFromHomeBlankett(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        let matchId = try req.parameters.require("id", as: UUID.self)
+        let playerId = try req.parameters.require("playerId", as: UUID.self)
+
+        return Match.find(matchId, on: req.db)
+            .unwrap(or: Abort(.notFound))
+            .flatMap { match in
+                // Ensure the blanket exists
+                guard let homeBlanket = match.homeBlanket else {
+                    return req.eventLoop.future(error: Abort(.badRequest, reason: "Home blanket not found"))
                 }
-        }
+
+                // Find the player in the homeBlankett and remove them
+                if let index = homeBlanket.players.firstIndex(where: { $0.id == playerId }) {
+                    match.homeBlanket?.players.remove(at: index)
+                } else {
+                    return req.eventLoop.future(error: Abort(.badRequest, reason: "Player not found in home blanket"))
+                }
+
+                return match.save(on: req.db).transform(to: .ok)
+            }
+    }
+
+
+    func removePlayerFromAwayBlankett(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        let matchId = try req.parameters.require("id", as: UUID.self)
+        let playerId = try req.content.decode(UUID.self)
+
+        return Match.find(matchId, on: req.db)
+            .unwrap(or: Abort(.notFound))
+            .flatMap { match in
+                // Ensure the blanket exists
+                guard let awayBlanket = match.awayBlanket else {
+                    return req.eventLoop.future(error: Abort(.badRequest, reason: "Away blanket not found"))
+                }
+
+                // Find the player in the awayBlankett and remove them
+                if let index = awayBlanket.players.firstIndex(where: { $0.id == playerId }) {
+                    match.awayBlanket?.players.remove(at: index)
+                } else {
+                    return req.eventLoop.future(error: Abort(.badRequest, reason: "Player not found in away blanket"))
+                }
+
+                return match.save(on: req.db).transform(to: .ok)
+            }
+    }
+
     
     func startGame(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let matchId = try req.parameters.require("id", as: UUID.self)
