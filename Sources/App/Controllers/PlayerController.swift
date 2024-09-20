@@ -27,6 +27,7 @@ final class PlayerController: RouteCollection {
 
         route.get("transfer", "name", ":search", use: searchTransferByName)
         route.get("name", ":search", use: searchByName)
+        route.get("sid", ":sid", use: searchByID)
 
         route.get("internal", ":id", use: getPlayerWithIdentification)
         route.get("reject", ":id", use: sendUpdatePlayerEmail)
@@ -191,6 +192,22 @@ final class PlayerController: RouteCollection {
             .all()
             .map { players in
                 players.map { $0.asPublic() }
+            }
+    }
+
+    func searchByID(req: Request) -> EventLoopFuture<Player.Public> {
+        guard let searchValue = req.parameters.get("sid") else {
+            return req.eventLoop.future(error: Abort(.badRequest, reason: "Missing search parameter"))
+        }
+
+        return Player.query(on: req.db)
+            .filter(\.$sid ~~ searchValue)
+            .first()
+            .flatMap { player in
+                guard let player = player else {
+                    return req.eventLoop.future(error: Abort(.notFound, reason: "Player not found"))
+                }
+                return req.eventLoop.future(player.asPublic())
             }
     }
 

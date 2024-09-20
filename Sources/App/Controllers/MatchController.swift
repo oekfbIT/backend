@@ -1,6 +1,11 @@
 import Vapor
 import Fluent
 
+struct LeagueMatches: Codable, Content{
+    var matches: [Match]
+    var league: String
+}
+
 func updatePlayerCardStatus(in blanket: inout Blankett?, playerId: UUID, cardType: MatchEventType) {
     // Ensure blanket is not nil
     guard blanket != nil else { return }
@@ -34,7 +39,10 @@ final class MatchController: RouteCollection {
         // Basic CRUD operations
         route.post(use: repository.create)
         route.post("batch", use: repository.createBatch)
+        route.get("livescore",use: getLiveScore)
+
         route.get(use: repository.index)
+
         route.get(":id", use: getMatchByID)
         route.delete(":id", use: repository.deleteID)
         route.patch(":id", use: repository.updateID)
@@ -66,6 +74,37 @@ final class MatchController: RouteCollection {
 
     func boot(routes: RoutesBuilder) throws {
         try setupRoutes(on: routes)
+    }
+    
+    func getLiveScore(req: Request) throws -> EventLoopFuture<[LeagueMatches]> {
+        return Match.query(on: req.db)
+            .filter(\.$status ~~ [.first, .second, .halftime])  // Filter matches that are in progress
+            .with(\.$season) { seasonQuery in  // Eager load the season and related league
+                seasonQuery.with(\.$league)  // Load the league through the season
+            }
+            .all()
+            .flatMap { matches in
+                // Group matches by the league name through season's league
+                var leagueMatchesDict = [String: LeagueMatches]()
+
+                for match in matches {
+                    guard let league = match.$season.value??.$league.value else {
+                        continue  // Skip matches without a valid league
+                    }
+
+                    let leagueName = league?.name  // Retrieve league name
+
+                    if leagueMatchesDict[leagueName ?? "Nicht Gennant"] == nil {
+                        leagueMatchesDict[leagueName ??  "Nicht Gennant"] = LeagueMatches(matches: [], league: leagueName ??  "Nicht Gennant")
+                    }
+
+                    leagueMatchesDict[leagueName ??  "Nicht Gennant"]?.matches.append(match)
+                }
+
+                // Convert the dictionary to an array of LeagueMatches
+                let leagueMatchesArray = Array(leagueMatchesDict.values)
+                return req.eventLoop.makeSucceededFuture(leagueMatchesArray)
+            }
     }
 
     // Function to handle adding a goal and updating the score
@@ -277,8 +316,6 @@ final class MatchController: RouteCollection {
             }
     }
 
-
-
     func removePlayerFromHomeBlankett(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let matchId = try req.parameters.require("id", as: UUID.self)
         let playerId = try req.parameters.require("playerId", as: UUID.self)
@@ -301,7 +338,6 @@ final class MatchController: RouteCollection {
                 return match.save(on: req.db).transform(to: .ok)
             }
     }
-
 
     func removePlayerFromAwayBlankett(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let matchId = try req.parameters.require("id", as: UUID.self)
@@ -326,8 +362,6 @@ final class MatchController: RouteCollection {
             }
     }
 
-
-    
     func startGame(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let matchId = try req.parameters.require("id", as: UUID.self)
         return Match.find(matchId, on: req.db)
@@ -443,7 +477,6 @@ final class MatchController: RouteCollection {
             }
     }
 
-
     func noShowGame(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let matchId = try req.parameters.require("id", as: UUID.self)
         struct NoShowRequest: Content {
@@ -518,7 +551,6 @@ final class MatchController: RouteCollection {
             }
     }
 
-    
 }
 
 struct AddPlayersRequest: Content {
