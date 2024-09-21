@@ -31,7 +31,117 @@ final class LeagueController: RouteCollection {
     }
 
     // MARK: - Core CRUD Handlers
+    func getLeagueTable(req: Request) -> EventLoopFuture<[TableItem]> {
+        guard let leagueID = req.parameters.get("id", as: UUID.self) else {
+            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league ID"))
+        }
 
+        return League.find(leagueID, on: req.db)
+            .unwrap(or: Abort(.notFound, reason: "League not found"))
+            .flatMap { league in
+                // Fetch all teams in the league
+                league.$teams.query(on: req.db).all().flatMap { teams in
+                    // Create an array of futures to fetch match stats for each team
+                    let teamStatsFutures = teams.map { team in
+                        self.getTeamStats(teamID: team.id!, db: req.db).map { stats in
+                            return (team, stats)
+                        }
+                    }
+                    
+                    // Flatten the array of futures into a single future
+                    return req.eventLoop.flatten(teamStatsFutures).map { teamStatsPairs in
+                        // Create table items with points, goals, wins, draws, losses, etc.
+                        var tableItems: [TableItem] = []
+                        
+                        for (team, stats) in teamStatsPairs {
+                            let tableItem = TableItem(
+                                image: team.logo,
+                                name: team.teamName,
+                                points: stats.totalPoints,
+                                id: team.id!,
+                                goals: stats.totalScored,
+                                ranking: 0,  // Ranking will be assigned after sorting
+                                wins: stats.wins,
+                                draws: stats.draws,
+                                losses: stats.losses,
+                                scored: stats.totalScored,
+                                against: stats.totalAgainst,
+                                difference: stats.goalDifference
+                            )
+                            tableItems.append(tableItem)
+                        }
+
+                        // Sort teams by points, then by goal difference
+                        tableItems.sort {
+                            if $0.points == $1.points {
+                                return $0.difference > $1.difference
+                            }
+                            return $0.points > $1.points
+                        }
+
+                        // Assign rankings
+                        for i in 0..<tableItems.count {
+                            tableItems[i].ranking = i + 1
+                        }
+
+                        return tableItems
+                    }
+                }
+            }
+    }
+
+    // Helper to get team stats
+    func getTeamStats(teamID: UUID, db: Database) -> EventLoopFuture<TeamStats> {
+        let validStatuses: [Match.GameStatus] = [.completed, .abbgebrochen, .submitted, .cancelled, .done]
+
+        return Match.query(on: db)
+            .group(.or) { group in
+                group.filter(\.$homeTeam.$id == teamID)
+                     .filter(\.$awayTeam.$id == teamID)
+            }
+            .filter(\.$status ~~ validStatuses) // Filter matches by valid statuses
+            .all()
+            .map { matches in
+                var wins = 0
+                var draws = 0
+                var losses = 0
+                var totalScored = 0
+                var totalAgainst = 0
+                var totalPoints = 0
+                
+                for match in matches {
+                    let isHome = match.$homeTeam.id == teamID
+                    let scored = isHome ? match.score.home : match.score.away
+                    let against = isHome ? match.score.away : match.score.home
+                    
+                    totalScored += scored
+                    totalAgainst += against
+                    
+                    if scored > against {
+                        wins += 1
+                        totalPoints += 3
+                    } else if scored == against {
+                        draws += 1
+                        totalPoints += 1
+                    } else {
+                        losses += 1
+                    }
+                }
+                
+                let goalDifference = totalScored - totalAgainst
+                
+                return TeamStats(
+                    wins: wins,
+                    draws: draws,
+                    losses: losses,
+                    totalScored: totalScored,
+                    totalAgainst: totalAgainst,
+                    goalDifference: goalDifference,
+                    totalPoints: totalPoints
+                )
+            }
+    }
+    
     func createSeason(req: Request) -> EventLoopFuture<HTTPStatus> {
         guard let leagueID = req.parameters.get("id", as: UUID.self),
               let numberOfRounds = req.parameters.get("number", as: Int.self) else {
@@ -124,64 +234,6 @@ final class LeagueController: RouteCollection {
                 return totalGoals
             }
     }
-
-    func getLeagueTable(req: Request) -> EventLoopFuture<[TableItem]> {
-        guard let leagueID = req.parameters.get("id", as: UUID.self) else {
-            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league ID"))
-        }
-
-        return League.find(leagueID, on: req.db)
-            .unwrap(or: Abort(.notFound, reason: "League not found"))
-            .flatMap { league in
-                // Fetch all teams in the league
-                league.$teams.query(on: req.db).all().flatMap { teams in
-                    // Create an array of futures to fetch goals for each team
-                    let teamGoalsFutures = teams.map { team in
-                        self.getTotalGoalsForTeam(teamID: team.id!, db: req.db).map { totalGoals in
-                            return (team, totalGoals)
-                        }
-                    }
-                    
-                    // Flatten the array of futures into a single future
-                    return req.eventLoop.flatten(teamGoalsFutures).map { teamGoalsPairs in
-                        // Create table items with points and goals
-                        var tableItems: [TableItem] = []
-                        
-                        for (team, totalGoals) in teamGoalsPairs {
-                            // Calculate points for the team
-                            // In this case, assume team.points is already calculated elsewhere
-                            let points = team.points  // Replace this with actual point calculation if needed
-                            
-                            let tableItem = TableItem(
-                                image: team.logo,
-                                name: team.teamName,
-                                points: points,
-                                id: team.id!,
-                                goals: totalGoals,
-                                ranking: 0  // Ranking will be assigned after sorting
-                            )
-                            tableItems.append(tableItem)
-                        }
-
-                        // Sort teams by points, then by goals
-                        tableItems.sort {
-                            if $0.points == $1.points {
-                                return $0.goals > $1.goals
-                            }
-                            return $0.points > $1.points
-                        }
-
-                        // Assign rankings
-                        for i in 0..<tableItems.count {
-                            tableItems[i].ranking = i + 1
-                        }
-
-                        return tableItems
-                    }
-                }
-            }
-    }
-
 }
 
 // MARK: - LeagueWithSeasons Struct
@@ -193,6 +245,16 @@ struct LeagueWithSeasons: Content {
 
 // MARK: - TableItem Struct
 
+struct TeamStats {
+    var wins: Int
+    var draws: Int
+    var losses: Int
+    var totalScored: Int
+    var totalAgainst: Int
+    var goalDifference: Int
+    var totalPoints: Int
+}
+
 struct TableItem: Codable, Content {
     var image: String
     var name: String
@@ -200,6 +262,13 @@ struct TableItem: Codable, Content {
     var id: UUID
     var goals: Int
     var ranking: Int
+
+    var wins: Int
+    var draws: Int
+    var losses: Int
+    var scored: Int
+    var against: Int
+    var difference: Int
 }
 
 // MARK: - League Extension to Handle Seasons
