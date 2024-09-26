@@ -19,7 +19,7 @@ final class TeamController: RouteCollection {
         route.get(":id",  "matches" , use: getWithMatches)
         route.delete(":id", use: getWithMatches)
 
-        route.patch(":id", use: repository.updateID)
+        route.patch(":id", use: updateID)
         route.patch("batch", use: repository.updateBatch)
         
         route.get(":id", "players", use: getTeamWithPlayers)
@@ -40,6 +40,49 @@ final class TeamController: RouteCollection {
         try setupRoutes(on: routes)
     }
     
+    func updateID(req: Request) throws -> EventLoopFuture<Team> {
+        guard let id = req.parameters.get("id", as: Team.IDValue.self) else {
+            throw Abort(.badRequest)
+        }
+
+        let updatedItem = try req.content.decode(Team.self)
+        return Team.find(id, on: req.db)
+            .unwrap(or: Abort(.notFound))
+            .flatMap { item in
+                let merged = item.merge(from: updatedItem)
+                return item.update(on: req.db).flatMap {
+                    // After successfully updating the team, update the related matches
+                    return Match.query(on: req.db)
+                        .group(.or) { group in
+                            group.filter(\.$homeTeam.$id == id)
+                            group.filter(\.$awayTeam.$id == id)
+                        }
+                        .all()
+                        .flatMapEach(on: req.eventLoop) { match in
+                            if match.$homeTeam.id == id {
+                                // Update homeBlanket for home team
+                                var updatedBlanket = match.homeBlanket ?? Blankett(name: merged.teamName, dress: merged.trikot.home, logo: merged.logo, players: [], coach: merged.coach)
+                                updatedBlanket.name = merged.teamName
+                                updatedBlanket.dress = merged.trikot.home
+                                updatedBlanket.logo = merged.logo
+                                updatedBlanket.coach = merged.coach
+                                match.homeBlanket = updatedBlanket
+                            } else if match.$awayTeam.id == id {
+                                // Update awayBlanket for away team
+                                var updatedBlanket = match.awayBlanket ?? Blankett(name: merged.teamName, dress: merged.trikot.away, logo: merged.logo, players: [], coach: merged.coach)
+                                updatedBlanket.name = merged.teamName
+                                updatedBlanket.dress = merged.trikot.away
+                                updatedBlanket.logo = merged.logo
+                                updatedBlanket.coach = merged.coach
+                                match.awayBlanket = updatedBlanket
+                            }
+                            return match.update(on: req.db)
+                        }
+                        .transform(to: merged)
+                }
+            }
+    }
+
     
     // Function to get a team with all its players
     func getTeamWithPlayers(req: Request) throws -> EventLoopFuture<Team.Public> {
