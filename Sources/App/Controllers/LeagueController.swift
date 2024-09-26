@@ -57,7 +57,7 @@ final class LeagueController: RouteCollection {
                             let tableItem = TableItem(
                                 image: team.logo,
                                 name: team.teamName,
-                                points: stats.totalPoints,
+                                points: team.points,
                                 id: team.id!,
                                 goals: stats.totalScored,
                                 ranking: 0,  // Ranking will be assigned after sorting
