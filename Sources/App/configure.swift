@@ -7,9 +7,9 @@ extension String {
     var bytes: [UInt8] { .init(self.utf8) }
 }
 
-// configures your application
+// Configures your application
 public func configure(_ app: Application) throws {
-    // uncomment to serve files from /Public folder
+    // Uncomment to serve files from /Public folder
     // app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
     
     let encoder = JSONEncoder()
@@ -36,69 +36,68 @@ public func configure(_ app: Application) throws {
 
     // Configure multiple allowed origins
     let allowedOrigins: [String] = [
+        "https://api.oekfb.eu",
+        "http://api.oekfb.eu",
         "http://localhost",
         "http://localhost:3000",
         "http://localhost:4000",
         "http://localhost:4001",
         "http://localhost:5500",
         "http://localhost:4500",
-
         "https://admin.oekfb.eu",
         "http://admin.oekfb.eu",
-
         "https://oekfb.eu:3000",
         "https://oekfb.eu:4000",
         "https://oekfb.eu",
-
         "http://oekfb.eu:3000",
         "http://oekfb.eu:4000",
         "http://oekfb.eu",
-        
         "https://www.oekfb.eu",
         "http://www.oekfb.eu",
-        
         "http://team.oekfb.eu",
         "https://team.oekfb.eu",
         "https://ref.oekfb.eu",
-        
         "http://165.232.91.105:3000",
-        "http://165.232.91.105:4000/",
-        "http://165.232.91.105:5000/",
-        "http://165.232.91.105/",
-        
+        "http://165.232.91.105:4000",
+        "http://165.232.91.105:5000",
+        "http://165.232.91.105",
         "https://165.232.91.105:3000",
-        "https://165.232.91.105:4000/",
-        "https://165.232.91.105:5000/",
-        "https://165.232.91.105/",
-
+        "https://165.232.91.105:4000",
+        "https://165.232.91.105:5000",
+        "https://165.232.91.105",
         "http://84.115.221.22",
         "http://84.115.221.22:3000",
         "http://84.115.221.22:4000",
         "http://84.115.221.22:5000",
-        
         "https://84.115.221.22",
         "https://84.115.221.22:3000",
         "https://84.115.221.22:4000",
         "https://84.115.221.22:5000",
-        
         "http://192.168.0.144:4000",
         "http://192.168.0.144:3000",
         "http://192.168.0.242"
     ]
 
-    // CORS configuration
-    let corsConfiguration = CORSMiddleware.Configuration(
-        allowedOrigin: .any(allowedOrigins),
+    // Initialize the custom CORS middleware
+    let corsMiddleware = CustomCORSMiddleware(
+        allowedOrigins: allowedOrigins,
         allowedMethods: [.GET, .POST, .PUT, .OPTIONS, .DELETE, .PATCH],
-        allowedHeaders: [.authorization, .contentType, .accept, .origin, .xRequestedWith, .userAgent, .init("sec-ch-ua"), .init("sec-ch-ua-mobile"), .init("sec-ch-ua-platform")],
-        allowCredentials: true,
-        exposedHeaders: [.authorization, .contentType]
+        allowedHeaders: [
+            "Authorization",
+            "Content-Type",
+            "Accept",
+            "Origin",
+            "X-Requested-With",
+            "User-Agent",
+            "sec-ch-ua",
+            "sec-ch-ua-mobile",
+            "sec-ch-ua-platform"
+        ],
+        allowCredentials: true
     )
 
-    let corsMiddleware = CORSMiddleware(configuration: corsConfiguration)
     app.middleware.use(corsMiddleware, at: .beginning) // Ensure it's the first middleware to run
 
-    
     let firebaseManager = FirebaseManager(
         client: app.client,
         apiKey: "AIzaSyBHum43yMHxKE15ctAI54LSCmiJ-6uDI8I",
@@ -109,6 +108,6 @@ public func configure(_ app: Application) throws {
     
     app.firebaseManager = firebaseManager
 
-    // register routes
+    // Register routes
     try routes(app)
 }
