@@ -96,8 +96,9 @@ public func configure(_ app: Application) throws {
         allowCredentials: true
     )
 
-    app.middleware.use(corsMiddleware, at: .beginning) // Ensure it's the first middleware to run
-
+    app.middleware.use(ErrorMiddleware.default(environment: app.environment))
+    app.middleware.use(corsMiddleware) // Move this after ErrorMiddleware
+    
     let firebaseManager = FirebaseManager(
         client: app.client,
         apiKey: "AIzaSyBHum43yMHxKE15ctAI54LSCmiJ-6uDI8I",

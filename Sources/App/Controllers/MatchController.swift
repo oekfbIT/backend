@@ -45,7 +45,7 @@ final class MatchController: RouteCollection {
 
         route.get(":id", use: getMatchByID)
         route.delete(":id", use: repository.deleteID)
-        route.patch(":id", use: repository.updateID)
+        route.patch(":id", use: updateID)
         route.patch("batch", use: repository.updateBatch)
 
         // Event-specific routes
@@ -75,6 +75,31 @@ final class MatchController: RouteCollection {
     func boot(routes: RoutesBuilder) throws {
         try setupRoutes(on: routes)
     }
+    
+    func updateID(req: Request) throws -> EventLoopFuture<Match> {
+        do {
+            guard let id = req.parameters.get("id", as: UUID.self) else {
+                throw Abort(.badRequest)
+            }
+            
+            let updatedItem = try req.content.decode(Match.self)
+            return Match.find(id, on: req.db)
+                .unwrap(or: Abort(.notFound))
+                .flatMap { item in
+                    let mergedItem = item.merge(from: updatedItem)
+                    return mergedItem.update(on: req.db).map { mergedItem }
+                }
+                .flatMapErrorThrowing { error in
+                    print("Error updating item: \(error)")
+                    throw error
+                }
+        } catch {
+            print("Error in updateID: \(error)")
+            throw error
+        }
+    }
+
+    
     
     func getLiveScore(req: Request) throws -> EventLoopFuture<[LeagueMatches]> {
         return Match.query(on: req.db)
