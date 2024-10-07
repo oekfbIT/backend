@@ -172,6 +172,8 @@ extension MatchMigration: Migration {
             .field(Match.FieldKeys.secondHalfEndDate, .date)
             .field(Match.FieldKeys.paid, .bool)
             .field(Match.FieldKeys.bericht, .string)
+            .field(Match.FieldKeys.homeBlanket, .json)
+            .field(Match.FieldKeys.awayBlanket, .json)
             .create()
     }
 
