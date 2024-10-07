@@ -188,6 +188,8 @@ extension Match: Mergeable {
         merged.$homeTeam.id = other.$homeTeam.id
         merged.$awayTeam.id = other.$awayTeam.id
         merged.score = other.score
+        merged.homeBlanket = other.homeBlanket
+        merged.awayBlanket = other.awayBlanket
         merged.status = other.status
         merged.bericht = other.bericht
         merged.$referee.id = other.$referee.id
