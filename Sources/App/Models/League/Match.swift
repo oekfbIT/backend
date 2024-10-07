@@ -41,13 +41,13 @@ struct PlayerOverview: Codable {
 }
 
 struct Blankett: Codable {
-    var name: String
-    var dress: String
+    var name: String?
+    var dress: String?
     var logo: String?
     var players: [PlayerOverview]
     var coach: Trainer?
     
-    init(name: String, dress: String, logo: String?, players: [PlayerOverview]?, coach: Trainer? = nil) {
+    init(name: String?, dress: String?, logo: String?, players: [PlayerOverview]?, coach: Trainer? = nil) {
         self.name = name
         self.dress = dress
         self.logo = logo
@@ -213,10 +213,12 @@ extension Match: Mergeable {
 
         if let homeBlanket = other.homeBlanket {
             merged.homeBlanket = homeBlanket
+            print("HOME BLANKET UPDATED")
         }
 
         if let awayBlanket = other.awayBlanket {
             merged.awayBlanket = awayBlanket
+            print("AWAY BLANKET UPDATED")
         }
 
         return merged
