@@ -27,6 +27,17 @@ struct PlayerOverview: Codable {
     var yellowCard: Int?
     var redYellowCard: Int?
     var redCard: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case sid
+        case name
+        case number
+        case image
+        case yellowCard = "yellow_card"
+        case redYellowCard = "red_yellow_card"
+        case redCard = "red_card"
+    }
 }
 
 struct Blankett: Codable {
@@ -185,22 +196,29 @@ extension MatchMigration: Migration {
 extension Match: Mergeable {
     func merge(from other: Match) -> Match {
         var merged = self
-        merged.id = other.id
+        merged.id = other.id ?? self.id
         merged.details = other.details
         merged.$homeTeam.id = other.$homeTeam.id
         merged.$awayTeam.id = other.$awayTeam.id
         merged.score = other.score
-        merged.homeBlanket = other.homeBlanket
-        merged.awayBlanket = other.awayBlanket
         merged.status = other.status
-        merged.bericht = other.bericht
-        merged.$referee.id = other.$referee.id
-        merged.$season.id = other.$season.id
-        merged.firstHalfStartDate = other.firstHalfStartDate
-        merged.secondHalfStartDate = other.secondHalfStartDate
-        merged.firstHalfEndDate = other.firstHalfEndDate
-        merged.secondHalfEndDate = other.secondHalfEndDate
-        
+        merged.bericht = other.bericht ?? self.bericht
+        merged.$referee.id = other.$referee.id ?? self.$referee.id
+        merged.$season.id = other.$season.id ?? self.$season.id
+        merged.firstHalfStartDate = other.firstHalfStartDate ?? self.firstHalfStartDate
+        merged.secondHalfStartDate = other.secondHalfStartDate ?? self.secondHalfStartDate
+        merged.firstHalfEndDate = other.firstHalfEndDate ?? self.firstHalfEndDate
+        merged.secondHalfEndDate = other.secondHalfEndDate ?? self.secondHalfEndDate
+        merged.paid = other.paid ?? self.paid
+
+        if let homeBlanket = other.homeBlanket {
+            merged.homeBlanket = homeBlanket
+        }
+
+        if let awayBlanket = other.awayBlanket {
+            merged.awayBlanket = awayBlanket
+        }
+
         return merged
     }
 }

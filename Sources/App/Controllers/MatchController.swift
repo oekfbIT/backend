@@ -79,18 +79,25 @@ final class MatchController: RouteCollection {
     func updateID(req: Request) throws -> EventLoopFuture<Match> {
         do {
             guard let id = req.parameters.get("id", as: UUID.self) else {
-                throw Abort(.badRequest)
+                throw Abort(.badRequest, reason: "Invalid or missing ID parameter.")
             }
-            
-            let updatedItem = try req.content.decode(Match.self)
+
+            let updatedItem: Match
+            do {
+                updatedItem = try req.content.decode(Match.self)
+            } catch {
+                print("Decoding error: \(error)")
+                throw Abort(.badRequest, reason: "Invalid JSON payload.")
+            }
+
             return Match.find(id, on: req.db)
-                .unwrap(or: Abort(.notFound))
-                .flatMap { item in
-                    let mergedItem = item.merge(from: updatedItem)
-                    return mergedItem.update(on: req.db).map { mergedItem }
+                .unwrap(or: Abort(.notFound, reason: "Match not found."))
+                .flatMap { existingMatch in
+                    let mergedMatch = existingMatch.merge(from: updatedItem)
+                    return mergedMatch.update(on: req.db).map { mergedMatch }
                 }
                 .flatMapErrorThrowing { error in
-                    print("Error updating item: \(error)")
+                    print("Error updating match: \(error)")
                     throw error
                 }
         } catch {

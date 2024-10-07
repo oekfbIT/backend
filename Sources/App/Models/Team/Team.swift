@@ -11,8 +11,14 @@ import Vapor
 
 struct Trainer: Codable {
     var name: String
-    var imageURL: String?
     var email: String?
+    var imageURL: String?
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case email
+        case imageURL = "image_url"
+    }
 }
 
 final class Team: Model, Content {
