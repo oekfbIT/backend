@@ -165,6 +165,28 @@ final class Match: Model, Content, Codable {
     }
 }
 
+extension Match {
+    enum CodingKeys: String, CodingKey {
+        case id
+        case bericht
+        case paid
+        case homeTeam = "home_team"
+        case awayTeam = "away_team"
+        case season
+        case details
+        case score
+        case status
+        case referee
+        case firstHalfStartDate = "first_half_start_date"
+        case secondHalfStartDate = "second_half_start_date"
+        case firstHalfEndDate = "first_half_end_date"
+        case secondHalfEndDate = "second_half_end_date"
+        case homeBlanket = "home_blanket"
+        case awayBlanket = "away_blanket"
+    }
+}
+
+
 // Match Migration
 extension MatchMigration: Migration {
     func prepare(on database: Database) -> EventLoopFuture<Void> {
