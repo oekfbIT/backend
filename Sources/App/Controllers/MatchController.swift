@@ -49,6 +49,7 @@ final class MatchController: RouteCollection {
         route.patch("batch", use: repository.updateBatch)
 
         // Event-specific routes
+        route.post(":id", "toggle", use: toggleDress)
         route.post(":id", "goal", use: addGoal)
         route.post(":id", "redCard", use: addRedCard)
         route.post(":id", "yellowCard", use: addYellowCard)
@@ -106,7 +107,56 @@ final class MatchController: RouteCollection {
         }
     }
 
-    
+    func toggleDress(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        let matchId = try req.parameters.require("id", as: UUID.self)
+        
+        struct ToggleRequest: Content {
+            let team: String // "home" or "away"
+        }
+        
+        let toggleRequest = try req.content.decode(ToggleRequest.self)
+        
+        return Match.query(on: req.db)
+            .filter(\.$id == matchId)
+            .with(\.$homeTeam) // Eager load home team
+            .with(\.$awayTeam) // Eager load away team
+            .first()
+            .unwrap(or: Abort(.notFound, reason: "Match not found"))
+            .flatMap { match in
+                switch toggleRequest.team.lowercased() {
+                case "home":
+                    guard let homeBlanket = match.homeBlanket else {
+                        return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Home blanket not found"))
+                    }
+                    
+                    // Toggle the dress for the home team
+                    if homeBlanket.dress == match.homeTeam.trikot.home {
+                        match.homeBlanket?.dress = match.homeTeam.trikot.away
+                    } else {
+                        match.homeBlanket?.dress = match.homeTeam.trikot.home
+                    }
+                    
+                case "away":
+                    guard let awayBlanket = match.awayBlanket else {
+                        return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Away blanket not found"))
+                    }
+                    
+                    // Toggle the dress for the away team
+                    if awayBlanket.dress == match.awayTeam.trikot.home {
+                        match.awayBlanket?.dress = match.awayTeam.trikot.away
+                    } else {
+                        match.awayBlanket?.dress = match.awayTeam.trikot.home
+                    }
+                    
+                default:
+                    return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid team specified. Must be 'home' or 'away'."))
+                }
+                
+                // Save the updated match and return HTTP status .ok
+                return match.save(on: req.db).transform(to: .ok)
+            }
+    }
+
     
     func getLiveScore(req: Request) throws -> EventLoopFuture<[LeagueMatches]> {
         return Match.query(on: req.db)
