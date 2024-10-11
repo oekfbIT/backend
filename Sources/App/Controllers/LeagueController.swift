@@ -92,7 +92,7 @@ final class LeagueController: RouteCollection {
 
     // Helper to get team stats
     func getTeamStats(teamID: UUID, db: Database) -> EventLoopFuture<TeamStats> {
-        let validStatuses: [Match.GameStatus] = [.completed, .abbgebrochen, .submitted, .cancelled, .done]
+        let validStatuses: [Match.GameStatus] = [.completed, .abbgebrochen, .submitted, .done]
 
         return Match.query(on: db)
             .group(.or) { group in

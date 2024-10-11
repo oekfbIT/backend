@@ -319,29 +319,52 @@ final class MatchController: RouteCollection {
     }
 
     func addPlayerToHomeBlankett(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        // Extract the match ID from the request parameters
         let matchId = try req.parameters.require("id", as: UUID.self)
         
+        // Define the expected structure of the incoming request body
         struct PlayerRequest: Content {
             let playerId: UUID
             let number: Int  // Overridden player number
             let coach: Trainer?
         }
         
+        // Decode the request body into the PlayerRequest structure
         let playerRequest = try req.content.decode(PlayerRequest.self)
 
+        // Fetch the match from the database
         return Match.find(matchId, on: req.db)
-            .unwrap(or: Abort(.notFound))
+            .unwrap(or: Abort(.notFound, reason: "Match with ID \(matchId) not found."))
             .flatMap { match in
+                // Initialize homeBlanket if it's nil
                 if match.homeBlanket == nil {
-                    match.homeBlanket = Blankett(name: match.$homeTeam.name, dress: match.homeTeam.trikot.home, logo: nil, players: [], coach: playerRequest.coach)
+                    match.homeBlanket = Blankett(
+                        name: match.$homeTeam.name,
+                        dress: match.homeTeam.trikot.home,
+                        logo: nil,
+                        players: [],
+                        coach: playerRequest.coach
+                    )
+                }
+                
+                // Check if the home team already has 12 or more players
+                if (match.homeBlanket?.players.count ?? 0) >= 12 {
+                    // Return a failed future with a conflict error
+                    return req.eventLoop.makeFailedFuture(
+                        Abort(.conflict, reason: "Home team already has 12 players.")
+                    )
                 }
 
+                // Proceed to find the player to be added or updated
                 return Player.find(playerRequest.playerId, on: req.db)
-                    .unwrap(or: Abort(.notFound))
+                    .unwrap(or: Abort(.notFound, reason: "Player with ID \(playerRequest.playerId) not found."))
                     .flatMap { player in
-                        if let index = match.homeBlanket?.players.firstIndex(where: { $0.id == player.id! }) {
+                        // Check if the player is already in the homeBlanket
+                        if let index = match.homeBlanket?.players.firstIndex(where: { $0.id == player.id }) {
+                            // Update the player's number if they already exist
                             match.homeBlanket?.players[index].number = playerRequest.number
                         } else {
+                            // Add the new player to the homeBlanket
                             match.homeBlanket?.players.append(PlayerOverview(
                                 id: player.id!,
                                 sid: player.sid,
@@ -353,37 +376,68 @@ final class MatchController: RouteCollection {
                                 redCard: 0
                             ))
                         }
+                        // Save the updated match to the database
                         return match.save(on: req.db).transform(to: .ok)
                     }
             }
     }
 
     func addPlayerToAwayBlankett(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        // Extract the match ID from the request parameters
         let matchId = try req.parameters.require("id", as: UUID.self)
         
+        // Define the expected structure of the incoming request body
         struct PlayerRequest: Content {
             let playerId: UUID
             let number: Int  // Overridden player number
             let coach: Trainer?
         }
         
+        // Decode the request body into the PlayerRequest structure
         let playerRequest = try req.content.decode(PlayerRequest.self)
 
+        // Fetch the match from the database
         return Match.find(matchId, on: req.db)
-            .unwrap(or: Abort(.notFound))
+            .unwrap(or: Abort(.notFound, reason: "Match with ID \(matchId) not found."))
             .flatMap { match in
+                // Initialize awayBlanket if it's nil
                 if match.awayBlanket == nil {
-                    match.awayBlanket = Blankett(name: match.$awayTeam.name, dress: match.awayTeam.trikot.away, logo: nil, players: [], coach: playerRequest.coach)
+                    match.awayBlanket = Blankett(
+                        name: match.$awayTeam.name,
+                        dress: match.awayTeam.trikot.away,
+                        logo: nil,
+                        players: [],
+                        coach: playerRequest.coach
+                    )
+                }
+                
+                // Check if the away team already has 12 or more players
+                if (match.awayBlanket?.players.count ?? 0) >= 12 {
+                    // Return a failed future with a conflict error
+                    return req.eventLoop.makeFailedFuture(
+                        Abort(.conflict, reason: "Away team already has 12 players.")
+                    )
                 }
 
+                // Proceed to find the player to be added or updated
                 return Player.find(playerRequest.playerId, on: req.db)
-                    .unwrap(or: Abort(.notFound))
+                    .unwrap(or: Abort(.notFound, reason: "Player with ID \(playerRequest.playerId) not found."))
                     .flatMap { player in
-                        if let index = match.awayBlanket?.players.firstIndex(where: { $0.id == player.id! }) {
+                        // Safely unwrap player.id
+                        guard let playerId = player.id else {
+                            return req.eventLoop.makeFailedFuture(
+                                Abort(.internalServerError, reason: "Player ID is missing.")
+                            )
+                        }
+                        
+                        // Check if the player is already in the awayBlanket
+                        if let index = match.awayBlanket?.players.firstIndex(where: { $0.id == playerId }) {
+                            // Update the player's number if they already exist
                             match.awayBlanket?.players[index].number = playerRequest.number
                         } else {
+                            // Add the new player to the awayBlanket
                             match.awayBlanket?.players.append(PlayerOverview(
-                                id: player.id!,
+                                id: playerId,
                                 sid: player.sid,
                                 name: player.name,
                                 number: playerRequest.number,
@@ -393,6 +447,8 @@ final class MatchController: RouteCollection {
                                 redCard: 0
                             ))
                         }
+                        
+                        // Save the updated match to the database
                         return match.save(on: req.db).transform(to: .ok)
                     }
             }
