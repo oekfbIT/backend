@@ -35,8 +35,7 @@ final class MatchController: RouteCollection {
 
     func setupRoutes(on app: RoutesBuilder) throws {
         let route = app.grouped(PathComponent(stringLiteral: repository.path))
-        
-        // Basic CRUD operations
+
         route.post(use: repository.create)
         route.post("batch", use: repository.createBatch)
         route.get("livescore",use: getLiveScore)
@@ -45,6 +44,7 @@ final class MatchController: RouteCollection {
 
         route.get(":id", use: getMatchByID)
         route.delete(":id", use: repository.deleteID)
+        
         route.patch(":id", use: updateID)
         route.patch("batch", use: repository.updateBatch)
 
@@ -54,7 +54,7 @@ final class MatchController: RouteCollection {
         route.post(":id", "redCard", use: addRedCard)
         route.post(":id", "yellowCard", use: addYellowCard)
         route.post(":id", "yellowRedCard", use: addYellowRedCard)
-        
+
         // Routes for adding players to blankets
         route.post(":id", "homeBlankett", "addPlayer", use: addPlayerToHomeBlankett)
         route.post(":id", "awayBlankett", "addPlayer", use: addPlayerToAwayBlankett)
@@ -70,7 +70,6 @@ final class MatchController: RouteCollection {
         route.patch(":id", "noShowGame", use: noShowGame)
         route.patch(":id", "spielabbruch", use: spielabbruch)
         route.patch(":id", "done", use: done)
-
     }
 
     func boot(routes: RoutesBuilder) throws {
@@ -156,7 +155,6 @@ final class MatchController: RouteCollection {
                 return match.save(on: req.db).transform(to: .ok)
             }
     }
-
     
     func getLiveScore(req: Request) throws -> EventLoopFuture<[LeagueMatches]> {
         return Match.query(on: req.db)
@@ -200,6 +198,8 @@ final class MatchController: RouteCollection {
             let name: String?
             let image: String?
             let number: String?
+            let assign: MatchAssignment?
+            let ownGoal: Bool?
         }
         
         let goalRequest = try req.content.decode(GoalRequest.self)
@@ -226,7 +226,9 @@ final class MatchController: RouteCollection {
                                            minute: goalRequest.minute, 
                                            name: goalRequest.name,
                                            image: goalRequest.image,
-                                           number: goalRequest.number
+                                           number: goalRequest.number,
+                                           assign: goalRequest.assign,
+                                           ownGoal: goalRequest.ownGoal
                     )
                     event.$match.id = match.id!
                     

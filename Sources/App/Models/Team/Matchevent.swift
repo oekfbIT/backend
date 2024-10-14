@@ -9,6 +9,10 @@ import Foundation
 import Fluent
 import Vapor
 
+enum MatchAssignment : String, Codable {
+    case home, away
+}
+
 final class MatchEvent: Model, Content, Codable {
     static let schema = "match_events"
 
@@ -21,6 +25,8 @@ final class MatchEvent: Model, Content, Codable {
     @OptionalField(key: FieldKeys.name) var name: String?
     @OptionalField(key: FieldKeys.image) var image: String?
     @OptionalField(key: FieldKeys.number) var number: String?
+    @OptionalField(key: FieldKeys.assign) var assign: MatchAssignment?
+    @OptionalField(key: FieldKeys.ownGoal) var ownGoal: Bool?
 
     enum FieldKeys {
         static let id: FieldKey = "id"
@@ -32,11 +38,13 @@ final class MatchEvent: Model, Content, Codable {
         static let name: FieldKey = "name"
         static let image: FieldKey = "image"
         static let number: FieldKey = "number"
+        static let assign: FieldKey = "assign"
+        static let ownGoal: FieldKey = "ownGoal"
     }
 
     init() {}
 
-    init(id: UUID? = nil, match: Match.IDValue, type: MatchEventType, playerId: UUID, minute: Int, name: String?, image: String?, number: String?) {
+    init(id: UUID? = nil, match: Match.IDValue, type: MatchEventType, playerId: UUID, minute: Int, name: String?, image: String?, number: String?, assign: MatchAssignment? = nil, ownGoal: Bool? = nil) {
         self.id = id
         self.$match.id = match
         self.type = type
@@ -45,6 +53,8 @@ final class MatchEvent: Model, Content, Codable {
         self.name = name
         self.image = image
         self.number = number
+        self.assign = assign
+        self.ownGoal = ownGoal
     }
 }
 
@@ -59,6 +69,8 @@ extension MatchEventMigration: Migration {
             .field(MatchEvent.FieldKeys.name, .string)
             .field(MatchEvent.FieldKeys.image, .string)
             .field(MatchEvent.FieldKeys.number, .string)
+            .field(MatchEvent.FieldKeys.assign, .string)
+            .field(MatchEvent.FieldKeys.ownGoal, .bool)
             .create()
     }
 
