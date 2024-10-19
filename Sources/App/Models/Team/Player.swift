@@ -7,15 +7,6 @@ enum PlayerEligibility: String, Codable {
     case Warten = "Warten"
 }
 
-struct PlayerStats: Codable {
-    var games: Int
-    var goals: Int
-    var yellow: Int
-    var yellowRed: Int
-    var red: Int
-    
-}
-
 final class Player: Model, Content, Codable {
     static let schema = "players"
 
@@ -38,6 +29,8 @@ final class Player: Model, Content, Codable {
     @OptionalField(key: FieldKeys.bank) var bank: Bool?
     @OptionalField(key: FieldKeys.transferred) var transferred: Bool?
     
+    @OptionalField(key: FieldKeys.blockdate) var blockdate: Date?
+    
     struct FieldKeys {
         static var id: FieldKey { "id" }
         static var sid: FieldKey { "sid" }
@@ -57,11 +50,12 @@ final class Player: Model, Content, Codable {
         static var isCaptain: FieldKey { "isCaptain" }
         static var bank: FieldKey { "bank" }
         static var transferred: FieldKey { "transferred" }
+        static var blockdate: FieldKey { "blockdate" }
     }
 
     init() {}
 
-    init(id: UUID? = nil, sid: String, image: String?, team_oeid: String?, email: String?, name: String, number: String, birthday: String, teamID: UUID?, nationality: String, position: String, eligibility: PlayerEligibility, registerDate: String, identification: String?, status: Bool?, isCaptain: Bool? = false, bank: Bool? = true) {
+    init(id: UUID? = nil, sid: String, image: String?, team_oeid: String?, email: String?, name: String, number: String, birthday: String, teamID: UUID?, nationality: String, position: String, eligibility: PlayerEligibility, registerDate: String, identification: String?, status: Bool?, isCaptain: Bool? = false, bank: Bool? = true, blockdate: Date? = nil ) {
         self.id = id
         self.sid = sid
         self.image = image
@@ -79,6 +73,7 @@ final class Player: Model, Content, Codable {
         self.status = status
         self.isCaptain = isCaptain
         self.bank = bank
+        self.blockdate = blockdate
     }
 }
 // Player Migration
@@ -101,6 +96,7 @@ extension PlayerMigration: Migration {
             .field(Player.FieldKeys.status, .bool)
             .field(Player.FieldKeys.isCaptain, .bool)
             .field(Player.FieldKeys.bank, .bool)
+            .field(Player.FieldKeys.blockdate, .date)
             .create()
     }
 
@@ -127,6 +123,7 @@ extension Player {
         var status: Bool?
         var isCaptain: Bool?
         var bank: Bool?
+        var blockdate: Date?
     }
     
     func asPublic() -> Public {
@@ -145,7 +142,8 @@ extension Player {
             registerDate: self.registerDate,
             status: self.status,
             isCaptain: self.isCaptain,
-            bank: self.bank
+            bank: self.bank,
+            blockdate: blockdate
         )
     }
 }
@@ -169,6 +167,21 @@ extension Player: Mergeable {
         merged.status = other.status
         merged.isCaptain = other.isCaptain
         merged.bank = other.bank
+        merged.blockdate = other.blockdate
         return merged
     }
 }
+
+// NEW STRUCT
+
+struct PlayerStats: Codable {
+    var matchesPlayed: Int
+    var goalsScored: Int
+    var redCards: Int
+    var yellowCards: Int
+    var yellowRedCrd: Int
+    var totalCards: Int {
+        return redCards + yellowCards + yellowRedCrd
+    }
+}
+

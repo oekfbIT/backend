@@ -1,17 +1,24 @@
 import Vapor
 import Fluent
 
+struct LeaderBoard: Codable, Content {
+    var name: String?
+    var image: String?
+    var number: String?
+    var count: Int // The total number of
+}
+
 final class LeagueController: RouteCollection {
     let repository: StandardControllerRepository<League>
-
+    
     init(path: String) {
         self.repository = StandardControllerRepository<League>(path: path)
     }
-
+    
     func boot(routes: RoutesBuilder) throws {
         try setupRoutes(on: routes)
     }
-
+    
     func setupRoutes(on app: RoutesBuilder) throws {
         let route = app.grouped(PathComponent(stringLiteral: repository.path))
         
@@ -28,14 +35,18 @@ final class LeagueController: RouteCollection {
         route.get("code", ":code", use: getLeaguebyCode)
         route.get(":id", "teamCount", use: getNumberOfTeams)
         route.get("state", ":state", use: getLeaguesForState)
+        
+        route.get(":id", "goalLeaderBoard", use: getGoalLeaderBoard) // LeagueID
+        route.get(":id", "redCardLeaderBoard", use: getRedCardLeaderBoard) // LeagueID
+        route.get(":id", "yellowCardLeaderBoard", use: getYellowCardLeaderBoard)// LeagueID
     }
-
+    
     // MARK: - Core CRUD Handlers
     func getLeagueTable(req: Request) -> EventLoopFuture<[TableItem]> {
         guard let leagueID = req.parameters.get("id", as: UUID.self) else {
             return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league ID"))
         }
-
+        
         return League.find(leagueID, on: req.db)
             .unwrap(or: Abort(.notFound, reason: "League not found"))
             .flatMap { league in
@@ -70,7 +81,7 @@ final class LeagueController: RouteCollection {
                             )
                             tableItems.append(tableItem)
                         }
-
+                        
                         // Sort teams by points, then by goal difference
                         tableItems.sort {
                             if $0.points == $1.points {
@@ -78,26 +89,26 @@ final class LeagueController: RouteCollection {
                             }
                             return $0.points > $1.points
                         }
-
+                        
                         // Assign rankings
                         for i in 0..<tableItems.count {
                             tableItems[i].ranking = i + 1
                         }
-
+                        
                         return tableItems
                     }
                 }
             }
     }
-
+    
     // Helper to get team stats
     func getTeamStats(teamID: UUID, db: Database) -> EventLoopFuture<TeamStats> {
-        let validStatuses: [Match.GameStatus] = [.completed, .abbgebrochen, .submitted, .done]
-
+        let validStatuses: [GameStatus] = [.completed, .abbgebrochen, .submitted, .done]
+        
         return Match.query(on: db)
             .group(.or) { group in
                 group.filter(\.$homeTeam.$id == teamID)
-                     .filter(\.$awayTeam.$id == teamID)
+                    .filter(\.$awayTeam.$id == teamID)
             }
             .filter(\.$status ~~ validStatuses) // Filter matches by valid statuses
             .all()
@@ -147,7 +158,7 @@ final class LeagueController: RouteCollection {
               let numberOfRounds = req.parameters.get("number", as: Int.self) else {
             return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing parameters"))
         }
-
+        
         return League.find(leagueID, on: req.db)
             .unwrap(or: Abort(.notFound, reason: "League not found"))
             .flatMap { league in
@@ -156,12 +167,12 @@ final class LeagueController: RouteCollection {
                 }
             }
     }
-
+    
     func getLeaguebyCode(req: Request) -> EventLoopFuture<League> {
         guard let leagueCode = req.parameters.get("code", as: String.self) else {
             return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league code"))
         }
-
+        
         return League.query(on: req.db)
             .filter(\.$code == leagueCode)
             .with(\.$teams)
@@ -169,12 +180,12 @@ final class LeagueController: RouteCollection {
             .first()
             .unwrap(or: Abort(.notFound, reason: "League not found"))
     }
-
+    
     func getLeagueWithSeasons(req: Request) -> EventLoopFuture<LeagueWithSeasons> {
         guard let leagueID = req.parameters.get("id", as: UUID.self) else {
             return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league ID"))
         }
-
+        
         return League.query(on: req.db)
             .filter(\.$id == leagueID)
             .with(\.$seasons)
@@ -185,55 +196,93 @@ final class LeagueController: RouteCollection {
                 LeagueWithSeasons(league: league, seasons: league.seasons)
             }
     }
-
+    
     func getNumberOfTeams(req: Request) -> EventLoopFuture<Int> {
         guard let leagueID = req.parameters.get("id", as: UUID.self) else {
             return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league ID"))
         }
-
+        
         return League.find(leagueID, on: req.db)
             .unwrap(or: Abort(.notFound, reason: "League not found"))
             .flatMap { league in
                 league.$teams.query(on: req.db).count()
             }
     }
-
+    
     func getLeaguesForState(req: Request) -> EventLoopFuture<[League]> {
         guard let state = req.parameters.get("state", as: Bundesland.self) else {
             return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing state parameter"))
         }
-
+        
         return League.query(on: req.db)
             .filter(\.$state == state)
             .all()
     }
+    
+    // MARK: - Leaderboard Handlers
 
-    // MARK: - League Table Calculation
+    func getGoalLeaderBoard(req: Request) -> EventLoopFuture<[LeaderBoard]> {
+        return getLeaderBoard(req: req, eventType: .goal)
+    }
 
-    func getTotalGoalsForTeam(teamID: UUID, db: Database) -> EventLoopFuture<Int> {
-        return Match.query(on: db)
-            .group(.or) { group in
-                group.filter(\.$homeTeam.$id == teamID)
-                     .filter(\.$awayTeam.$id == teamID)
-            }
+    func getRedCardLeaderBoard(req: Request) -> EventLoopFuture<[LeaderBoard]> {
+        return getLeaderBoard(req: req, eventType: .redCard)
+    }
+
+    func getYellowCardLeaderBoard(req: Request) -> EventLoopFuture<[LeaderBoard]> {
+        return getLeaderBoard(req: req, eventType: .yellowCard)
+    }
+
+    // Generalized function for all leaderboards
+    private func getLeaderBoard(req: Request, eventType: MatchEventType) -> EventLoopFuture<[LeaderBoard]> {
+        guard let leagueID = req.parameters.get("id", as: UUID.self) else {
+            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league ID"))
+        }
+
+        // Fetch teams and their players from the specified league
+        return Team.query(on: req.db)
+            .filter(\.$league.$id == leagueID) // Filter by the provided league ID
+            .with(\.$players) // Load related players
             .all()
-            .map { matches in
-                // Initialize total goals counter
-                var totalGoals = 0
-                
-                // Loop through each match and sum the goals
-                for match in matches {
-                    if match.$homeTeam.id == teamID {
-                        totalGoals += match.score.home
-                    } else if match.$awayTeam.id == teamID {
-                        totalGoals += match.score.away
+            .flatMap { teams in
+                // Collect all player IDs from the league's teams
+                let playerIDs = teams.flatMap { $0.players.compactMap { $0.id } }
+
+                // Fetch all match events for these players
+                return MatchEvent.query(on: req.db)
+                    .filter(\.$player.$id ~~ playerIDs) // Only include events for players from the league
+                    .filter(\.$type == eventType) // Filter by event type (goal, red card, yellow card)
+                    .all()
+                    .flatMap { events in
+                        // Create a dictionary to count events per player
+                        var playerEventCounts: [UUID: (name: String?, image: String?, number: String?, count: Int)] = [:]
+
+                        for event in events {
+                            let playerId = event.$player.id
+                            let playerInfo = (event.name, event.image, event.number)
+                            
+                            if let existingCount = playerEventCounts[playerId]?.count {
+                                playerEventCounts[playerId]?.count = existingCount + 1
+                            } else {
+                                playerEventCounts[playerId] = (playerInfo.0, playerInfo.1, playerInfo.2, 1)
+                            }
+                        }
+
+                        // Convert the dictionary into a sorted array of LeaderBoard items
+                        let leaderboard = playerEventCounts.map { (playerId, playerData) in
+                            LeaderBoard(
+                                name: playerData.name,
+                                image: playerData.image,
+                                number: playerData.number,
+                                count: playerData.count
+                            )
+                        }.sorted { $0.count > $1.count }
+
+                        return req.eventLoop.makeSucceededFuture(leaderboard)
                     }
-                }
-                
-                // Return the total goals for this team
-                return totalGoals
             }
     }
+
 }
 
 // MARK: - LeagueWithSeasons Struct
@@ -245,7 +294,7 @@ struct LeagueWithSeasons: Content {
 
 // MARK: - TableItem Struct
 
-struct TeamStats {
+struct TeamStats: Codable {
     var wins: Int
     var draws: Int
     var losses: Int

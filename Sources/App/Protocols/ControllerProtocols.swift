@@ -37,9 +37,9 @@ protocol RefereeProtocol {
 
 
 protocol PublicSection {
-    func getAllLiveScores(req: Request) throws -> EventLoopFuture<[LiveScore]> // Request Contains: GameID +
-    func getleagueLiveScores(req: Request) throws -> EventLoopFuture<[LiveScore]> // Request Contains: LeagueID
-    func leagueRankings(req: Request) throws -> EventLoopFuture<Rankings> // Request Contains: LeagueID
+//    func getAllLiveScores(req: Request) throws -> EventLoopFuture<[LiveScore]> // Request Contains: GameID +
+//    func getleagueLiveScores(req: Request) throws -> EventLoopFuture<[LiveScore]> // Request Contains: LeagueID
+//    func leagueRankings(req: Request) throws -> EventLoopFuture<Rankings> // Request Contains: LeagueID
 }
 
 protocol MessengerProtocol {
@@ -53,7 +53,6 @@ protocol MailingProtocol {
     func saveMailRecord(id: UUID) -> UUID // Replace with Mail Model Flow
 }
 
-struct LiveScore: Codable {}
 struct Rankings: Codable {}
 
 enum InitialContact: Codable {

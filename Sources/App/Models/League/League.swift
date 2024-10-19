@@ -9,12 +9,27 @@ import Foundation
 import Fluent
 import Vapor
 
+struct Hero: Codable {
+    let title: String?
+    let subtitle: String?
+    let content: String?
+    let image: String?
+    let href: String?
+}
+
 final class League: Model, Content, Codable {
     static let schema = "leagues"
 
     @ID(custom: FieldKeys.id) var id: UUID?
     @OptionalField(key: FieldKeys.state) var state: Bundesland?
+
     @OptionalField(key: FieldKeys.code) var code: String?
+
+    @OptionalField(key: FieldKeys.wochenbericht) var wochenbericht: String?
+    @OptionalField(key: FieldKeys.hero) var hero: Hero?
+
+    
+    
     @OptionalField(key: FieldKeys.hourly) var hourly: Double?
     @OptionalField(key: FieldKeys.teamcount) var teamcount: Int?
     @Field(key: FieldKeys.name) var name: String
@@ -28,11 +43,13 @@ final class League: Model, Content, Codable {
         static var teamcount: FieldKey { "teamcount" }
         static var code: FieldKey { "code" }
         static var name: FieldKey { "name" }
+        static var wochenbericht: FieldKey { "wochenbericht" }
+        static var hero: FieldKey { "hero" }
     }
 
     init() {}
 
-    init(id: UUID? = nil, state: Bundesland?, teamcount: Int?, code: String, name: String) {
+    init(id: UUID? = nil, state: Bundesland?, teamcount: Int?, code: String, name: String, wochenbericht: String? = nil, hero: Hero? = nil) {
         self.id = id
         self.state = state
         self.code = code

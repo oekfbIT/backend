@@ -56,6 +56,19 @@ struct Blankett: Codable {
     }
 }
 
+
+enum GameStatus: String, Codable {
+    case pending,
+         first,
+         second,
+         halftime,
+         completed,
+         abbgebrochen,
+         submitted,
+         cancelled,
+         done
+}
+
 final class Match: Model, Content, Codable {
     static let schema = "matches"
 
@@ -97,17 +110,6 @@ final class Match: Model, Content, Codable {
     // POST GAME
     @OptionalField(key: FieldKeys.bericht) var bericht: String?
     
-    enum GameStatus: String, Codable {
-        case pending, 
-             first,
-             second, 
-             halftime,
-             completed,
-             abbgebrochen,
-             submitted,
-             cancelled,
-             done 
-    }
 
     enum FieldKeys {
         static var id: FieldKey { "id" }
