@@ -28,9 +28,8 @@ final class Player: Model, Content, Codable {
     @OptionalField(key: FieldKeys.isCaptain) var isCaptain: Bool?
     @OptionalField(key: FieldKeys.bank) var bank: Bool?
     @OptionalField(key: FieldKeys.transferred) var transferred: Bool?
-    
     @OptionalField(key: FieldKeys.blockdate) var blockdate: Date?
-    
+
     struct FieldKeys {
         static var id: FieldKey { "id" }
         static var sid: FieldKey { "sid" }
@@ -76,7 +75,8 @@ final class Player: Model, Content, Codable {
         self.blockdate = blockdate
     }
 }
-// Player Migration
+
+// Player Migration (fixed version)
 extension PlayerMigration: Migration {
     func prepare(on database: Database) -> EventLoopFuture<Void> {
         database.schema(Player.schema)
@@ -104,7 +104,6 @@ extension PlayerMigration: Migration {
         database.schema(Player.schema).delete()
     }
 }
-
 
 extension Player {
     struct Public: Codable, Content {
@@ -143,7 +142,7 @@ extension Player {
             status: self.status,
             isCaptain: self.isCaptain,
             bank: self.bank,
-            blockdate: blockdate
+            blockdate: self.blockdate
         )
     }
 }
@@ -172,8 +171,7 @@ extension Player: Mergeable {
     }
 }
 
-// NEW STRUCT
-
+// NEW STRUCT for PlayerStats
 struct PlayerStats: Codable {
     var matchesPlayed: Int
     var goalsScored: Int
@@ -184,4 +182,3 @@ struct PlayerStats: Codable {
         return redCards + yellowCards + yellowRedCrd
     }
 }
-

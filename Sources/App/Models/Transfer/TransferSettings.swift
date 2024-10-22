@@ -7,6 +7,7 @@ final class TransferSettings: Model, Content, Codable {
 
     @ID(custom: .id) var id: UUID?
     @Field(key: FieldKeys.isTransferOpen) var isTransferOpen: Bool
+    @Field(key: FieldKeys.isDressChangeOpen) var isDressChangeOpen: Bool
     @Field(key: FieldKeys.fromDate) var fromDate: String
     @Field(key: FieldKeys.to) var to: String
     @OptionalField(key: FieldKeys.name) var name: String?
@@ -15,6 +16,7 @@ final class TransferSettings: Model, Content, Codable {
     struct FieldKeys {
         static var id: FieldKey { "id" }
         static var isTransferOpen: FieldKey { "isTransferOpen"}
+        static var isDressChangeOpen: FieldKey { "isDressChangeOpen"}
         static var fromDate: FieldKey { "player"}
         static var to: FieldKey { "status"}
         static var name: FieldKey { "name"}
@@ -26,6 +28,7 @@ final class TransferSettings: Model, Content, Codable {
     init(
         id: UUID? = nil,
         isTransferOpen: Bool,
+        isDressChangeOpen: Bool? = false,
         fromDate: String,
         to: String,
         name: String?,
@@ -33,6 +36,7 @@ final class TransferSettings: Model, Content, Codable {
     ) {
         self.id = id
         self.isTransferOpen = isTransferOpen
+        self.isDressChangeOpen = isDressChangeOpen ?? false
         self.fromDate = fromDate
         self.to = to
         self.name = name
@@ -46,6 +50,7 @@ extension TransferSettings: Mergeable {
         var merged = self
         merged.id = other.id
         merged.isTransferOpen = other.isTransferOpen
+        merged.isDressChangeOpen = other.isDressChangeOpen
         merged.fromDate = other.fromDate
         merged.to = other.to
         merged.created = other.created
@@ -60,6 +65,7 @@ extension TransferSettingsMigration: Migration {
         database.schema(TransferSettings.schema)
             .id()
             .field(TransferSettings.FieldKeys.isTransferOpen, .bool, .required)
+            .field(TransferSettings.FieldKeys.isDressChangeOpen, .bool, .required)
             .field(TransferSettings.FieldKeys.fromDate, .string, .required)
             .field(TransferSettings.FieldKeys.to, .string, .required)
             .field(TransferSettings.FieldKeys.name, .string)

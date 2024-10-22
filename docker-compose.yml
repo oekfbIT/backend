@@ -61,6 +61,18 @@ services:
     deploy:
       replicas: 0
 
+  queues:
+    image: oekfbbackend:latest
+    build:
+      context: .
+    environment:
+      <<: *shared_environment
+    depends_on:
+      - db
+    command: ["queues", "--scheduled"]
+    deploy:
+      replicas: 1
+
   db:
     image: mongo:latest
     volumes:

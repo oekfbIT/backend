@@ -1,7 +1,12 @@
+import Vapor
 import Fluent
 import FluentMongoDriver
 import Leaf
-import Vapor
+import Smtp
+import SwiftSoup
+import Queues
+import QueuesMongoDriver
+import MongoKitten
 
 extension String {
     var bytes: [UInt8] { .init(self.utf8) }
@@ -111,6 +116,31 @@ public func configure(_ app: Application) throws {
     
     app.firebaseManager = firebaseManager
 
-    // Register routes
-    try routes(app)
-}
+    // Configure Queues with MongoDB
+     let mongoConnectionString = Environment.get(ENV.databaseURL.key) ?? ENV.databaseURL.dev_default
+     let mongoDatabase = try MongoDatabase.connect(mongoConnectionString, on: app.eventLoopGroup.next()).wait()
+     
+     // Setup Queues with MongoDB driver
+     try app.queues.use(.mongodb(mongoDatabase))
+     
+    app.queues.schedule(UnlockPlayerJob())
+        .weekly()
+        .on(.monday)
+        .at(8,0)
+    
+    app.queues.schedule(DressLockJob())
+        .weekly()
+        .on(.sunday)
+        .at(23, 0)
+
+    app.queues.schedule(DressUnlockJob())
+        .weekly()
+        .on(.monday)
+        .at(6, 0)
+
+     // Start the scheduled jobs
+     try app.queues.startScheduledJobs()
+
+     // Register routes
+     try routes(app)
+ }
