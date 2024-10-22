@@ -31,6 +31,9 @@ final class TransferSettingsController: RouteCollection {
         // Add the new routes
         route.get("settings", use: getFirstSettings)
         route.get("toggle", use: toggleIsTransferOpen)
+        
+        route.get("isDressChangeOpen", use: isDressChangeOpen)
+
     }
 
     func boot(routes: RoutesBuilder) throws {
@@ -55,4 +58,13 @@ final class TransferSettingsController: RouteCollection {
         try await settings.save(on: req.db)
         return settings
     }
+    
+    // New method to return true or false if the dress change is open
+    func isDressChangeOpen(req: Request) async throws -> Bool {
+        guard let settings = try await TransferSettings.query(on: req.db).first() else {
+            throw Abort(.notFound, reason: "No TransferSettings found.")
+        }
+        return settings.isDressChangeOpen
+    }
+
 }
