@@ -65,3 +65,5 @@ coverage
 
 # Mac system files
 .DS_Store
+
+.build/checkouts/
