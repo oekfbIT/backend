@@ -138,6 +138,10 @@ public func configure(_ app: Application) throws {
         .on(.monday)
         .at(6, 0)
 
+    app.queues.schedule(DressUnlockJob())
+        .minutely()
+        .at(0)
+
      // Start the scheduled jobs
      try app.queues.startScheduledJobs()
 
