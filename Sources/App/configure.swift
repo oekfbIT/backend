@@ -142,11 +142,11 @@ public func configure(_ app: Application) throws {
     // Test JOBS
     app.queues.schedule(UnlockPlayerJob())
         .daily()
-        .at(17,15)
+        .at(17,45)
     
     app.queues.schedule(DressLockJob())
         .daily()
-        .at(17,20)
+        .at(17,50)
 
      // Start the scheduled jobs
      try app.queues.startScheduledJobs()
