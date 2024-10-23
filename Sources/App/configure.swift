@@ -149,8 +149,9 @@ public func configure(_ app: Application) throws {
 //        .at(17,50)
     
     app.queues.schedule(UnlockPlayerJob())
-        .minutely()
-        .at(0)
+        .weekly()
+        .on(.wednesday)
+        .at(10, 0)
 
      // Start the scheduled jobs
      try app.queues.startScheduledJobs()
