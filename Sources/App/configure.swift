@@ -130,7 +130,7 @@ public func configure(_ app: Application) throws {
     
     app.queues.schedule(DressLockJob())
         .weekly()
-        .on(.sunday)
+        .on(.thursday)
         .at(23, 0)
 
     app.queues.schedule(DressUnlockJob())
@@ -140,13 +140,17 @@ public func configure(_ app: Application) throws {
 
     
     // Test JOBS
-    app.queues.schedule(UnlockPlayerJob())
-        .daily()
-        .at(17,45)
+//    app.queues.schedule(UnlockPlayerJob())
+//        .daily()
+//        .at(17,45)
+//    
+//    app.queues.schedule(DressLockJob())
+//        .daily()
+//        .at(17,50)
     
-    app.queues.schedule(DressLockJob())
-        .daily()
-        .at(17,50)
+    app.queues.schedule(UnlockPlayerJob())
+        .minutely()
+        .at(0)
 
      // Start the scheduled jobs
      try app.queues.startScheduledJobs()
