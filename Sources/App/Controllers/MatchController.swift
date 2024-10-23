@@ -702,6 +702,7 @@ final class MatchController: RouteCollection {
         return Match.find(matchId, on: req.db)
             .unwrap(or: Abort(.notFound))
             .flatMap { match in
+                // Reset game status and score
                 match.status = .pending
                 match.firstHalfStartDate = nil
                 match.secondHalfStartDate = nil
@@ -709,7 +710,34 @@ final class MatchController: RouteCollection {
                 match.secondHalfEndDate = nil
                 match.score = Score(home: 0, away: 0)
                 
-                return match.save(on: req.db).transform(to: .ok)
+                // Reset all player cards and goals in home blanket
+                if var homeBlanket = match.homeBlanket {
+                    for i in 0..<homeBlanket.players.count {
+                        homeBlanket.players[i].yellowCard = 0
+                        homeBlanket.players[i].redYellowCard = 0
+                        homeBlanket.players[i].redCard = 0
+                    }
+                    match.homeBlanket = homeBlanket
+                }
+                
+                // Reset all player cards and goals in away blanket
+                if var awayBlanket = match.awayBlanket {
+                    for i in 0..<awayBlanket.players.count {
+                        awayBlanket.players[i].yellowCard = 0
+                        awayBlanket.players[i].redYellowCard = 0
+                        awayBlanket.players[i].redCard = 0
+                    }
+                    match.awayBlanket = awayBlanket
+                }
+                
+                // Delete all MatchEvents associated with the match
+                return MatchEvent.query(on: req.db)
+                    .filter(\.$match.$id == matchId)
+                    .delete()
+                    .flatMap {
+                        // Save the updated match
+                        return match.save(on: req.db).transform(to: .ok)
+                    }
             }
     }
 
