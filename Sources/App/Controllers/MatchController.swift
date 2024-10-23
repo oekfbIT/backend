@@ -43,6 +43,8 @@ final class MatchController: RouteCollection {
         route.get(use: repository.index)
 
         route.get(":id", use: getMatchByID)
+        route.get("league", ":matchID", use: getLeagueFromMatch)
+
         route.get(":id", "resetGame" , use: resetGame)
         route.get(":id", "resetHalftime" , use: resetHalftime)
         
@@ -724,6 +726,40 @@ final class MatchController: RouteCollection {
                 return match.save(on: req.db).transform(to: .ok)
             }
     }
+    
+    func getLeagueFromMatch(req: Request) throws -> EventLoopFuture<League> {
+        // Extract the match ID from the request parameters
+        let matchId = try req.parameters.require("matchID", as: UUID.self)
+        
+        // Fetch the match from the database
+        return Match.find(matchId, on: req.db)
+            .unwrap(or: Abort(.notFound, reason: "Match with ID \(matchId) not found."))
+            .flatMap { match in
+                // Ensure the season exists for the match
+                guard let seasonID = match.$season.id else {
+                    return req.eventLoop.makeFailedFuture(
+                        Abort(.notFound, reason: "Season not found for the match with ID \(matchId).")
+                    )
+                }
+                
+                // Fetch the season from the database
+                return Season.find(seasonID, on: req.db)
+                    .unwrap(or: Abort(.notFound, reason: "Season with ID \(seasonID) not found."))
+                    .flatMap { season in
+                        // Ensure the league exists for the season
+                        guard let leagueID = season.$league.id else {
+                            return req.eventLoop.makeFailedFuture(
+                                Abort(.notFound, reason: "League not found for the season with ID \(seasonID).")
+                            )
+                        }
+                        
+                        // Fetch the league from the database
+                        return League.find(leagueID, on: req.db)
+                            .unwrap(or: Abort(.notFound, reason: "League with ID \(leagueID) not found."))
+                    }
+            }
+    }
+
 }
 
 struct AddPlayersRequest: Content {
