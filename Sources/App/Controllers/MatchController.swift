@@ -43,6 +43,9 @@ final class MatchController: RouteCollection {
         route.get(use: repository.index)
 
         route.get(":id", use: getMatchByID)
+        route.get(":id", "resetGame" , use: resetGame)
+        route.get(":id", "resetHalftime" , use: resetHalftime)
+        
         route.delete(":id", use: repository.deleteID)
         
         route.patch(":id", use: updateID)
@@ -691,6 +694,36 @@ final class MatchController: RouteCollection {
             }
     }
 
+    func resetGame(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        let matchId = try req.parameters.require("id", as: UUID.self)
+        
+        return Match.find(matchId, on: req.db)
+            .unwrap(or: Abort(.notFound))
+            .flatMap { match in
+                match.status = .pending
+                match.firstHalfStartDate = nil
+                match.secondHalfStartDate = nil
+                match.firstHalfEndDate = nil
+                match.secondHalfEndDate = nil
+                match.score = Score(home: 0, away: 0)
+                
+                return match.save(on: req.db).transform(to: .ok)
+            }
+    }
+
+    func resetHalftime(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        let matchId = try req.parameters.require("id", as: UUID.self)
+        
+        return Match.find(matchId, on: req.db)
+            .unwrap(or: Abort(.notFound))
+            .flatMap { match in
+                match.status = .halftime
+                match.secondHalfStartDate = nil
+                match.secondHalfEndDate = nil
+                
+                return match.save(on: req.db).transform(to: .ok)
+            }
+    }
 }
 
 struct AddPlayersRequest: Content {

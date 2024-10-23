@@ -102,10 +102,8 @@ final class Match: Model, Content, Codable {
     // MID GAME TO DETERMINE THE TIMER
     @OptionalField(key: FieldKeys.firstHalfStartDate) var firstHalfStartDate: Date?
     @OptionalField(key: FieldKeys.secondHalfStartDate) var secondHalfStartDate: Date?
-
     @OptionalField(key: FieldKeys.firstHalfEndDate) var firstHalfEndDate: Date?
     @OptionalField(key: FieldKeys.secondHalfEndDate) var secondHalfEndDate: Date?
-
     
     // POST GAME
     @OptionalField(key: FieldKeys.bericht) var bericht: String?
