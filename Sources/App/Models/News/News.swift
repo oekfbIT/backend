@@ -15,6 +15,7 @@ final class NewsItem: Model, Content, Codable {
     @ID(custom: FieldKeys.id) var id: UUID?
     @OptionalField(key: FieldKeys.image) var image: String?
     @OptionalField(key: FieldKeys.text) var text: String?
+    @OptionalField(key: FieldKeys.title) var title: String?
     @OptionalField(key: FieldKeys.tag) var tag: String?
     @Timestamp(key: FieldKeys.created, on: .create) var created: Date?
 
@@ -22,16 +23,18 @@ final class NewsItem: Model, Content, Codable {
         static var id: FieldKey { "id" }
         static var image: FieldKey { "image" }
         static var text: FieldKey { "text" }
+        static var title: FieldKey { "title" }
         static var tag: FieldKey { "tag" }
         static var created: FieldKey { "created" }
     }
 
     init() {}
 
-    init(id: UUID? = nil, image: String? = nil, text: String? = nil, tag: String? = nil, created: Date? = nil) {
+    init(id: UUID? = nil, image: String? = nil, text: String? = nil, title: String? = nil, tag: String? = nil, created: Date? = nil) {
         self.id = id
         self.image = image
         self.text = text
+        self.title = title
         self.tag = tag
         self.created = created
     }
@@ -43,6 +46,7 @@ extension NewsItem: Mergeable {
         merged.image = other.image ?? self.image
         merged.tag = other.tag ?? self.tag
         merged.text = other.text ?? self.text
+        merged.title = other.title ?? self.title
         merged.created = other.created ?? self.created
         return merged
     }
@@ -55,6 +59,7 @@ extension NewsItemMigration: Migration {
             .field(NewsItem.FieldKeys.id, .uuid, .identifier(auto: true))
             .field(NewsItem.FieldKeys.image, .string)
             .field(NewsItem.FieldKeys.text, .string)
+            .field(NewsItem.FieldKeys.title, .string)
             .field(NewsItem.FieldKeys.tag, .string)
             .field(NewsItem.FieldKeys.created, .datetime)
             .create()
