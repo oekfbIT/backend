@@ -22,7 +22,7 @@ final class StrafsenatController: RouteCollection {
         route.post(use: repository.create)
         route.post("batch", use: repository.createBatch)
 
-        route.get(use: repository.index)
+        route.get(use: index)
         route.get(":id", use: repository.getbyID)
         route.delete(":id", use: repository.deleteID)
 
@@ -32,6 +32,13 @@ final class StrafsenatController: RouteCollection {
         // Add the close and open routes
         route.patch(":id","close", use: close)
         route.patch(":id","open", use: open)
+    }
+    
+
+    func index(req: Request) throws -> EventLoopFuture<Page<Strafsenat>> {
+        return Strafsenat.query(on: req.db)
+            .sort(\.$created, .descending)
+            .paginate(for: req)
     }
 
     // Function to close the status (set offen to false)
