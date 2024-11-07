@@ -109,6 +109,7 @@ final class Team: Model, Content {
         var id: UUID?
         var sid: String?
         var logo: String?
+        var league: String?
         var teamName: String
         var foundationYear: String?
         var membershipSince: String?
@@ -123,6 +124,7 @@ final class Team: Model, Content {
             id: self.id,
             sid: self.sid,
             logo: self.logo,
+            league: self.league?.code,
             teamName: self.teamName,
             foundationYear: self.foundationYear,
             membershipSince: self.membershipSince,
