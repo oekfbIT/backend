@@ -21,7 +21,7 @@ final class HomepageController: RouteCollection {
         let route = app.grouped(PathComponent(stringLiteral: path))
         
         route.get("leagueList", use: fetchLeagueList) // CHECK
-        route.get(":id", "homepage", use: fetchHomepage) // CHECK
+        route.get("byCode", ":code", "homepage", use: fetchHomepage) // Fetch by code
         route.get(":id", "homepage", "livescore", use: fetchLivescore) // League ID Parameter
         route.get(":id", "homepage", "clubs", use: fetchLeagueClubs) // League ID Parameter
         route.get("homepage", "clubs", ":id", use: fetchClub) // Team ID Parameter
@@ -59,53 +59,82 @@ final class HomepageController: RouteCollection {
     }
     
     func fetchHomepage(req: Request) throws -> EventLoopFuture<PublicHomepageLeague> {
-        // Get the league from the League ID with the teams
-        guard let leagueID = req.parameters.get("id", as: UUID.self) else {
-            throw Abort(.badRequest, reason: "Invalid or missing league ID")
+        // Get the league code from the request parameters
+        guard let leagueCode = req.parameters.get("code", as: String.self) else {
+            throw Abort(.badRequest, reason: "Invalid or missing league code")
         }
-        return League.find(leagueID, on: req.db)
+        
+        return League.query(on: req.db)
+            .filter(\League.$code == leagueCode)
+            .first()
             .unwrap(or: Abort(.notFound, reason: "League not found"))
             .flatMap { league in
-                // Fetch teams with players
-                return league.$teams.query(on: req.db)
+                // Fetch teams for the league
+                let teamsFuture = league.$teams.query(on: req.db)
                     .with(\.$players)
                     .all()
-                    .flatMap { teams in
-                        // Parse Teams into PublicTeams
-                        let publicTeams = teams.map { team in
-                            PublicTeam(
-                                id: team.id,
-                                sid: team.sid,
-                                leagueCode: team.leagueCode,
-                                points: team.points,
-                                logo: team.logo,
-                                coverimg: team.coverimg,
-                                teamName: team.teamName,
-                                foundationYear: team.foundationYear,
-                                membershipSince: team.membershipSince,
-                                averageAge: team.averageAge,
-                                coach: team.coach,
-                                captain: team.captain,
-                                trikot: team.trikot,
-                                stats: nil
-                            )
-                        }
-                        // Get all the news with the tag == leagueID as string
-                        return NewsItem.query(on: req.db)
-                            .filter(\.$tag == leagueID.uuidString)
-                            .all()
-                            .map { newsItems in
-                                // Wrap into PublicHomepageLeague and return
-                                PublicHomepageLeague(
-                                    hero: league.hero,
-                                    teams: publicTeams,
-                                    news: newsItems
-                                )
-                            }
+                
+                // Fetch news items for the league or "Alle"
+                let newsFuture = NewsItem.query(on: req.db)
+                    .group(.or) { group in
+                        group.filter(\NewsItem.$tag == leagueCode)
+                        group.filter(\NewsItem.$tag == "Alle")
                     }
+                    .all()
+                
+                // Fetch seasons with matches for the league
+                let seasonsFuture = league.$seasons.query(on: req.db)
+                    .with(\.$matches)
+                    .all()
+                
+                return teamsFuture.and(newsFuture).and(seasonsFuture).map { result in
+                    let (teams, newsItems, seasons) = (result.0.0, result.0.1, result.1)
+                    
+                    // Combine all matches from all seasons
+                    let allMatches = seasons.flatMap { $0.matches }
+                    
+                    // Define the date range (now to next 7 days)
+                    let now = Date()
+                    let nextWeek = Calendar.current.date(byAdding: .day, value: 7, to: now)!
+                    
+                    print("Now: \(now), NextWeek: \(nextWeek)") // Debugging
+                    
+                    // Filter matches within the next 7 days
+                    let upcomingMatches = allMatches.filter { match in
+                        guard let matchDate = match.details.date else {
+                            print("Match \(match.id ?? UUID()) has no date.") // Debugging
+                            return false
+                        }
+                        let isWithinRange = matchDate >= now && matchDate <= nextWeek
+                        print("Match \(match.id ?? UUID()) date: \(matchDate), Within range: \(isWithinRange)") // Debugging
+                        return isWithinRange
+                    }
+                    
+                    // Map teams to PublicTeamShort
+                    let publicTeams = teams.map { team in
+                        PublicTeamShort(
+                            id: team.id,
+                            sid: team.sid,
+                            logo: team.logo,
+                            teamName: team.teamName
+                        )
+                    }
+                    
+                    // Return the combined data
+                    return PublicHomepageLeague(
+                        data: league.homepagedata,
+                        teams: publicTeams,
+                        news: newsItems,
+                        upcoming: upcomingMatches
+                    )
+                }
             }
     }
-    
+
+
+
+
+
     func fetchLeagueClubs(req: Request) throws -> EventLoopFuture<[PublicTeam]> {
         // Get the league from the League ID with the teams
         guard let leagueID = req.parameters.get("id", as: UUID.self) else {
@@ -427,9 +456,10 @@ struct PublicLeagueOverview: Content, Codable {
 }
 
 struct PublicHomepageLeague: Content, Codable {
-    var hero: Hero?
-    var teams: [PublicTeam]?
+    var data: HomepageData?
+    var teams: [PublicTeamShort]?
     var news: [NewsItem]?
+    var upcoming: [Match]?
 }
 
 struct PublicTeam: Content, Codable {
@@ -447,6 +477,13 @@ struct PublicTeam: Content, Codable {
     var captain: String?
     var trikot: Trikot
     var stats: TeamStats?
+}
+
+struct PublicTeamShort: Content, Codable {
+    var id: UUID?
+    var sid: String?
+    var logo: String
+    var teamName: String
 }
 
 struct PublicTeamFull: Content, Codable {

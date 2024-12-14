@@ -25,10 +25,7 @@ final class League: Model, Content, Codable {
 
     @OptionalField(key: FieldKeys.code) var code: String?
 
-    @OptionalField(key: FieldKeys.wochenbericht) var wochenbericht: String?
-    @OptionalField(key: FieldKeys.hero) var hero: Hero?
-
-    
+    @OptionalField(key: FieldKeys.homepageData) var homepagedata: HomepageData?
     
     @OptionalField(key: FieldKeys.hourly) var hourly: Double?
     @OptionalField(key: FieldKeys.teamcount) var teamcount: Int?
@@ -43,18 +40,18 @@ final class League: Model, Content, Codable {
         static var teamcount: FieldKey { "teamcount" }
         static var code: FieldKey { "code" }
         static var name: FieldKey { "name" }
-        static var wochenbericht: FieldKey { "wochenbericht" }
-        static var hero: FieldKey { "hero" }
+        static var homepageData: FieldKey { "homepageData" }
     }
 
     init() {}
 
-    init(id: UUID? = nil, state: Bundesland?, teamcount: Int?, code: String, name: String, wochenbericht: String? = nil, hero: Hero? = nil) {
+    init(id: UUID? = nil, state: Bundesland?, teamcount: Int?, code: String, name: String, wochenbericht: String? = nil, homepagedata: HomepageData? = nil) {
         self.id = id
         self.state = state
         self.code = code
         self.name = name
         self.teamcount = teamcount ?? 14
+        self.homepagedata = homepagedata
     }
 }
 
@@ -67,6 +64,7 @@ extension League: Mergeable {
         merged.code = other.code
         merged.name = other.name
         merged.teamcount = other.teamcount
+        merged.homepagedata = other.homepagedata
         return merged
     }
 }
@@ -81,10 +79,24 @@ extension LeagueMigration: Migration {
             .field(League.FieldKeys.code, .string)
             .field(League.FieldKeys.hourly, .double)
             .field(League.FieldKeys.teamcount, .int)
+            .field(League.FieldKeys.homepageData, .json)
             .create()
     }
 
     func revert(on database: Database) -> EventLoopFuture<Void> {
         database.schema(League.schema).delete()
     }
+}
+
+
+struct HomepageData: Codable {
+    let wochenbericht: String
+    let sliderdata: [SliderData]
+}
+
+struct SliderData: Codable {
+    let image: String
+    let title: String
+    let description: String
+    let newsID: UUID?
 }
