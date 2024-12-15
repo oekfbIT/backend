@@ -29,7 +29,7 @@ final class StrafsenatController: RouteCollection {
         route.patch(":id", use: repository.updateID)
         route.patch("batch", use: repository.updateBatch)
         
-        // Add the close and open routes
+        // Add the close and open routes???
         route.patch(":id","close", use: close)
         route.patch(":id","open", use: open)
     }

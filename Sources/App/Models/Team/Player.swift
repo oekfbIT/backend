@@ -13,22 +13,26 @@ final class Player: Model, Content, Codable {
     @ID(custom: FieldKeys.id) var id: UUID?
     @Field(key: FieldKeys.sid) var sid: String
     @OptionalField(key: FieldKeys.image) var image: String?
+    @OptionalParent(key: FieldKeys.teamID) var team: Team?
     @OptionalField(key: FieldKeys.team_oeid) var team_oeid: String?
     @OptionalField(key: FieldKeys.email) var email: String?
+    
     @Field(key: FieldKeys.name) var name: String
     @Field(key: FieldKeys.number) var number: String
     @Field(key: FieldKeys.birthday) var birthday: String
-    @OptionalParent(key: FieldKeys.teamID) var team: Team?
     @Field(key: FieldKeys.nationality) var nationality: String
     @Field(key: FieldKeys.position) var position: String
     @Field(key: FieldKeys.eligibility) var eligibility: PlayerEligibility
     @Field(key: FieldKeys.registerDate) var registerDate: String
+    
     @OptionalField(key: FieldKeys.identification) var identification: String?
     @OptionalField(key: FieldKeys.status) var status: Bool?
     @OptionalField(key: FieldKeys.isCaptain) var isCaptain: Bool?
     @OptionalField(key: FieldKeys.bank) var bank: Bool?
     @OptionalField(key: FieldKeys.transferred) var transferred: Bool?
     @OptionalField(key: FieldKeys.blockdate) var blockdate: Date?
+
+    @Children(for: \.$player) var events: [MatchEvent]
 
     struct FieldKeys {
         static var id: FieldKey { "id" }
@@ -168,17 +172,5 @@ extension Player: Mergeable {
         merged.bank = other.bank
         merged.blockdate = other.blockdate
         return merged
-    }
-}
-
-// NEW STRUCT for PlayerStats
-struct PlayerStats: Codable {
-    var matchesPlayed: Int
-    var goalsScored: Int
-    var redCards: Int
-    var yellowCards: Int
-    var yellowRedCrd: Int
-    var totalCards: Int {
-        return redCards + yellowCards + yellowRedCrd
     }
 }

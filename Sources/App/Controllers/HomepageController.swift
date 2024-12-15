@@ -1,54 +1,46 @@
-//
-//  HomepageController.swift
-//
-//  Copyright © 2023.
-//  Alon Yakobichvili
-//  All rights reserved.
-//
-
 import Vapor
 import Fluent
 
 final class HomepageController: RouteCollection {
-    
     let path: String
-    
+
     init(path: String) {
         self.path = path
     }
 
-    func setupRoutes(on app: RoutesBuilder) throws {
-        let route = app.grouped(PathComponent(stringLiteral: path))
-        
-        route.get("leagueList", use: fetchLeagueList) // CHECK
-        route.get("byCode", ":code", "homepage", use: fetchHomepage) // Fetch by code
-        route.get(":id", "homepage", "livescore", use: fetchLivescore) // League ID Parameter
-        route.get(":id", "homepage", "clubs", use: fetchLeagueClubs) // League ID Parameter
-        route.get("homepage", "clubs", ":id", use: fetchClub) // Team ID Parameter
-        route.get("homepage", "clubs", "players", ":playerID", use: fetchPlayerDetail) // PlayerID parameter
-        route.get(":id", "homepage", "news", use: fetchLeagueNews) // League ID Parameter
-        route.get("homepage", "news", ":newsItemID", use: fetchNewsItem) // News Item ID Parameter
-        
-        
-        route.get(":id", "homepage", "goalLeaderBoard", use: getGoalLeaderBoard) // LeagueID
-        route.get(":id", "homepage", "redCardLeaderBoard", use: getRedCardLeaderBoard) // LeagueID
-        route.get(":id","homepage", "yellowCardLeaderBoard", use: getYellowCardLeaderBoard)// LeagueID
-
-        // Commented out due to missing implementations
-         route.post("homepage", "register", use: register)
-        // route.grouped(User.authenticator()).post("login", use: login)
-    }
-    
     func boot(routes: RoutesBuilder) throws {
         try setupRoutes(on: routes)
     }
-    
-    // HOMEPAGE GETTERS
+
+    func setupRoutes(on app: RoutesBuilder) throws {
+        let route = app.grouped(PathComponent(stringLiteral: path))
+
+        route.get("leagueList", use: fetchLeagueList)
+        route.get("byCode", ":code", "homepage", use: fetchHomepage)
+        route.get(":id", "homepage", "livescore", use: fetchLivescore)
+        route.get(":id", "homepage", "clubs", use: fetchLeagueClubs)
+        route.get("homepage", "clubs", ":id", use: fetchClub)
+        route.get("homepage", "clubs", "players", ":playerID", use: fetchPlayerDetail)
+        route.get(":id", "homepage", "news", use: fetchLeagueNews)
+        route.get("homepage", "news", ":newsItemID", use: fetchNewsItem)
+        route.get("homepage", "season", ":seasonID", use: fetchNewsItem)
+
+        route.get("homepage", ":id", "tabelle", use: getLeagueTable)
+        route.get(":id", "homepage", "matches", use: fetchLeagueMatches)
+        route.get("match", ":id", "details", use: fetchMatchDetail)
+
+        route.get(":id", "homepage", "goalLeaderBoard", use: getGoalLeaderBoard)
+        route.get(":id", "homepage", "redCardLeaderBoard", use: getRedCardLeaderBoard)
+        route.get(":id","homepage", "yellowCardLeaderBoard", use: getYellowCardLeaderBoard)
+
+        route.post("homepage", "register", use: register)
+    }
+
+    // MARK: - Homepage Data
 
     func fetchLeagueList(req: Request) throws -> EventLoopFuture<[PublicLeagueOverview]> {
-        // Get all the leagues and map them to PublicLeagueOverview
         return League.query(on: req.db).all().mapEach { league in
-            return PublicLeagueOverview(
+            PublicLeagueOverview(
                 id: league.id,
                 state: league.state,
                 code: league.code,
@@ -57,130 +49,174 @@ final class HomepageController: RouteCollection {
             )
         }
     }
-    
+
     func fetchHomepage(req: Request) throws -> EventLoopFuture<PublicHomepageLeague> {
-        // Get the league code from the request parameters
         guard let leagueCode = req.parameters.get("code", as: String.self) else {
             throw Abort(.badRequest, reason: "Invalid or missing league code")
         }
-        
-        return League.query(on: req.db)
-            .filter(\League.$code == leagueCode)
-            .first()
-            .unwrap(or: Abort(.notFound, reason: "League not found"))
+
+        return findLeague(byCode: leagueCode, db: req.db)
             .flatMap { league in
-                // Fetch teams for the league
-                let teamsFuture = league.$teams.query(on: req.db)
-                    .with(\.$players)
-                    .all()
-                
-                // Fetch news items for the league or "Alle"
-                let newsFuture = NewsItem.query(on: req.db)
-                    .group(.or) { group in
-                        group.filter(\NewsItem.$tag == leagueCode)
-                        group.filter(\NewsItem.$tag == "Alle")
-                    }
-                    .all()
-                
-                // Fetch seasons with matches for the league
-                let seasonsFuture = league.$seasons.query(on: req.db)
-                    .with(\.$matches)
-                    .all()
-                
-                return teamsFuture.and(newsFuture).and(seasonsFuture).map { result in
+                // Start all async fetches
+                let teamsFuture = self.fetchTeams(for: league, db: req.db)
+                let newsFuture = self.fetchNewsItems(for: league, code: leagueCode, db: req.db)
+                let seasonsFuture = self.fetchSeasonsWithMatches(for: league, db: req.db)
+
+                return teamsFuture.and(newsFuture).and(seasonsFuture).flatMap { result in
                     let (teams, newsItems, seasons) = (result.0.0, result.0.1, result.1)
-                    
-                    // Combine all matches from all seasons
-                    let allMatches = seasons.flatMap { $0.matches }
-                    
-                    // Define the date range (now to next 7 days)
-                    let now = Date()
-                    let nextWeek = Calendar.current.date(byAdding: .day, value: 7, to: now)!
-                    
-                    print("Now: \(now), NextWeek: \(nextWeek)") // Debugging
-                    
-                    // Filter matches within the next 7 days
-                    let upcomingMatches = allMatches.filter { match in
-                        guard let matchDate = match.details.date else {
-                            print("Match \(match.id ?? UUID()) has no date.") // Debugging
-                            return false
-                        }
-                        let isWithinRange = matchDate >= now && matchDate <= nextWeek
-                        print("Match \(match.id ?? UUID()) date: \(matchDate), Within range: \(isWithinRange)") // Debugging
-                        return isWithinRange
-                    }
-                    
-                    // Map teams to PublicTeamShort
-                    let publicTeams = teams.map { team in
-                        PublicTeamShort(
-                            id: team.id,
-                            sid: team.sid,
-                            logo: team.logo,
-                            teamName: team.teamName
+
+                    let upcomingMatches = self.getUpcomingMatches(from: seasons)
+                    let publicTeams = self.mapTeamsToPublic(teams)
+                    let upcomingMatchesShort = self.mapMatchesToShort(upcomingMatches)
+
+                    return req.eventLoop.future(
+                        PublicHomepageLeague(
+                            data: league.homepagedata,
+                            teams: publicTeams,
+                            news: newsItems,
+                            upcoming: upcomingMatchesShort
                         )
-                    }
-                    
-                    // Return the combined data
-                    return PublicHomepageLeague(
-                        data: league.homepagedata,
-                        teams: publicTeams,
-                        news: newsItems,
-                        upcoming: upcomingMatches
                     )
                 }
             }
     }
 
+    // MARK: - Helper Methods for fetchHomepage
 
+    private func findLeague(byCode code: String, db: Database) -> EventLoopFuture<League> {
+        return League.query(on: db)
+            .filter(\League.$code == code)
+            .first()
+            .unwrap(or: Abort(.notFound, reason: "League not found"))
+    }
 
+    private func fetchTeams(for league: League, db: Database) -> EventLoopFuture<[Team]> {
+        return league.$teams.query(on: db)
+            .with(\.$players)
+            .all()
+    }
 
+    private func fetchNewsItems(for league: League, code: String, db: Database) -> EventLoopFuture<[NewsItem]> {
+        return NewsItem.query(on: db)
+            .group(.or) { group in
+                group.filter(\NewsItem.$tag == code)
+                group.filter(\NewsItem.$tag == "Alle")
+            }
+            .all()
+    }
 
-    func fetchLeagueClubs(req: Request) throws -> EventLoopFuture<[PublicTeam]> {
-        // Get the league from the League ID with the teams
+    private func fetchSeasonsWithMatches(for league: League, db: Database) -> EventLoopFuture<[Season]> {
+        return league.$seasons.query(on: db)
+            .with(\.$matches) { match in
+                match.with(\.$homeTeam)
+                     .with(\.$awayTeam)
+            }
+            .all()
+    }
+
+    private func getUpcomingMatches(from seasons: [Season]) -> [Match] {
+        let allMatches = seasons.flatMap { $0.matches }
+        let now = Date()
+        guard let nextWeek = Calendar.current.date(byAdding: .day, value: 6, to: now) else { return [] }
+
+        return allMatches.filter { match in
+            guard let matchDate = match.details.date else { return false }
+            return matchDate >= now && matchDate <= nextWeek
+        }
+    }
+
+    private func mapTeamsToPublic(_ teams: [Team]) -> [PublicTeamShort] {
+        return teams.map { team in
+            PublicTeamShort(
+                id: team.id,
+                sid: team.sid,
+                logo: team.logo,
+                teamName: team.teamName
+            )
+        }
+    }
+
+    private func mapMatchesToShort(_ matches: [Match]) -> [PublicMatchShort] {
+        return matches.map { match in
+            PublicMatchShort(
+                id: match.id,
+                details: match.details,
+                homeBlanket: MiniBlankett(
+                    id: match.$homeTeam.id,
+                    logo: match.homeBlanket?.logo,
+                    name: match.homeBlanket?.name
+                ),
+                awayBlanket: MiniBlankett(
+                    id: match.$awayTeam.id,
+                    logo: match.awayBlanket?.logo,
+                    name: match.awayBlanket?.name
+                ),
+                score: match.score,
+                status: match.status
+            )
+        }
+    }
+
+    // MARK: - Other Handlers
+
+    func fetchLeagueClubs(req: Request) throws -> EventLoopFuture<[PublicTeamShort]> {
         guard let leagueID = req.parameters.get("id", as: UUID.self) else {
             throw Abort(.badRequest, reason: "Invalid or missing league ID")
         }
         return League.find(leagueID, on: req.db)
             .unwrap(or: Abort(.notFound, reason: "League not found"))
             .flatMap { league in
-                return league.$teams.query(on: req.db)
+                league.$teams.query(on: req.db)
                     .with(\.$players)
                     .all()
                     .map { teams in
-                        // Parse the teams into PublicTeam
                         teams.map { team in
-                            PublicTeam(
+                            PublicTeamShort(
                                 id: team.id,
                                 sid: team.sid,
-                                leagueCode: team.leagueCode,
-                                points: team.points,
                                 logo: team.logo,
-                                coverimg: team.coverimg,
-                                teamName: team.teamName,
-                                foundationYear: team.foundationYear,
-                                membershipSince: team.membershipSince,
-                                averageAge: team.averageAge,
-                                coach: team.coach,
-                                captain: team.captain,
-                                trikot: team.trikot,
-                                stats: nil
+                                teamName: team.teamName
                             )
                         }
                     }
             }
     }
-    
+
     func fetchClub(req: Request) throws -> EventLoopFuture<PublicTeamFull> {
-        // Get the club (team) from the Team ID and parse into PublicTeam
         guard let teamID = req.parameters.get("id", as: UUID.self) else {
             throw Abort(.badRequest, reason: "Invalid or missing team ID")
         }
         return Team.find(teamID, on: req.db)
             .unwrap(or: Abort(.notFound, reason: "Team not found"))
             .flatMap { team in
-                return team.$players.query(on: req.db)
-                    .all()
-                    .map { players in
+                team.$players.query(on: req.db).all().flatMap { players in
+                    // Fetch stats for each player and the team
+                    let playerStatsFutures = players.map { player in
+                        self.getPlayerStats(playerID: player.id!, db: req.db).map { stats in
+                            PublicPlayer(
+                                id: player.id,
+                                sid: player.sid,
+                                image: player.image,
+                                team_oeid: player.team_oeid,
+                                name: player.name,
+                                number: player.number,
+                                birthday: player.birthday,
+                                team: nil,
+                                nationality: player.nationality,
+                                position: player.position,
+                                eligibility: player.eligibility,
+                                registerDate: player.registerDate,
+                                status: player.status,
+                                isCaptain: player.isCaptain,
+                                bank: player.bank,
+                                stats: stats
+                            )
+                        }
+                    }
+
+                    let teamStatsFuture = self.getTeamStats(teamID: team.id!, db: req.db)
+
+                    return req.eventLoop.flatten(playerStatsFutures).and(teamStatsFuture).map { (publicPlayers, teamStats) in
                         PublicTeamFull(
                             id: team.id,
                             sid: team.sid,
@@ -195,63 +231,25 @@ final class HomepageController: RouteCollection {
                             coach: team.coach,
                             captain: team.captain,
                             trikot: team.trikot,
-                            players: players.map { player in
-                                PublicPlayer(
-                                    id: player.id,
-                                    sid: player.sid,
-                                    image: player.image,
-                                    team_oeid: player.team_oeid,
-                                    name: player.name,
-                                    number: player.number,
-                                    birthday: player.birthday,
-                                    team: nil, // Optionally include team if needed
-                                    nationality: player.nationality,
-                                    position: player.position,
-                                    eligibility: player.eligibility,
-                                    registerDate: player.registerDate,
-                                    status: player.status,
-                                    isCaptain: player.isCaptain,
-                                    bank: player.bank,
-                                    stats: default_player_stats // Stats can be calculated separately if needed
-                                )
-                            },
-                            stats: default_team_stats
+                            players: publicPlayers,
+                            stats: teamStats
                         )
                     }
+                }
             }
     }
 
-    func fetchLeagueNews(req: Request) throws -> EventLoopFuture<[NewsItem]> {
-        // Search all the news items and get all where tag == leagueID parameter
-        guard let leagueID = req.parameters.get("id", as: UUID.self) else {
-            throw Abort(.badRequest, reason: "Invalid or missing league ID")
-        }
-        return NewsItem.query(on: req.db)
-            .filter(\.$tag == leagueID.uuidString)
-            .all()
-    }
-        
-    func fetchNewsItem(req: Request) throws -> EventLoopFuture<NewsItem> {
-        // Search the news item with the ID and return the item
-        guard let newsItemID = req.parameters.get("newsItemID", as: UUID.self) else {
-            throw Abort(.badRequest, reason: "Invalid or missing news item ID")
-        }
-        return NewsItem.find(newsItemID, on: req.db)
-            .unwrap(or: Abort(.notFound, reason: "News item not found"))
-    }
-    
     func fetchLivescore(req: Request) throws -> EventLoopFuture<[PublicMatch]> {
         return Match.query(on: req.db)
-            .filter(\.$status ~~ [.first, .second, .halftime])  // Filter matches that are in progress
+            .filter(\.$status ~~ [.first, .second, .halftime])
             .with(\.$season) { seasonQuery in
-                seasonQuery.with(\.$league)  // Load the league through the season
+                seasonQuery.with(\.$league)
             }
             .with(\.$homeTeam)
             .with(\.$awayTeam)
             .with(\.$events)
-            .all()  // Ensure we're fetching all matches
+            .all()
             .map { matches in
-                // Parse them into [PublicMatch]
                 matches.map { match in
                     PublicMatch(
                         id: match.id,
@@ -269,15 +267,84 @@ final class HomepageController: RouteCollection {
             }
     }
 
+    func fetchPlayerDetail(req: Request) throws -> EventLoopFuture<PublicPlayer> {
+        guard let playerID = req.parameters.get("playerID", as: UUID.self) else {
+            throw Abort(.badRequest, reason: "Invalid or missing player ID")
+        }
+        return Player.find(playerID, on: req.db)
+            .unwrap(or: Abort(.notFound, reason: "Player not found"))
+            .flatMap { player in
+                self.getPlayerStats(playerID: playerID, db: req.db).map { stats in
+                    PublicPlayer(
+                        id: player.id,
+                        sid: player.sid,
+                        image: player.image,
+                        team_oeid: player.team_oeid,
+                        name: player.name,
+                        number: player.number,
+                        birthday: player.birthday,
+                        team: nil,
+                        nationality: player.nationality,
+                        position: player.position,
+                        eligibility: player.eligibility,
+                        registerDate: player.registerDate,
+                        status: player.status,
+                        isCaptain: player.isCaptain,
+                        bank: player.bank,
+                        stats: stats
+                    )
+                }
+            }
+    }
+
+    func fetchLeagueNews(req: Request) throws -> EventLoopFuture<[NewsItem]> {
+        guard let leagueParam = req.parameters.get("id") else {
+            throw Abort(.badRequest, reason: "Invalid or missing league ID or code")
+        }
+
+        return League.query(on: req.db)
+            .group(.or) { group in
+                if let leagueID = UUID(uuidString: leagueParam) {
+                    group.filter(\.$id == leagueID)
+                } else {
+                    group.filter(\.$code == leagueParam)
+                }
+            }
+            .first()
+            .flatMap { optionalLeague in
+                guard let league = optionalLeague else {
+                    return req.eventLoop.future(error: Abort(.notFound, reason: "League not found"))
+                }
+
+                return NewsItem.query(on: req.db)
+                    .group(.or) { group in
+                        group.filter(\.$tag == "Alle")
+                        if let code = league.code {
+                            group.filter(\.$tag == code)
+                        }
+                        if let lID = league.id?.uuidString {
+                            group.filter(\.$tag == lID)
+                        }
+                    }
+                    .all()
+            }
+    }
+
+    func fetchNewsItem(req: Request) throws -> EventLoopFuture<NewsItem> {
+        guard let newsItemID = req.parameters.get("newsItemID", as: UUID.self) else {
+            throw Abort(.badRequest, reason: "Invalid or missing news item ID")
+        }
+        return NewsItem.find(newsItemID, on: req.db)
+            .unwrap(or: Abort(.notFound, reason: "News item not found"))
+    }
+
     func fetchMatchDetail(req: Request) throws -> EventLoopFuture<PublicMatch> {
-        // Get the match from the matchID and parse it into PublicMatch
         guard let matchID = req.parameters.get("id", as: UUID.self) else {
             throw Abort(.badRequest, reason: "Invalid or missing match ID")
         }
         return Match.find(matchID, on: req.db)
             .unwrap(or: Abort(.notFound, reason: "Match not found"))
             .flatMap { match in
-                // Ensure related data is loaded
                 match.$season.load(on: req.db).and(match.$referee.load(on: req.db)).flatMap { _, _ in
                     match.$events.query(on: req.db)
                         .all()
@@ -299,41 +366,9 @@ final class HomepageController: RouteCollection {
             }
     }
 
-    func fetchPlayerDetail(req: Request) throws -> EventLoopFuture<PublicPlayer> {
-        // Get the player from the playerID and parse it into PublicPlayer
-        guard let playerID = req.parameters.get("playerID", as: UUID.self) else {
-            throw Abort(.badRequest, reason: "Invalid or missing player ID")
-        }
-        return Player.find(playerID, on: req.db)
-            .unwrap(or: Abort(.notFound, reason: "Player not found"))
-            .map { player in
-                // Map Player to PublicPlayer
-                PublicPlayer(
-                    id: player.id,
-                    sid: player.sid,
-                    image: player.image,
-                    team_oeid: player.team_oeid,
-                    name: player.name,
-                    number: player.number,
-                    birthday: player.birthday,
-                    team: nil, // Optionally include team if needed
-                    nationality: player.nationality,
-                    position: player.position,
-                    eligibility: player.eligibility,
-                    registerDate: player.registerDate,
-                    status: player.status,
-                    isCaptain: player.isCaptain,
-                    bank: player.bank,
-                    stats: default_player_stats // Stats can be calculated separately if needed
-                )
-            }
-    }
-
     func register(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let registrationRequest = try req.content.decode(TeamRegistrationRequest.self)
 
-        print(registrationRequest)
-        
         let newRegistration = TeamRegistration()
         newRegistration.primary = registrationRequest.primaryContact
         newRegistration.secondary = registrationRequest.secondaryContact
@@ -341,29 +376,21 @@ final class HomepageController: RouteCollection {
         newRegistration.verein = registrationRequest.verein
         newRegistration.refereerLink = registrationRequest.referCode
         newRegistration.status = .draft
-        newRegistration.paidAmount = nil
+        newRegistration.paidAmount = 0.0
         newRegistration.bundesland = registrationRequest.bundesland
         newRegistration.initialPassword = registrationRequest.initialPassword ?? String.randomString(length: 8)
-        newRegistration.refereerLink = registrationRequest.referCode
-        newRegistration.customerSignedContract = nil
-        newRegistration.adminSignedContract = nil
-        newRegistration.paidAmount = 0.0
         newRegistration.isWelcomeEmailSent = true
         newRegistration.isLoginDataSent = false
-        
-        return newRegistration.save(on: req.db).map { _ in
-            // Send the welcome email in the background
-            print("Created: ", newRegistration)
+
+        return newRegistration.save(on: req.db).map {
             self.sendWelcomeEmailInBackground(req: req, recipient: registrationRequest.primaryContact.email, registration: newRegistration)
             return HTTPStatus.ok
-        }.flatMapError { error in
+        }.flatMapError { _ in
             return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid request"))
         }
     }
 
-    // Background email sending function
     private func sendWelcomeEmailInBackground(req: Request, recipient: String, registration: TeamRegistration?) {
-        // Run the email sending on the request's event loop
         req.eventLoop.execute {
             do {
                 try emailController.sendWelcomeMail(req: req, recipient: recipient, registration: registration).whenComplete { result in
@@ -379,7 +406,7 @@ final class HomepageController: RouteCollection {
             }
         }
     }
-    
+
     // MARK: - Leaderboard Handlers
 
     func getGoalLeaderBoard(req: Request) -> EventLoopFuture<[LeaderBoard]> {
@@ -394,56 +421,221 @@ final class HomepageController: RouteCollection {
         return getLeaderBoard(req: req, eventType: .yellowCard)
     }
 
-    // Generalized function for all leaderboards
     private func getLeaderBoard(req: Request, eventType: MatchEventType) -> EventLoopFuture<[LeaderBoard]> {
         guard let leagueID = req.parameters.get("id", as: UUID.self) else {
             return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league ID"))
         }
 
-        // Fetch teams and their players from the specified league
         return Team.query(on: req.db)
-            .filter(\.$league.$id == leagueID) // Filter by the provided league ID
-            .with(\.$players) // Load related players
+            .filter(\.$league.$id == leagueID)
+            .with(\.$players)
             .all()
             .flatMap { teams in
-                // Collect all player IDs from the league's teams
                 let playerIDs = teams.flatMap { $0.players.compactMap { $0.id } }
 
-                // Fetch all match events for these players
                 return MatchEvent.query(on: req.db)
-                    .filter(\.$player.$id ~~ playerIDs) // Only include events for players from the league
-                    .filter(\.$type == eventType) // Filter by event type (goal, red card, yellow card)
+                    .filter(\.$player.$id ~~ playerIDs)
+                    .filter(\.$type == eventType)
                     .all()
-                    .flatMap { events in
-                        // Create a dictionary to count events per player
-                        var playerEventCounts: [UUID: (name: String?, image: String?, number: String?, count: Int)] = [:]
-
-                        for event in events {
-                            let playerId = event.$player.id
-                            let playerInfo = (event.name, event.image, event.number)
-                            
-                            if let existingCount = playerEventCounts[playerId]?.count {
-                                playerEventCounts[playerId]?.count = existingCount + 1
-                            } else {
-                                playerEventCounts[playerId] = (playerInfo.0, playerInfo.1, playerInfo.2, 1)
-                            }
-                        }
-
-                        // Convert the dictionary into a sorted array of LeaderBoard items
-                        let leaderboard = playerEventCounts.map { (playerId, playerData) in
-                            LeaderBoard(
-                                name: playerData.name,
-                                image: playerData.image,
-                                number: playerData.number,
-                                count: playerData.count
-                            )
-                        }.sorted { $0.count > $1.count }
-
-                        return req.eventLoop.makeSucceededFuture(leaderboard)
+                    .map { events in
+                        self.mapEventsToLeaderBoard(events)
                     }
             }
     }
+
+    // MARK: - Stats & Utilities
+
+    func getPlayerStats(playerID: UUID, db: Database) -> EventLoopFuture<PlayerStats> {
+        return MatchEvent.query(on: db)
+            .filter(\.$player.$id == playerID)
+            .all()
+            .map { events in
+                var stats = PlayerStats(matchesPlayed: 0, goalsScored: 0, redCards: 0, yellowCards: 0, yellowRedCrd: 0)
+                var matchSet = Set<UUID>()
+
+                for event in events {
+                    matchSet.insert(event.$match.id)
+                    switch event.type {
+                    case .goal:
+                        stats.goalsScored += 1
+                    case .redCard:
+                        stats.redCards += 1
+                    case .yellowCard:
+                        stats.yellowCards += 1
+                    case .yellowRedCard:
+                        stats.yellowRedCrd += 1
+                    default:
+                        break
+                    }
+                }
+                stats.matchesPlayed = matchSet.count
+                return stats
+            }
+    }
+
+    func getTeamStats(teamID: UUID, db: Database) -> EventLoopFuture<TeamStats> {
+        let validStatuses: [GameStatus] = [.completed, .abbgebrochen, .submitted, .cancelled, .done]
+
+        return Match.query(on: db)
+            .group(.or) { group in
+                group.filter(\.$homeTeam.$id == teamID)
+                group.filter(\.$awayTeam.$id == teamID)
+            }
+            .filter(\.$status ~~ validStatuses)
+            .with(\.$events)
+            .all()
+            .map { matches in
+                var stats = TeamStats(wins: 0, draws: 0, losses: 0, totalScored: 0, totalAgainst: 0, goalDifference: 0, totalPoints: 0, totalYellowCards: 0, totalRedCards: 0)
+
+                for match in matches {
+                    let isHome = match.$homeTeam.id == teamID
+                    let scored = isHome ? match.score.home : match.score.away
+                    let against = isHome ? match.score.away : match.score.home
+
+                    stats.totalScored += scored
+                    stats.totalAgainst += against
+
+                    if scored > against {
+                        stats.wins += 1
+                        stats.totalPoints += 3
+                    } else if scored == against {
+                        stats.draws += 1
+                        stats.totalPoints += 1
+                    } else {
+                        stats.losses += 1
+                    }
+
+                    for event in match.events {
+                        if let assign = event.assign {
+                            if (isHome && assign == .home) || (!isHome && assign == .away) {
+                                switch event.type {
+                                case .yellowCard:
+                                    stats.totalYellowCards += 1
+                                case .redCard:
+                                    stats.totalRedCards += 1
+                                default:
+                                    break
+                                }
+                            }
+                        }
+                    }
+                }
+                stats.goalDifference = stats.totalScored - stats.totalAgainst
+                return stats
+            }
+    }
+
+    func getLeagueTable(req: Request) -> EventLoopFuture<[TableItem]> {
+        guard let leagueID = req.parameters.get("id", as: UUID.self) else {
+            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league ID"))
+        }
+
+        return League.find(leagueID, on: req.db)
+            .unwrap(or: Abort(.notFound, reason: "League not found"))
+            .flatMap { league in
+                league.$teams.query(on: req.db).all().flatMap { teams in
+                    let teamStatsFutures = teams.map { team in
+                        self.getTeamStats(teamID: team.id!, db: req.db).map { stats in (team, stats) }
+                    }
+
+                    return req.eventLoop.flatten(teamStatsFutures).map { teamStatsPairs in
+                        var tableItems: [TableItem] = []
+
+                        for (team, stats) in teamStatsPairs {
+                            let tableItem = TableItem(
+                                image: team.logo,
+                                name: team.teamName,
+                                points: team.points,
+                                id: team.id!,
+                                goals: stats.totalScored,
+                                ranking: 0,
+                                wins: stats.wins,
+                                draws: stats.draws,
+                                losses: stats.losses,
+                                scored: stats.totalScored,
+                                against: stats.totalAgainst,
+                                difference: stats.goalDifference
+                            )
+                            tableItems.append(tableItem)
+                        }
+
+                        tableItems.sort {
+                            if $0.points == $1.points {
+                                return $0.difference > $1.difference
+                            }
+                            return $0.points > $1.points
+                        }
+
+                        for i in 0..<tableItems.count {
+                            tableItems[i].ranking = i + 1
+                        }
+
+                        return tableItems
+                    }
+                }
+            }
+    }
+
+    func fetchLeagueMatches(req: Request) throws -> EventLoopFuture<[PublicMatchShort]> {
+        guard let leagueID = req.parameters.get("id", as: UUID.self) else {
+            throw Abort(.badRequest, reason: "Invalid or missing league ID")
+        }
+
+        return Match.query(on: req.db)
+            .join(Season.self, on: \Match.$season.$id == \Season.$id)
+            .filter(Season.self, \Season.$league.$id == leagueID)
+            .with(\.$homeTeam)
+            .with(\.$awayTeam)
+            .all()
+            .map { matches in
+                matches.map { match in
+                    PublicMatchShort(
+                        id: match.id,
+                        details: match.details,
+                        homeBlanket: MiniBlankett(
+                            id: match.$homeTeam.id,
+                            logo: match.homeBlanket?.logo,
+                            name: match.homeBlanket?.name
+                        ),
+                        awayBlanket: MiniBlankett(
+                            id: match.$awayTeam.id,
+                            logo: match.awayBlanket?.logo,
+                            name: match.awayBlanket?.name
+                        ),
+                        score: match.score,
+                        status: match.status
+                    )
+                }
+            }
+    }
+
+    private func mapEventsToLeaderBoard(_ events: [MatchEvent]) -> [LeaderBoard] {
+        var playerEventCounts: [UUID: (name: String?, image: String?, number: String?, count: Int)] = [:]
+
+        for event in events {
+            let playerId = event.$player.id
+            let playerInfo = (event.name, event.image, event.number)
+
+            if let existingCount = playerEventCounts[playerId]?.count {
+                playerEventCounts[playerId]?.count = existingCount + 1
+            } else {
+                playerEventCounts[playerId] = (playerInfo.0, playerInfo.1, playerInfo.2, 1)
+            }
+        }
+
+        let leaderboard = playerEventCounts.map { (_, playerData) in
+            LeaderBoard(
+                name: playerData.name,
+                image: playerData.image,
+                number: playerData.number,
+                count: playerData.count.asDouble()
+            )
+        }
+
+        return leaderboard
+    }
 }
+
 
 // MARK: - Supporting Models
 
@@ -459,7 +651,7 @@ struct PublicHomepageLeague: Content, Codable {
     var data: HomepageData?
     var teams: [PublicTeamShort]?
     var news: [NewsItem]?
-    var upcoming: [Match]?
+    var upcoming: [PublicMatchShort]?
 }
 
 struct PublicTeam: Content, Codable {
@@ -485,6 +677,7 @@ struct PublicTeamShort: Content, Codable {
     var logo: String
     var teamName: String
 }
+
 
 struct PublicTeamFull: Content, Codable {
     var id: UUID?
@@ -523,6 +716,21 @@ struct PublicMatch: Content, Codable {
     var bericht: String?
 }
 
+struct PublicMatchShort: Content, Codable {
+    var id: UUID?
+    let details: MatchDetails?
+    var homeBlanket: MiniBlankett?
+    var awayBlanket: MiniBlankett?
+    var score: Score?
+    var status: GameStatus?
+}
+
+struct MiniBlankett: Codable {
+    let id: UUID?
+    let logo: String?
+    let name: String?
+}
+
 struct PublicPlayer: Content, Codable {
     var id: UUID?
     var sid: String
@@ -542,33 +750,10 @@ struct PublicPlayer: Content, Codable {
     var stats: PlayerStats?
 }
 
-let default_player_stats = PlayerStats(matchesPlayed: 0,
-                                       goalsScored: 0,
-                                       redCards: 0,
-                                       yellowCards: 0,
-                                       yellowRedCrd: 0 )
-
-let default_team_stats = TeamStats(wins: 0,
-                                   draws: 0,
-                                   losses: 0,
-                                   totalScored: 0,
-                                   totalAgainst: 0,
-                                   goalDifference: 0,
-                                   totalPoints: 0)
-
-// Since missing structs cannot be invented, the following are not implemented
-/*
-struct LeagueTableItem: Codable {
-    // Implementation omitted
+struct PlayerStats: Content, Codable {
+    var matchesPlayed: Int
+    var goalsScored: Int
+    var redCards: Int
+    var yellowCards: Int
+    var yellowRedCrd: Int
 }
-
-struct TeamStats: Codable {
-    // Implementation omitted
-}
-
-struct NewSession: Content {
-    // Implementation omitted
-}
-
-// Other missing types like User, EmailController, etc., are not included as per your instructions.
-*/

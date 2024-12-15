@@ -206,16 +206,6 @@ final class UserController: RouteCollection {
             }
         }
     }
-
-
-
-
-    /*
-     TODO: [X]
-     [] USER WITH TEAM LIST
-     [] USER WITH LIST OF ALL TICKETS
-     [] UPDATE CLEARANCE LEVEL
-     */
 }
 
 extension User: Mergeable {

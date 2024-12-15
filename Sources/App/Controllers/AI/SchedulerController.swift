@@ -10,6 +10,7 @@ struct TestJob: AsyncScheduledJob {
 }
 
 struct UnlockPlayerJob: AsyncScheduledJob {
+    
     func run(context: QueueContext) async throws {
         context.logger.info("Unlock Job is running.")
         print("Unlock Job is running.")
