@@ -28,7 +28,8 @@ func routes(_ app: Application) throws {
         TransferController(path: "transfers"),
         TransferSettingsController(path: "transferSettings"),
         StrafsenatController(path: "strafsenat"),
-        HomepageController(path: "client")
+        HomepageController(path: "client"),
+        ClientController(path: "webClient")
 ]
     
     app.get("status") { req async -> String in

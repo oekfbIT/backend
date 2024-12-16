@@ -209,3 +209,24 @@ struct Dress: Codable {
     let image: String
     let color: TrikotColor
 }
+
+extension Team {
+    func asPublicTeam() -> PublicTeam {
+        return PublicTeam(
+            id: self.id,
+            sid: self.sid,
+            leagueCode: self.leagueCode,
+            points: self.points,
+            logo: self.logo,
+            coverimg: self.coverimg,
+            teamName: self.teamName,
+            foundationYear: self.foundationYear,
+            membershipSince: self.membershipSince,
+            averageAge: self.averageAge,
+            coach: self.coach,
+            captain: self.captain,
+            trikot: self.trikot,
+            stats: nil
+        )
+    }
+}

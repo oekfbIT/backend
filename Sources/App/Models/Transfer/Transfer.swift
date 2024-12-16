@@ -118,3 +118,12 @@ extension TransferMigration: Migration {
 }
 
 
+struct PublicTransfer: Codable, Content {
+    let id: UUID?
+    let created: Date?
+    let playerName: String
+    let OldteamName: String
+    let NewteamName: String
+    let playerImage: String
+    let teamImage: String
+}
