@@ -41,9 +41,11 @@ public func configure(_ app: Application) throws {
 
     // Configure multiple allowed origins
     let allowedOrigins: [String] = [
+        "https://hompage-6jhdh.ondigitalocean.app/",
         "https://api.oekfb.eu",
         "http://api.oekfb.eu",
         "http://localhost",
+        "http://localhost:1234",
         "http://localhost:3000",
         "http://localhost:4000",
         "http://localhost:4001",
@@ -103,9 +105,9 @@ public func configure(_ app: Application) throws {
         allowCredentials: true
     )
 
+    app.middleware.use(corsMiddleware) // CORS should run first
     app.middleware.use(ErrorMiddleware.default(environment: app.environment))
-    app.middleware.use(corsMiddleware) // Move this after ErrorMiddleware
-    
+
     let firebaseManager = FirebaseManager(
         client: app.client,
         apiKey: "AIzaSyBHum43yMHxKE15ctAI54LSCmiJ-6uDI8I",
