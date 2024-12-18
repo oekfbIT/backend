@@ -76,12 +76,12 @@ final class TransferController: RouteCollection {
                         return req.eventLoop.makeFailedFuture(Abort(.notFound, reason: "Player not found."))
                     }
 
-                    // Update the player's team ID to the new team ID
-                    player.$team.id = newTransfer.team
-                    
                     // Set the transfer's origin to the player's current team
                     newTransfer.origin = player.$team.id
-                    
+
+                    // Update the player's team ID to the new team ID
+                    player.$team.id = newTransfer.team
+                                        
                     // Save the updated player and transfer
                     return player.save(on: req.db).flatMap { _ in
                         return newTransfer.save(on: req.db).map {

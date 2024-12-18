@@ -23,7 +23,6 @@ final class ClientController: RouteCollection {
         route.get("news", "league", ":code", use: fetchNews)
         route.get("news", "detail", ":id", use: fetchNewsItem)
         route.get("matches", "league", ":code", use: fetchFirstSeasonMatches)
-        route.get("news", "detail", ":id", use: fetchNewsItem)
         // First, define a route that fetches a single match by its ID and includes the events:
         route.get("match", "detail", ":id", use: fetchMatch)
         route.get("player", "detail", ":id", use: fetchPlayer)
@@ -381,7 +380,8 @@ final class ClientController: RouteCollection {
         return leaderboard
     }
 
-    // MARK: BLOCKED PLAYERS
+    
+// MARK: BLOCKED PLAYERS
     func blockedPlayers(req: Request) throws -> EventLoopFuture<[SperrItem]> {
         // Extract league code from the request parameters
         guard let leagueCode = req.parameters.get("code") else {
