@@ -290,8 +290,13 @@ final class ClientController: RouteCollection {
             return self.getAllMatchesForTeam(teamID: teamID, db: req.db)
         }
 
-        // Combine player details and upcoming matches
-        return playerFuture.and(upcomingMatchesFuture).map { (player, upcomingMatches) in
+        // Fetch player statistics
+        let playerStatsFuture: EventLoopFuture<PlayerStats> = self.getPlayerStats(playerID: playerID, db: req.db)
+
+        // Combine player details, stats, and upcoming matches
+        return playerFuture.and(upcomingMatchesFuture).and(playerStatsFuture).map { (playerAndMatches, stats) in
+            let (player, upcomingMatches) = playerAndMatches
+
             let publicPlayer = PublicPlayer(
                 id: player.id,
                 sid: player.sid,
@@ -308,7 +313,7 @@ final class ClientController: RouteCollection {
                 status: player.status,
                 isCaptain: player.isCaptain,
                 bank: player.bank,
-                stats: nil // Add stats if required
+                stats: stats // Include stats fetched from getPlayerStats
             )
 
             return PlayerDetailResponse(
@@ -318,6 +323,7 @@ final class ClientController: RouteCollection {
             )
         }
     }
+
     
     // MARK: LEADERBOARD
     func getGoalLeaderBoard(req: Request) -> EventLoopFuture<[LeaderBoard]> {

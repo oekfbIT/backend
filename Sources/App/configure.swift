@@ -41,6 +41,7 @@ public func configure(_ app: Application) throws {
 
     // Configure multiple allowed origins
     let allowedOrigins: [String] = [
+        "http://localhost:8081",
         "https://homepage-kbe6d.ondigitalocean.app",
         "https://api.oekfb.eu",
         "http://api.oekfb.eu",
