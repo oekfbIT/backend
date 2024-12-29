@@ -51,6 +51,7 @@ final class ClientController: RouteCollection {
     // MARK: League Selection
     func fetchTransfers(req: Request) throws -> EventLoopFuture<[Transfer]> {
         return Transfer.query(on: req.db)
+            .filter(\.$status == .angenommen)
             .filter(\.$originName != nil)
             .filter(\.$originImage != nil)
             .all()
