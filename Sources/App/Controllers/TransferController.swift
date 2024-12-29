@@ -47,6 +47,65 @@ final class TransferController: RouteCollection {
         try setupRoutes(on: routes)
     }
 
+    // Route to create a transfer and set its status to "warten"
+    func createTransfer(req: Request) -> EventLoopFuture<Transfer> {
+        do {
+            // Decode the incoming transfer data
+            let transfer = try req.content.decode(Transfer.self)
+
+            // Check for existing transfer with the same player and accepted status
+            return Transfer.query(on: req.db)
+                .filter(\.$player == transfer.player)
+                .group(.or) { group in
+                    group.filter(\.$status == .angenommen)
+                }
+                .first()
+                .flatMap { existingTransfer -> EventLoopFuture<Transfer> in
+                    if let _ = existingTransfer {
+                        // If an existing transfer is found, return a failed future
+                        return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Dieser Spieler wurde diese Saison schon einen Transfer gehabt."))
+                    } else {
+                        // No existing transfer found, proceed to create a new one
+                        return Player.find(transfer.player, on: req.db).flatMap { player -> EventLoopFuture<Transfer> in
+                            guard let player = player, let playerTeamID = player.$team.id else {
+                                return req.eventLoop.makeFailedFuture(Abort(.notFound, reason: "Player or player's current team not found."))
+                            }
+
+                            return Team.find(playerTeamID, on: req.db).flatMap { playerTeam -> EventLoopFuture<Transfer> in
+                                guard let playerTeam = playerTeam else {
+                                    return req.eventLoop.makeFailedFuture(Abort(.notFound, reason: "Player's current team details not found."))
+                                }
+
+                                // Set the origin fields to the player's current team
+                                var newTransfer = transfer
+                                newTransfer.status = .warten
+                                newTransfer.origin = playerTeam.id
+                                newTransfer.originName = playerTeam.teamName
+                                newTransfer.originImage = playerTeam.logo
+
+                                // Save the new transfer to the database
+                                return newTransfer.create(on: req.db).flatMap { _ -> EventLoopFuture<Transfer> in
+                                    if let recipientEmail = player.email {
+                                        do {
+                                            try self.emailcontroller.sendTransferRequest(req: req, recipient: recipientEmail, transfer: newTransfer)
+                                        } catch {
+                                            return req.eventLoop.makeFailedFuture(Abort(.internalServerError, reason: "Failed to send transfer email."))
+                                        }
+                                    } else {
+                                        return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Player does not have an email address."))
+                                    }
+
+                                    return req.eventLoop.makeSucceededFuture(newTransfer)
+                                }
+                            }
+                        }
+                    }
+                }
+        } catch {
+            return req.eventLoop.makeFailedFuture(error)
+        }
+    }
+    
     // Route to reject a transfer by ID
     func rejectTransfer(req: Request) -> EventLoopFuture<HTTPStatus> {
         return Transfer.find(req.parameters.get("id"), on: req.db).flatMap { transfer in
@@ -57,34 +116,38 @@ final class TransferController: RouteCollection {
             return transfer.save(on: req.db).transform(to: .ok)
         }
     }
-    
-    
+        
     func createTransferAdmin(req: Request) -> EventLoopFuture<Player> {
         do {
             // Decode the incoming transfer data
             let transfer = try req.content.decode(Transfer.self)
-            
+
             // Set the status to 'angenommen'
             var newTransfer = transfer
             newTransfer.status = .angenommen
 
             // Save the new transfer to the database
-            return newTransfer.create(on: req.db).flatMap { _ -> EventLoopFuture<Player> in
-                // Find the player associated with this transfer
-                return Player.find(newTransfer.player, on: req.db).flatMap { player -> EventLoopFuture<Player> in
-                    guard let player = player else {
-                        return req.eventLoop.makeFailedFuture(Abort(.notFound, reason: "Player not found."))
+            return Player.find(newTransfer.player, on: req.db).flatMap { player -> EventLoopFuture<Player> in
+                guard let player = player, let playerTeamID = player.$team.id else {
+                    return req.eventLoop.makeFailedFuture(Abort(.notFound, reason: "Player or player's current team not found."))
+                }
+
+                return Team.find(playerTeamID, on: req.db).flatMap { playerTeam -> EventLoopFuture<Player> in
+                    guard let playerTeam = playerTeam else {
+                        return req.eventLoop.makeFailedFuture(Abort(.notFound, reason: "Player's current team details not found."))
                     }
 
-                    // Set the transfer's origin to the player's current team
-                    newTransfer.origin = player.$team.id
+                    // Set the origin fields to the player's current team
+                    newTransfer.origin = playerTeam.id
+                    newTransfer.originName = playerTeam.teamName
+                    newTransfer.originImage = playerTeam.logo
 
                     // Update the player's team ID to the new team ID
                     player.$team.id = newTransfer.team
-                                        
+
                     // Save the updated player and transfer
                     return player.save(on: req.db).flatMap { _ in
-                        return newTransfer.save(on: req.db).map {
+                        return newTransfer.create(on: req.db).map {
                             player
                         }
                     }
@@ -94,61 +157,6 @@ final class TransferController: RouteCollection {
             return req.eventLoop.makeFailedFuture(error)
         }
     }
-
-    // Route to create a transfer and set its status to "warten"
-    func createTransfer(req: Request) -> EventLoopFuture<Transfer> {
-        do {
-            // Decode the incoming transfer data
-            let transfer = try req.content.decode(Transfer.self)
-            
-            // Check for existing transfer with the same player, team, and status
-            return Transfer.query(on: req.db)
-                .filter(\.$player == transfer.player)
-                .group(.or) { group in
-                    group.filter(\.$status == .angenommen)
-                }
-                .first()
-                .flatMap { existingTransfer -> EventLoopFuture<Transfer> in
-                    if let _ = existingTransfer {
-                        // If an existing transfer is found, return a failed future
-                        return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Dieser Spieler wurde diese saison schon einen Transfer gehabt."))
-                    } else {
-                        // No existing transfer found, proceed to create a new one
-                        var newTransfer = transfer
-                        newTransfer.status = .warten
-                        
-                        // Save the new transfer to the database
-                        return newTransfer.create(on: req.db).flatMap { _ -> EventLoopFuture<Transfer> in
-                            // Find the player associated with this transfer
-                            return Player.find(newTransfer.player, on: req.db).flatMap { player -> EventLoopFuture<Transfer> in
-                                guard let player = player else {
-                                    return req.eventLoop.makeFailedFuture(Abort(.notFound, reason: "Player not found."))
-                                }
-                                
-                                // Send email after the player is found
-                                if let recipientEmail = player.email {
-                                    do {
-                                        try self.emailcontroller.sendTransferRequest(req: req, recipient: recipientEmail, transfer: newTransfer)
-                                    } catch {
-                                        // Handle the error if email sending fails
-                                        return req.eventLoop.makeFailedFuture(Abort(.internalServerError, reason: "Failed to send transfer email."))
-                                    }
-                                } else {
-                                    // Handle the case where the player does not have an email
-                                    return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Player does not have an email address."))
-                                }
-
-                                // Return the saved transfer
-                                return req.eventLoop.makeSucceededFuture(newTransfer)
-                            }
-                        }
-                    }
-                }
-        } catch {
-            return req.eventLoop.makeFailedFuture(error)
-        }
-    }
-
 
     // Route to confirm a transfer
     func confirmTransfer(req: Request) -> EventLoopFuture<Player> {

@@ -21,6 +21,7 @@ final class ClientController: RouteCollection {
         route.get("clubs", "detail", ":id", use: fetchClub)
         route.get("table", "league", ":code", use: fetchtable)
         route.get("news", "league", ":code", use: fetchNews)
+        route.get("transfers", use: fetchTransfers)
         route.get("news", "detail", ":id", use: fetchNewsItem)
         route.get("matches", "league", ":code", use: fetchFirstSeasonMatches)
         // First, define a route that fetches a single match by its ID and includes the events:
@@ -46,7 +47,12 @@ final class ClientController: RouteCollection {
             )
         }
     }
-    
+
+    // MARK: League Selection
+    func fetchTransfers(req: Request) throws -> EventLoopFuture<[Transfer]> {
+        return Transfer.query(on: req.db).all()
+    }
+
     // MARK: Homepage
     func fetchHomepageData(req: Request) throws -> EventLoopFuture<HomepageResponse> {
         guard let leagueCode = req.parameters.get("code", as: String.self) else {

@@ -16,11 +16,14 @@ final class Transfer: Model, Content, Codable {
     @Timestamp(key: FieldKeys.created, on: .create) var created: Date?
 
     @OptionalField(key: FieldKeys.origin) var origin: UUID?
+    
     @Field(key: FieldKeys.playerName) var playerName: String
-    @Field(key: FieldKeys.teamName) var teamName: String
     @Field(key: FieldKeys.playerImage) var playerImage: String
+    @Field(key: FieldKeys.teamName) var teamName: String
     @Field(key: FieldKeys.teamImage) var teamImage: String
-
+    @OptionalField(key: FieldKeys.originName) var originName: String?
+    @OptionalField(key: FieldKeys.originImage) var originImage: String?
+    
     
     struct FieldKeys {
         static var id: FieldKey { "id" }
@@ -34,6 +37,8 @@ final class Transfer: Model, Content, Codable {
         static var teamName: FieldKey { "teamName"}
         static var playerImage: FieldKey { "playerImage"}
         static var teamImage: FieldKey { "teamImage"}
+        static var originName: FieldKey { "originName"}
+        static var originImage: FieldKey { "originImage"}
     }
 
     init() {}
@@ -45,21 +50,28 @@ final class Transfer: Model, Content, Codable {
         status: TransferStatus? = .warten,
         created: Date?,
         playerName: String,
-        teamName: String,
         playerImage: String,
+        teamName: String,
         teamImage: String,
-        origin: UUID?
+        origin: UUID?,
+        originName: String? = nil,
+        originImage: String? = nil
     ) {
         self.id = id
         self.team = team
         self.player = player
         self.status = status
         self.created = created
+        
         self.playerName = playerName
-        self.teamName = teamName
         self.playerImage = playerImage
+        
+        self.teamName = teamName
         self.teamImage = teamImage
+        
         self.origin = origin
+        self.originName = originName
+        self.originImage = originImage
     }
 }
 
@@ -74,6 +86,8 @@ extension Transfer {
         var teamName: String
         var playerImage: String
         var teamImage: String
+        var originName: String
+        var originImage: String
     }
 }
 
@@ -91,6 +105,8 @@ extension Transfer: Mergeable {
         merged.playerImage = other.playerImage
         merged.teamImage = other.teamImage
         merged.origin = other.origin
+        merged.originName = other.originName
+        merged.originImage = other.originImage
         return merged
     }
 }
