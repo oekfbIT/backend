@@ -586,16 +586,21 @@ extension ClientController {
                     }
 
                     for event in match.events {
-                        if let assign = event.assign {
-                            if (isHome && assign == .home) || (!isHome && assign == .away) {
-                                switch event.type {
-                                case .yellowCard:
-                                    stats.totalYellowCards += 1
-                                case .redCard:
-                                    stats.totalRedCards += 1
-                                default:
-                                    break
-                                }
+                        // Infer assign if it is nil
+                        let inferredAssign: MatchAssignment = (event.$player.id == match.$homeTeam.id) ? .home : .away
+
+                        // Use the inferred assign if `event.assign` is nil
+                        let assign = event.assign ?? inferredAssign
+
+                        // Update yellow/red card stats based on assign
+                        if (isHome && assign == .home) || (!isHome && assign == .away) {
+                            switch event.type {
+                            case .yellowCard:
+                                stats.totalYellowCards += 1
+                            case .redCard:
+                                stats.totalRedCards += 1
+                            default:
+                                break
                             }
                         }
                     }
@@ -604,7 +609,7 @@ extension ClientController {
                 return stats
             }
     }
-    
+
     /// Returns all matches for a given team (home or away) as PublicMatchShort
     func getAllMatchesForTeam(teamID: UUID, db: Database) -> EventLoopFuture<[PublicMatchShort]> {
         return Match.query(on: db)
