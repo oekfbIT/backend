@@ -50,7 +50,10 @@ final class ClientController: RouteCollection {
 
     // MARK: League Selection
     func fetchTransfers(req: Request) throws -> EventLoopFuture<[Transfer]> {
-        return Transfer.query(on: req.db).all()
+        return Transfer.query(on: req.db)
+            .filter(\.$originName != nil)
+            .filter(\.$originImage != nil)
+            .all()
     }
 
     // MARK: Homepage

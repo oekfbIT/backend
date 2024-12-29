@@ -121,9 +121,13 @@ extension TransferMigration: Migration {
             .field(Transfer.FieldKeys.status, .string, .required)
             .field(Transfer.FieldKeys.created, .string, .required)
             .field(Transfer.FieldKeys.playerName, .string, .required)
-            .field(Transfer.FieldKeys.teamName, .string, .required)
             .field(Transfer.FieldKeys.playerImage, .string, .required)
+            .field(Transfer.FieldKeys.teamName, .string, .required)
             .field(Transfer.FieldKeys.teamImage, .string, .required)
+            .field(Transfer.FieldKeys.origin, .string)
+            .field(Transfer.FieldKeys.originName, .string)
+            .field(Transfer.FieldKeys.originImage, .string)
+
             .field(Transfer.FieldKeys.origin, .string)
             .create()
     }
