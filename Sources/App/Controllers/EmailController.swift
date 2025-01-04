@@ -24,7 +24,7 @@ final class EmailController {
     let smtpConfig = SmtpServerConfiguration(
         hostname: "smtp.easyname.com",
         port: 587,  // Use port 587 for STARTTLS
-        signInMethod: .credentials(username: "admin@oekfb.eu", password: "Oekfb$2024"),
+        signInMethod: .credentials(username: "office@oekfb.eu", password: "Oekfb$2024"),
         secure: .startTls,
         helloMethod: .ehlo  // Use EHLO instead of HELO
     )
