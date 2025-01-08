@@ -628,7 +628,10 @@ final class HomepageController: RouteCollection {
                 name: playerData.name,
                 image: playerData.image,
                 number: playerData.number,
-                count: playerData.count.asDouble()
+                count: playerData.count.asDouble(),
+                teamimg: nil,
+                teamName: nil,
+                teamId: nil
             )
         }
 

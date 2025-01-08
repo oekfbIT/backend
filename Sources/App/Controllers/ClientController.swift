@@ -358,42 +358,66 @@ final class ClientController: RouteCollection {
             .with(\.$players)
             .all()
             .flatMap { teams in
-                let playerIDs = teams.flatMap { $0.players.compactMap { $0.id } }
-
+                // Build PlayerID -> (teamLogo, teamName, teamId)
+                var playerTeamDict: [UUID: (String?, String?, String?)] = [:]
+                for team in teams {
+                    let tIDString = team.id?.uuidString
+                    for player in team.players {
+                        if let pid = player.id {
+                            playerTeamDict[pid] = (team.logo, team.teamName, tIDString)
+                        }
+                    }
+                }
+                
+                let playerIDs = playerTeamDict.keys.map { $0 }
                 return MatchEvent.query(on: req.db)
                     .filter(\.$player.$id ~~ playerIDs)
                     .filter(\.$type == eventType)
                     .all()
                     .map { events in
-                        self.mapEventsToLeaderBoard(events)
+                        self.mapEventsToLeaderBoard(events, playerTeamDict: playerTeamDict)
                     }
             }
     }
-    
-    private func mapEventsToLeaderBoard(_ events: [MatchEvent]) -> [LeaderBoard] {
+
+    // 3) Supply the team info
+    private func mapEventsToLeaderBoard(
+        _ events: [MatchEvent],
+        playerTeamDict: [UUID: (String?, String?, String?)]
+    ) -> [LeaderBoard] {
+        
         var playerEventCounts: [UUID: (name: String?, image: String?, number: String?, count: Int)] = [:]
-
+        
         for event in events {
-            let playerId = event.$player.id
-            let playerInfo = (event.name, event.image, event.number)
-
-            if let existingCount = playerEventCounts[playerId]?.count {
-                playerEventCounts[playerId]?.count = existingCount + 1
+            let pid = event.$player.id
+            let info = (event.name, event.image, event.number)
+            
+            if let existing = playerEventCounts[pid] {
+                playerEventCounts[pid] = (
+                    existing.name,
+                    existing.image,
+                    existing.number,
+                    existing.count + 1
+                )
             } else {
-                playerEventCounts[playerId] = (playerInfo.0, playerInfo.1, playerInfo.2, 1)
+                playerEventCounts[pid] = (info.0, info.1, info.2, 1)
             }
         }
 
-        let leaderboard = playerEventCounts.map { (_, playerData) in
-            LeaderBoard(
-                name: playerData.name,
-                image: playerData.image,
-                number: playerData.number,
-                count: playerData.count.asDouble()
+        return playerEventCounts.compactMap { (playerId, data) in
+            let (teamImg, teamName, teamId) = playerTeamDict[playerId] ?? (nil, nil, nil)
+            
+            return LeaderBoard(
+                name: data.name,
+                image: data.image,
+                number: data.number,
+                count: Double(data.count),
+                teamimg: teamImg,
+                teamName: teamName,
+                teamId: teamId
             )
         }
-
-        return leaderboard
+        .sorted { ($0.count ?? 0) > ($1.count ?? 0) }
     }
 
     
@@ -744,10 +768,6 @@ struct MatchEventOutput: Content, Codable {
     var playerImage: String?
     var playerSid: String?
 }
-
-
-
-
 
 struct SperrItem: Codable, Content {
     let playerName: String?

@@ -229,52 +229,66 @@ final class LeagueController: RouteCollection {
             .with(\.$players)
             .all()
             .flatMap { teams in
-                let playerIDs = teams.flatMap { $0.players.compactMap { $0.id } }
+                // 1) Build the dictionary: PlayerID -> (teamLogo, teamName, teamIdString)
+                var playerTeamDict: [UUID: (String?, String?, String?)] = [:]
+                for team in teams {
+                    let teamIdString = team.id?.uuidString
+                    for player in team.players {
+                        if let pid = player.id {
+                            // Store whichever info you want from the team
+                            playerTeamDict[pid] = (team.logo, team.teamName, teamIdString)
+                        }
+                    }
+                }
+                
+                // 2) Collect all the player IDs so we only fetch relevant events
+                let playerIDs = playerTeamDict.keys.map { $0 }
 
+                // 3) Fetch all events (of eventType) for those players
                 return MatchEvent.query(on: req.db)
                     .filter(\.$player.$id ~~ playerIDs)
                     .filter(\.$type == eventType)
                     .all()
+                    // 4) Map them to your LeaderBoard objects, passing the dictionary
                     .map { events in
-                        self.mapEventsToLeaderBoard(events)
+                        self.mapEventsToLeaderBoard(events, playerTeamDict: playerTeamDict)
                     }
             }
     }
 
-    private func mapEventsToLeaderBoard(_ events: [MatchEvent]) -> [LeaderBoard] {
-        // MARK: - Aggregation Dictionary
-        // Using a dictionary keyed by player ID to count how many times a particular event occurred for that player.
+    private func mapEventsToLeaderBoard(_ events: [MatchEvent], playerTeamDict: [UUID: (String?, String?, String?)]) -> [LeaderBoard] {
         var playerEventCounts: [UUID: (name: String?, image: String?, number: String?, count: Int)] = [:]
 
-        // MARK: - Counting Events
-        // Iterate through each event and aggregate the counts based on the player ID.
         for event in events {
             let playerId = event.$player.id
             let playerInfo = (event.name, event.image, event.number)
-
-            // If the player is already in the dictionary, increment their count; otherwise, start at 1.
-            if let existingData = playerEventCounts[playerId] {
-                playerEventCounts[playerId] = (existingData.name, existingData.image, existingData.number, existingData.count + 1)
+            
+            if let existing = playerEventCounts[playerId] {
+                playerEventCounts[playerId] = (
+                    existing.name,
+                    existing.image,
+                    existing.number,
+                    existing.count + 1
+                )
             } else {
                 playerEventCounts[playerId] = (playerInfo.0, playerInfo.1, playerInfo.2, 1)
             }
         }
 
-        // MARK: - Building the Leaderboard Array
-        // Convert the dictionary into an array of LeaderBoard objects.
-        let leaderboard = playerEventCounts.map { (_, playerData) in
-            LeaderBoard(
-                name: playerData.name,
-                image: playerData.image,
-                number: playerData.number,
-                count: playerData.count.asDouble()
+        return playerEventCounts.map { (playerId, data) in
+            let (teamImg, teamName, teamId) = playerTeamDict[playerId] ?? (nil, nil, nil)
+            
+            return LeaderBoard(
+                name: data.name,
+                image: data.image,
+                number: data.number,
+                count: Double(data.count),
+                teamimg: teamImg,
+                teamName: teamName,
+                teamId: teamId
             )
         }
-        // Sort the leaderboard by event count in descending order.
-        .sorted { $0.count ?? 0 > $1.count ?? 0 }
-
-        // MARK: - Return the Final Leaderboard
-        return leaderboard
+        .sorted { ($0.count ?? 0) > ($1.count ?? 0) }
     }
 
 }
@@ -306,6 +320,10 @@ struct LeaderBoard: Codable, Content {
     let image: String?
     let number: String?
     let count: Double?
+    
+    let teamimg: String?
+    let teamName: String?
+    let teamId: String?
 }
 
 struct TeamStats: Content, Codable {
