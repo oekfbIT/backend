@@ -28,6 +28,7 @@ final class League: Model, Content, Codable {
     @OptionalField(key: FieldKeys.homepageData) var homepagedata: HomepageData?
     
     @OptionalField(key: FieldKeys.hourly) var hourly: Double?
+    @OptionalField(key: FieldKeys.youtube) var youtube: String?
     @OptionalField(key: FieldKeys.teamcount) var teamcount: Int?
     @Field(key: FieldKeys.name) var name: String
     @Children(for: \.$league) var teams: [Team]
@@ -41,17 +42,19 @@ final class League: Model, Content, Codable {
         static var code: FieldKey { "code" }
         static var name: FieldKey { "name" }
         static var homepageData: FieldKey { "homepageData" }
+        static var youtube: FieldKey { "youtube" }
     }
 
     init() {}
 
-    init(id: UUID? = nil, state: Bundesland?, teamcount: Int?, code: String, name: String, wochenbericht: String? = nil, homepagedata: HomepageData? = nil) {
+    init(id: UUID? = nil, state: Bundesland?, teamcount: Int?, code: String, name: String, wochenbericht: String? = nil, homepagedata: HomepageData? = nil, youtube: String? = nil) {
         self.id = id
         self.state = state
         self.code = code
         self.name = name
         self.teamcount = teamcount ?? 14
         self.homepagedata = homepagedata
+        self.youtube = youtube
     }
 }
 
@@ -65,6 +68,7 @@ extension League: Mergeable {
         merged.name = other.name
         merged.teamcount = other.teamcount
         merged.homepagedata = other.homepagedata
+        merged.youtube = other.youtube
         return merged
     }
 }
@@ -80,6 +84,7 @@ extension LeagueMigration: Migration {
             .field(League.FieldKeys.hourly, .double)
             .field(League.FieldKeys.teamcount, .int)
             .field(League.FieldKeys.homepageData, .json)
+            .field(League.FieldKeys.youtube, .string)
             .create()
     }
 
@@ -91,6 +96,7 @@ extension LeagueMigration: Migration {
 
 struct HomepageData: Codable {
     let wochenbericht: String
+    let youtubeLink: String?
     let sliderdata: [SliderData]
 }
 

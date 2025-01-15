@@ -63,28 +63,29 @@ final class ClientController: RouteCollection {
             throw Abort(.badRequest, reason: "Invalid or missing league code")
         }
         
-        let leagueFuture = fetchLeagueByCode(leagueCode, db: req.db)
+        let leagueFuture = fetchLeagueByCode(leagueCode, db: req.db) // Wrapped Value
         let teamsFuture = leagueFuture.flatMap { self.fetchTeams(for: $0, db: req.db) }
         let newsFuture = leagueFuture.flatMap { self.fetchLeagueNews(league: $0, code: leagueCode, db: req.db) }
         let seasonsFuture = leagueFuture.flatMap { self.fetchSeasons(for: $0, db: req.db) }
         
-        return teamsFuture.and(newsFuture).and(seasonsFuture).flatMap { result in
-            let (teams, newsItems, seasons) = (result.0.0, result.0.1, result.1)
-            let upcomingMatches = self.getUpcomingMatchesWithinNext7Days(from: seasons)
-            let upcomingMatchesShort = self.mapMatchesToShort(upcomingMatches)
-            let publicTeams = self.mapTeamsToPublic(teams)
-            
-            return leagueFuture.map { league in
-                HomepageResponse(
+        return leagueFuture.flatMap { league in
+            teamsFuture.and(newsFuture).and(seasonsFuture).map { result in
+                let (teams, newsItems, seasons) = (result.0.0, result.0.1, result.1)
+                let upcomingMatches = self.getUpcomingMatchesWithinNext7Days(from: seasons)
+                let upcomingMatchesShort = self.mapMatchesToShort(upcomingMatches)
+                let publicTeams = self.mapTeamsToPublic(teams)
+                
+                return HomepageResponse(
                     data: league.homepagedata,
                     teams: publicTeams,
                     news: newsItems,
-                    upcoming: upcomingMatchesShort
+                    upcoming: upcomingMatchesShort,
+                    league: league // Pass the actual league object here
                 )
             }
         }
     }
-    
+
     // MARK: Club
     func fetchLeagueClubs(req: Request) throws -> EventLoopFuture<[PublicTeamShort]> {
         guard let leagueCode = req.parameters.get("code", as: String.self) else {
@@ -730,6 +731,7 @@ struct HomepageResponse: Codable, Content {
     var teams: [PublicTeamShort]?
     var news: [NewsItem]?
     var upcoming: [PublicMatchShort]?
+    let league: League?
 }
 
 struct ClubDetailResponse: Codable, Content {
