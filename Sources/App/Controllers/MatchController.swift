@@ -37,6 +37,8 @@ final class MatchController: RouteCollection {
         let route = app.grouped(PathComponent(stringLiteral: repository.path))
 
         route.post(use: repository.create)
+        route.post("create", "internal", use: createInternal)
+        
         route.post("batch", use: repository.createBatch)
         route.get("livescore",use: getLiveScore)
 
@@ -788,6 +790,74 @@ final class MatchController: RouteCollection {
             }
     }
 
+}
+
+
+extension MatchController {
+    
+    func createInternal(req: Request) throws -> EventLoopFuture<Match> {
+        struct CreateInternalMatchRequest: Content {
+            let homeTeamId: UUID
+            let awayTeamId: UUID
+            let gameday: Int
+            let seasonId: UUID
+        }
+        
+        // Decode request body
+        let createRequest = try req.content.decode(CreateInternalMatchRequest.self)
+        
+        // Fetch the teams and the season
+        let homeTeamFuture = Team.find(createRequest.homeTeamId, on: req.db).unwrap(or: Abort(.notFound, reason: "Home team not found."))
+        let awayTeamFuture = Team.find(createRequest.awayTeamId, on: req.db).unwrap(or: Abort(.notFound, reason: "Away team not found."))
+        let seasonFuture = Season.find(createRequest.seasonId, on: req.db).unwrap(or: Abort(.notFound, reason: "Season not found."))
+        
+        return homeTeamFuture.and(awayTeamFuture).and(seasonFuture).flatMap { (teams, season) in
+            let (homeTeam, awayTeam) = teams
+            
+            // Create default MatchDetails
+            let details = MatchDetails(
+                gameday: createRequest.gameday,
+                date: nil,
+                stadium: nil,
+                location: "Nicht Zugeordnet"
+            )
+            
+            // Create Blankett for home and away teams
+            let homeBlanket = Blankett(
+                name: homeTeam.teamName,
+                dress: homeTeam.trikot.home,
+                logo: homeTeam.logo,
+                players: [],
+                coach: homeTeam.coach
+            )
+            
+            let awayBlanket = Blankett(
+                name: awayTeam.teamName,
+                dress: awayTeam.trikot.away,
+                logo: awayTeam.logo,
+                players: [],
+                coach: awayTeam.coach
+            )
+            
+            // Create the Match instance
+            let match = Match(
+                details: details,
+                homeTeamId: homeTeam.id!,
+                awayTeamId: awayTeam.id!,
+                homeBlanket: homeBlanket,
+                awayBlanket: awayBlanket,
+                score: Score(home: 0, away: 0),
+                status: .pending
+            )
+            
+            match.$season.id = season.id
+            
+            // Save the match to the database
+            return match.create(on: req.db).map { match }
+        }
+    }
+    
+    
 }
 
 struct AddPlayersRequest: Content {
