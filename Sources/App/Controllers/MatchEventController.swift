@@ -1,4 +1,5 @@
 import Vapor
+import Fluent
 
 final class MatchEventController: RouteCollection {
     let repository: StandardControllerRepository<MatchEvent>
@@ -19,10 +20,43 @@ final class MatchEventController: RouteCollection {
 
         route.patch(":id", use: repository.updateID)
         route.patch("batch", use: repository.updateBatch)
+        route.get("player", ":playerId", use: getPlayerEventsSummary) // New route for player events
+
     }
 
     func boot(routes: RoutesBuilder) throws {
         try setupRoutes(on: routes)
+    }
+
+    struct MatchEventSummary: Content {
+        let goalCount: Int
+        let redCardCount: Int
+        let yellowCardCount: Int
+        let yellowRedCardCount: Int
+    }
+
+    func getPlayerEventsSummary(req: Request) throws -> EventLoopFuture<MatchEventSummary> {
+        // Extract the player's UUID from the request parameters
+        let playerId = try req.parameters.require("playerId", as: UUID.self)
+
+        // Query the database to find all events associated with the player
+        return MatchEvent.query(on: req.db)
+            .filter(\.$player.$id == playerId)
+            .all()
+            .map { events in
+                // Count events by type
+                let goalCount = events.filter { $0.type == .goal }.count
+                let redCardCount = events.filter { $0.type == .redCard }.count
+                let yellowCardCount = events.filter { $0.type == .yellowCard }.count
+                let yellowRedCardCount = events.filter { $0.type == .yellowRedCard }.count
+
+                return MatchEventSummary(
+                    goalCount: goalCount,
+                    redCardCount: redCardCount,
+                    yellowCardCount: yellowCardCount,
+                    yellowRedCardCount: yellowRedCardCount
+                )
+            }
     }
 
     // Custom delete function to handle event deletion and score/card adjustment
