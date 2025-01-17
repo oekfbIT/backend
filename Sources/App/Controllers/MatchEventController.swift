@@ -33,6 +33,8 @@ final class MatchEventController: RouteCollection {
         let redCardCount: Int
         let yellowCardCount: Int
         let yellowRedCardCount: Int
+        let totalAppearances: Int
+        let totalMatches: Int
     }
 
     func getPlayerEventsSummary(req: Request) throws -> EventLoopFuture<MatchEventSummary> {
@@ -43,19 +45,34 @@ final class MatchEventController: RouteCollection {
         return MatchEvent.query(on: req.db)
             .filter(\.$player.$id == playerId)
             .all()
-            .map { events in
-                // Count events by type
-                let goalCount = events.filter { $0.type == .goal }.count
-                let redCardCount = events.filter { $0.type == .redCard }.count
-                let yellowCardCount = events.filter { $0.type == .yellowCard }.count
-                let yellowRedCardCount = events.filter { $0.type == .yellowRedCard }.count
+            .flatMap { events in
+                // Extract unique match IDs from the events
+                let matchIds = events.map { $0.$match.id }.compactMap { $0 }
+                
+                // Query the database to find all matches for the player
+                return Match.query(on: req.db)
+                    .filter(\.$id ~~ matchIds)
+                    .all()
+                    .map { matches in
+                        // Count events by type
+                        let goalCount = events.filter { $0.type == .goal }.count
+                        let redCardCount = events.filter { $0.type == .redCard }.count
+                        let yellowCardCount = events.filter { $0.type == .yellowCard }.count
+                        let yellowRedCardCount = events.filter { $0.type == .yellowRedCard }.count
 
-                return MatchEventSummary(
-                    goalCount: goalCount,
-                    redCardCount: redCardCount,
-                    yellowCardCount: yellowCardCount,
-                    yellowRedCardCount: yellowRedCardCount
-                )
+                        // Total appearances and matches
+                        let totalAppearances = events.count
+                        let totalMatches = matches.count
+
+                        return MatchEventSummary(
+                            goalCount: goalCount,
+                            redCardCount: redCardCount,
+                            yellowCardCount: yellowCardCount,
+                            yellowRedCardCount: yellowRedCardCount,
+                            totalAppearances: totalAppearances,
+                            totalMatches: totalMatches
+                        )
+                    }
             }
     }
 
@@ -94,7 +111,6 @@ final class MatchEventController: RouteCollection {
             }
     }
 
-    // Helper function to update the match score after removing a goal event
     // Helper function to update the match score after removing a goal event
     private func updateScoreForGoalRemoval(event: MatchEvent, match: Match, req: Request) -> EventLoopFuture<Void> {
         guard let assign = event.assign else {
