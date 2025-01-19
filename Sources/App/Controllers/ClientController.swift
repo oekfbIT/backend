@@ -553,31 +553,42 @@ extension ClientController {
 // MARK: - Stats & Matches Utilities
 extension ClientController {
     func getPlayerStats(playerID: UUID, db: Database) -> EventLoopFuture<PlayerStats> {
-        return MatchEvent.query(on: db)
-            .filter(\.$player.$id == playerID)
-            .all()
-            .map { events in
-                var stats = PlayerStats(matchesPlayed: 0, goalsScored: 0, redCards: 0, yellowCards: 0, yellowRedCrd: 0)
-                var matchSet = Set<UUID>()
-                for event in events {
-                    matchSet.insert(event.$match.id)
-                    switch event.type {
-                    case .goal:
-                        stats.goalsScored += 1
-                    case .redCard:
-                        stats.redCards += 1
-                    case .yellowCard:
-                        stats.yellowCards += 1
-                    case .yellowRedCard:
-                        stats.yellowRedCrd += 1
-                    default:
-                        break
+        
+        // 1) All match events for this player (to count goal/card types)
+                let eventsFuture = MatchEvent.query(on: db)
+                    .filter(\.$player.$id == playerID)
+                    .all()
+                
+                // 2) All matches where the player appears in either homeBlanket or awayBlanket
+                let matchesFuture = Match.query(on: db)
+                    .all()
+                    .map { matches in
+                        matches.filter { match in
+                            let homeContains = match.homeBlanket?.players.contains { $0.id == playerID } ?? false
+                            let awayContains = match.awayBlanket?.players.contains { $0.id == playerID } ?? false
+                            return homeContains || awayContains
+                        }
                     }
-                }
-                stats.matchesPlayed = matchSet.count
-                return stats
+                
+                // Combine the two and calculate the summary
+                return eventsFuture.and(matchesFuture).map { (events, relevantMatches) in
+                    let goalCount = events.filter { $0.type == .goal }.count
+                    let redCardCount = events.filter { $0.type == .redCard }.count
+                    let yellowCardCount = events.filter { $0.type == .yellowCard }.count
+                    let yellowRedCardCount = events.filter { $0.type == .yellowRedCard }.count
+                    
+                    // Both totalAppearances and totalMatches come from the
+                    // blanket-based match count as requested:
+                    let totalMatches = relevantMatches.count
+                    let totalAppearances = relevantMatches.count
+                    
+                    return PlayerStats(matchesPlayed: totalMatches,
+                                           goalsScored: goalCount,
+                                           redCards: redCardCount,
+                                           yellowCards: yellowCardCount,
+                                           yellowRedCrd: yellowRedCardCount)
+                    }
             }
-    }
 
     func getTeamStats(teamID: UUID, db: Database) -> EventLoopFuture<TeamStats> {
         let validStatuses: [GameStatus] = [.completed, .abbgebrochen, .submitted, .cancelled, .done]
