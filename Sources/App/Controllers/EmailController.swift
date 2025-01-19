@@ -37,7 +37,7 @@ final class EmailController {
         print("SMTP Configuration: \(req.application.smtp.configuration)")
 
         let email = try Email(
-            from: EmailAddress(address: "admin@oekfb.eu", name: "Admin"),
+            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
             to: [EmailAddress(address: "alon.yakoby@gmail.com", name: "Alon Yakoby")],
             subject: "Test Email",
             body: "This is a test email sent from Vapor application."
@@ -70,7 +70,7 @@ final class EmailController {
         """
 
         let email = try Email(
-            from: EmailAddress(address: "admin@oekfb.eu", name: "Admin"),
+            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
             to: [EmailAddress(address: recipient)],
             subject: "Registration Details",
             body: emailBody
@@ -121,7 +121,7 @@ final class EmailController {
         """
 
         let email = try Email(
-            from: EmailAddress(address: "admin@oekfb.eu", name: "Admin"),
+            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
             to: [EmailAddress(address: recipient)],
             subject: "OEKFB Anmeldung - Willkommen",
             body: emailBody,
@@ -200,7 +200,7 @@ final class EmailController {
 
         // Creating the email object
         let email = try Email(
-            from: EmailAddress(address: "admin@oekfb.eu", name: "Admin"),
+            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
             to: [EmailAddress(address: recipient)],
             subject: "OEKFB Anmeldung - Zahlungsanforderung",
             body: emailBody,
@@ -247,7 +247,7 @@ final class EmailController {
         """
 
         let email = try Email(
-            from: EmailAddress(address: "admin@oekfb.eu", name: "Admin"),
+            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
             to: [EmailAddress(address: recipient)],
             subject: "OEKFB Anmeldung - Willkommen",
             body: emailBody
@@ -289,7 +289,7 @@ final class EmailController {
         """
 
         let email = try Email(
-            from: EmailAddress(address: "admin@oekfb.eu", name: "Admin"),
+            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
             to: [EmailAddress(address: recipient)],
             subject: "OEKFB Anmeldung - Willkommen",
             body: emailBody
@@ -330,7 +330,7 @@ final class EmailController {
         """
 
         let email = try Email(
-            from: EmailAddress(address: "admin@oekfb.eu", name: "Admin"),
+            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
             to: [EmailAddress(address: recipient)],
             subject: "OEKFB Anmeldung - Mannschaft Login Daten",
             body: emailBody
@@ -416,7 +416,7 @@ final class EmailController {
         """
 
         let email = try Email(
-            from: EmailAddress(address: "admin@oekfb.eu", name: "Admin"),
+            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
             to: [EmailAddress(address: recipient)],
             subject: "OEKFB Spieleranmeldung: \(player.sid)",
             body: emailBody,
@@ -465,7 +465,7 @@ final class EmailController {
         """
 
         let email = try Email(
-            from: EmailAddress(address: "admin@oekfb.eu", name: "Admin"),
+            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
             to: [EmailAddress(address: recipient)],
             subject: "OEKFB Anmeldung - Transfer Anfrage",
             body: emailBody,
