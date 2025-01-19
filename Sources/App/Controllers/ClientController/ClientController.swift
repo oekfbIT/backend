@@ -114,23 +114,42 @@ final class ClientController: RouteCollection {
         
         let teamFuture = fetchTeam(byID: teamID, db: req.db)
         let leagueFuture = teamFuture.flatMap { self.fetchLeagueForTeam($0, db: req.db) }
-        let playersFuture = teamFuture.flatMap { self.fetchPlayers(for: $0, db: req.db) }
-        let playerStatsFuture = playersFuture.flatMap { self.fetchAllPlayerStats($0, db: req.db) }
+        let playersFuture = teamFuture
+            .flatMap { self.fetchPlayers(for: $0, db: req.db) }
+            .map { players in
+                players.map { player in
+                    MiniPlayer(
+                        id: player.id,
+                        sid: player.sid,
+                        image: player.image,
+                        team_oeid: player.team_oeid,
+                        name: player.name,
+                        number: player.number,
+                        birthday: player.birthday,
+                        nationality: player.nationality,
+                        position: player.position,
+                        eligibility: player.eligibility,
+                        registerDate: player.registerDate,
+                        status: player.status,
+                        isCaptain: player.isCaptain,
+                        bank: player.bank
+                    )
+                }
+            }
         let teamStatsFuture = teamFuture.flatMap { self.getTeamStats(teamID: $0.id!, db: req.db) }
         let upcomingMatchesFuture = teamFuture.flatMap { self.getAllMatchesForTeam(teamID: $0.id!, db: req.db) }
         let newsFuture = teamFuture.and(leagueFuture).flatMap { (team, league) in
             self.fetchTeamAndLeagueNews(teamName: team.teamName, leagueCode: league?.code, db: req.db)
         }
-        
+
         return teamFuture
             .and(leagueFuture)
             .and(playersFuture)
-            .and(playerStatsFuture)
             .and(teamStatsFuture)
             .and(upcomingMatchesFuture)
             .and(newsFuture)
             .map { result in
-                let ((((((team, league), players), publicPlayers), teamStats), upcomingMatches), news) = result
+                let (((((team, league), players), teamStats), upcomingMatches), news) = result
                 
                 let club = PublicTeamFull(
                     id: team.id,
@@ -146,7 +165,7 @@ final class ClientController: RouteCollection {
                     coach: team.coach,
                     captain: team.captain,
                     trikot: team.trikot,
-                    players: publicPlayers,
+                    players: players, // Mapped MiniPlayer array
                     stats: teamStats
                 )
                 
@@ -157,7 +176,7 @@ final class ClientController: RouteCollection {
                 )
             }
     }
-    
+
     // MARK: Table
     func fetchtable(req: Request) -> EventLoopFuture<[TableItem]> {
         
@@ -458,336 +477,4 @@ final class ClientController: RouteCollection {
             }
     }
 
-}
-
-// MARK: - Helper Fetch Methods (DB Calls)
-extension ClientController {
-    func fetchLeagueByCode(_ code: String, db: Database) -> EventLoopFuture<League> {
-        League.query(on: db)
-            .filter(\.$code == code)
-            .first()
-            .unwrap(or: Abort(.notFound, reason: "League not found"))
-    }
-
-    func fetchTeams(for league: League, db: Database) -> EventLoopFuture<[Team]> {
-        league.$teams.query(on: db)
-            .with(\.$players)
-            .all()
-    }
-
-    func fetchLeagueNews(league: League, code: String, db: Database) -> EventLoopFuture<[NewsItem]> {
-        NewsItem.query(on: db)
-            .group(.or) { group in
-                group.filter(\NewsItem.$tag == code)
-                group.filter(\NewsItem.$tag == "Alle")
-            }
-            .all()
-    }
-
-    func fetchSeasons(for league: League, db: Database) -> EventLoopFuture<[Season]> {
-        league.$seasons.query(on: db)
-            .with(\.$matches) { match in
-                match.with(\.$homeTeam)
-                     .with(\.$awayTeam)
-            }
-            .all()
-    }
-
-    func fetchTeam(byID teamID: UUID, db: Database) -> EventLoopFuture<Team> {
-        Team.find(teamID, on: db)
-            .unwrap(or: Abort(.notFound, reason: "Team not found"))
-    }
-
-    func fetchLeagueForTeam(_ team: Team, db: Database) -> EventLoopFuture<League?> {
-        team.$league.get(on: db)
-    }
-
-    func fetchPlayers(for team: Team, db: Database) -> EventLoopFuture<[Player]> {
-        team.$players.query(on: db).all()
-    }
-
-    func fetchAllPlayerStats(_ players: [Player], db: Database) -> EventLoopFuture<[PublicPlayer]> {
-        let futures = players.map { player in
-            self.getPlayerStats(playerID: player.id!, db: db).map { stats in
-                PublicPlayer(
-                    id: player.id,
-                    sid: player.sid,
-                    image: player.image,
-                    team_oeid: player.team_oeid,
-                    name: player.name,
-                    number: player.number,
-                    birthday: player.birthday,
-                    team: nil,
-                    nationality: player.nationality,
-                    position: player.position,
-                    eligibility: player.eligibility,
-                    registerDate: player.registerDate,
-                    status: player.status,
-                    isCaptain: player.isCaptain,
-                    bank: player.bank,
-                    stats: stats
-                )
-            }
-        }
-        return db.eventLoop.flatten(futures)
-    }
-
-    func fetchTeamAndLeagueNews(teamName: String, leagueCode: String?, db: Database) -> EventLoopFuture<[NewsItem]> {
-        let teamNewsFuture = fetchRelatedNewsItems(term: leagueCode ?? "", db: db)
-        let leagueNewsFuture = (leagueCode ?? "").isEmpty ? db.eventLoop.future([]) : fetchRelatedNewsItems(term: leagueCode!, db: db)
-        return teamNewsFuture.and(leagueNewsFuture).map { teamNews, leagueNews in
-            teamNews + leagueNews
-        }
-    }
-
-    func fetchRelatedNewsItems(term: String, db: Database) -> EventLoopFuture<[NewsItem]> {
-        NewsItem.query(on: db)
-            .group(.or) { group in
-                group.filter(\NewsItem.$tag == term)
-                group.filter(\NewsItem.$tag == "Alle")
-            }
-            .all()
-    }
-}
-
-// MARK: - Stats & Matches Utilities
-extension ClientController {
-    func getPlayerStats(playerID: UUID, db: Database) -> EventLoopFuture<PlayerStats> {
-        
-        // 1) All match events for this player (to count goal/card types)
-                let eventsFuture = MatchEvent.query(on: db)
-                    .filter(\.$player.$id == playerID)
-                    .all()
-                
-                // 2) All matches where the player appears in either homeBlanket or awayBlanket
-                let matchesFuture = Match.query(on: db)
-                    .all()
-                    .map { matches in
-                        matches.filter { match in
-                            let homeContains = match.homeBlanket?.players.contains { $0.id == playerID } ?? false
-                            let awayContains = match.awayBlanket?.players.contains { $0.id == playerID } ?? false
-                            return homeContains || awayContains
-                        }
-                    }
-                
-                // Combine the two and calculate the summary
-                return eventsFuture.and(matchesFuture).map { (events, relevantMatches) in
-                    let goalCount = events.filter { $0.type == .goal }.count
-                    let redCardCount = events.filter { $0.type == .redCard }.count
-                    let yellowCardCount = events.filter { $0.type == .yellowCard }.count
-                    let yellowRedCardCount = events.filter { $0.type == .yellowRedCard }.count
-                    
-                    // Both totalAppearances and totalMatches come from the
-                    // blanket-based match count as requested:
-                    let totalMatches = relevantMatches.count
-                    let totalAppearances = relevantMatches.count
-                    
-                    return PlayerStats(matchesPlayed: totalMatches,
-                                           goalsScored: goalCount,
-                                           redCards: redCardCount,
-                                           yellowCards: yellowCardCount,
-                                           yellowRedCrd: yellowRedCardCount)
-                    }
-            }
-
-    func getTeamStats(teamID: UUID, db: Database) -> EventLoopFuture<TeamStats> {
-        let validStatuses: [GameStatus] = [.completed, .abbgebrochen, .submitted, .cancelled, .done]
-
-        return Match.query(on: db)
-            .group(.or) { group in
-                group.filter(\.$homeTeam.$id == teamID)
-                group.filter(\.$awayTeam.$id == teamID)
-            }
-            .filter(\.$status ~~ validStatuses)
-            .with(\.$events)
-            .all()
-            .map { matches in
-                var stats = TeamStats(
-                    wins: 0,
-                    draws: 0,
-                    losses: 0,
-                    totalScored: 0,
-                    totalAgainst: 0,
-                    goalDifference: 0,
-                    totalPoints: 0,
-                    totalYellowCards: 0,
-                    totalRedCards: 0
-                )
-
-                for match in matches {
-                    let isHome = match.$homeTeam.id == teamID
-                    let scored = isHome ? match.score.home : match.score.away
-                    let against = isHome ? match.score.away : match.score.home
-                    stats.totalScored += scored
-                    stats.totalAgainst += against
-
-                    if scored > against {
-                        stats.wins += 1
-                        stats.totalPoints += 3
-                    } else if scored == against {
-                        stats.draws += 1
-                        stats.totalPoints += 1
-                    } else {
-                        stats.losses += 1
-                    }
-
-                    for event in match.events {
-                        // Infer assign if it is nil
-                        let inferredAssign: MatchAssignment = (event.$player.id == match.$homeTeam.id) ? .home : .away
-
-                        // Use the inferred assign if `event.assign` is nil
-                        let assign = event.assign ?? inferredAssign
-
-                        // Update yellow/red card stats based on assign
-                        if (isHome && assign == .home) || (!isHome && assign == .away) {
-                            switch event.type {
-                            case .yellowCard:
-                                stats.totalYellowCards += 1
-                            case .redCard:
-                                stats.totalRedCards += 1
-                            default:
-                                break
-                            }
-                        }
-                    }
-                }
-                stats.goalDifference = stats.totalScored - stats.totalAgainst
-                return stats
-            }
-    }
-
-    /// Returns all matches for a given team (home or away) as PublicMatchShort
-    func getAllMatchesForTeam(teamID: UUID, db: Database) -> EventLoopFuture<[PublicMatchShort]> {
-        return Match.query(on: db)
-            .group(.or) { group in
-                group.filter(\.$homeTeam.$id == teamID)
-                group.filter(\.$awayTeam.$id == teamID)
-            }
-            .with(\.$homeTeam)
-            .with(\.$awayTeam)
-            .with(\.$events)
-            .all()
-            .map { matches in
-                matches.map { match in
-                    PublicMatchShort(
-                        id: match.id,
-                        details: match.details,
-                        homeBlanket: MiniBlankett(
-                            id: match.$homeTeam.id,
-                            logo: match.homeBlanket?.logo,
-                            name: match.homeBlanket?.name
-                        ),
-                        awayBlanket: MiniBlankett(
-                            id: match.$awayTeam.id,
-                            logo: match.awayBlanket?.logo,
-                            name: match.awayBlanket?.name
-                        ),
-                        score: match.score,
-                        status: match.status
-                    )
-                }
-            }
-    }
-
-    // MARK: Upcoming Matches Helper
-    private func getUpcomingMatchesWithinNext7Days(from seasons: [Season]) -> [Match] {
-        let allMatches = seasons.flatMap { $0.matches }
-        let now = Date()
-        guard let nextWeek = Calendar.current.date(byAdding: .day, value: 7, to: now) else { return [] }
-
-        return allMatches.filter { match in
-            guard let matchDate = match.details.date else { return false }
-            return matchDate >= now && matchDate <= nextWeek
-        }
-    }
-
-    // MARK: Helper Mapping
-    private func mapTeamsToPublic(_ teams: [Team]) -> [PublicTeamShort] {
-        return teams.map { team in
-            PublicTeamShort(
-                id: team.id,
-                sid: team.sid,
-                logo: team.logo,
-                teamName: team.teamName
-            )
-        }
-    }
-
-    private func mapMatchesToShort(_ matches: [Match]) -> [PublicMatchShort] {
-        return matches.map { match in
-            PublicMatchShort(
-                id: match.id,
-                details: match.details,
-                homeBlanket: MiniBlankett(
-                    id: match.$homeTeam.id,
-                    logo: match.homeBlanket?.logo,
-                    name: match.homeBlanket?.name
-                ),
-                awayBlanket: MiniBlankett(
-                    id: match.$awayTeam.id,
-                    logo: match.awayBlanket?.logo,
-                    name: match.awayBlanket?.name
-                ),
-                score: match.score,
-                status: match.status
-            )
-        }
-    }
-
-}
-
-// MARK: - Response Structures
-struct HomepageResponse: Codable, Content {
-    var data: HomepageData?
-    var teams: [PublicTeamShort]?
-    var news: [NewsItem]?
-    var upcoming: [PublicMatchShort]?
-    let league: League?
-}
-
-struct ClubDetailResponse: Codable, Content {
-    let club: PublicTeamFull
-    var upcoming: [PublicMatchShort]?
-    var news: [NewsItem]?
-}
-
-struct PlayerDetailResponse: Codable, Content {
-    let player: PublicPlayer
-    var upcoming: [PublicMatchShort]?
-    var news: [NewsItem]?
-}
-
-struct TableResponse: Codable, Content {}
-struct NewsResponse: Codable, Content {}
-struct NewsDetailResponse: Codable, Content {}
-
-struct RegistrationRequest: Codable, Content {}
-
-// Define a structure to represent the match events publicly:
-struct MatchEventOutput: Content, Codable {
-    var id: UUID?
-    var type: MatchEventType
-    var minute: Int
-    var name: String?
-    var image: String?
-    var number: String?
-    var assign: MatchAssignment?
-    var ownGoal: Bool?
-
-    // Player info from the event
-    var playerID: UUID?
-    var playerName: String?
-    var playerNumber: Int?
-    var playerImage: String?
-    var playerSid: String?
-}
-
-struct SperrItem: Codable, Content {
-    let playerName: String?
-    let playerImage: String?
-    let playerSid: String?
-    let teamName: String?
-    let teamImage: String?
-    let teamSid: String?
-    let blockdate: Date?
 }

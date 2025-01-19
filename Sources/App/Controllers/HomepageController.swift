@@ -193,7 +193,7 @@ final class HomepageController: RouteCollection {
                     // Fetch stats for each player and the team
                     let playerStatsFutures = players.map { player in
                         self.getPlayerStats(playerID: player.id!, db: req.db).map { stats in
-                            PublicPlayer(
+                            MiniPlayer(
                                 id: player.id,
                                 sid: player.sid,
                                 image: player.image,
@@ -201,15 +201,13 @@ final class HomepageController: RouteCollection {
                                 name: player.name,
                                 number: player.number,
                                 birthday: player.birthday,
-                                team: nil,
                                 nationality: player.nationality,
                                 position: player.position,
                                 eligibility: player.eligibility,
                                 registerDate: player.registerDate,
                                 status: player.status,
                                 isCaptain: player.isCaptain,
-                                bank: player.bank,
-                                stats: stats
+                                bank: player.bank
                             )
                         }
                     }
@@ -696,8 +694,45 @@ struct PublicTeamFull: Content, Codable {
     var coach: Trainer?
     var captain: String?
     var trikot: Trikot
-    var players: [PublicPlayer]
+    var players: [MiniPlayer]
     var stats: TeamStats?
+}
+
+struct MiniPlayer: Content, Codable {
+    var id: UUID?
+    var sid: String
+    var image: String?
+    var team_oeid: String?
+    var name: String
+    var number: String
+    var birthday: String
+    var nationality: String
+    var position: String
+    var eligibility: PlayerEligibility
+    var registerDate: String
+    var status: Bool?
+    var isCaptain: Bool?
+    var bank: Bool?
+}
+
+
+struct PublicPlayer: Content, Codable {
+    var id: UUID?
+    var sid: String
+    var image: String?
+    var team_oeid: String?
+    var name: String
+    var number: String
+    var birthday: String
+    var team: PublicTeam?
+    var nationality: String
+    var position: String
+    var eligibility: PlayerEligibility
+    var registerDate: String
+    var status: Bool?
+    var isCaptain: Bool?
+    var bank: Bool?
+    var stats: PlayerStats?
 }
 
 
@@ -732,25 +767,6 @@ struct MiniBlankett: Codable {
     let id: UUID?
     let logo: String?
     let name: String?
-}
-
-struct PublicPlayer: Content, Codable {
-    var id: UUID?
-    var sid: String
-    var image: String?
-    var team_oeid: String?
-    var name: String
-    var number: String
-    var birthday: String
-    var team: PublicTeam?
-    var nationality: String
-    var position: String
-    var eligibility: PlayerEligibility
-    var registerDate: String
-    var status: Bool?
-    var isCaptain: Bool?
-    var bank: Bool?
-    var stats: PlayerStats?
 }
 
 struct PlayerStats: Content, Codable {
