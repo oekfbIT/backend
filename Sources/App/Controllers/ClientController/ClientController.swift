@@ -447,8 +447,8 @@ final class ClientController: RouteCollection {
         guard let leagueCode = req.parameters.get("code") else {
             throw Abort(.badRequest, reason: "League code is required")
         }
-        
-        // Query to fetch players with blockdate not nil and in the specified league
+
+        // Query to fetch players with blockdate in the future and eligibility "Gesperrt"
         return League.query(on: req.db)
             .filter(\.$code == leagueCode) // Filter leagues by code
             .with(\.$teams) { team in
@@ -458,10 +458,14 @@ final class ClientController: RouteCollection {
             .flatMapThrowing { league in
                 guard let teams = league?.teams else { return [] }
                 
-                // Collect all players with a non-nil blockdate
+                let currentDate = Date() // Get the current date
+
+                // Collect all players that meet the conditions
                 let blockedPlayers = teams.flatMap { team in
                     team.players.compactMap { player -> SperrItem? in
-                        guard let blockdate = player.blockdate else { return nil }
+                        guard let blockdate = player.blockdate, blockdate > currentDate else { return nil }
+                        guard player.eligibility == .Gesperrt else { return nil }
+                        
                         return SperrItem(
                             playerName: player.name,
                             playerImage: player.image,
@@ -477,5 +481,6 @@ final class ClientController: RouteCollection {
                 return blockedPlayers
             }
     }
+ad
 
 }
