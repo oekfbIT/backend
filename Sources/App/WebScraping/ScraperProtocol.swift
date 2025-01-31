@@ -69,7 +69,7 @@ final class ScraperController {
                     let captainImageURL = try doc.select("table:contains(Kapitän) img").first()?.attr("src") ?? "Unknown Captain"
                     let coachImageURL = try doc.select("table:contains(Trainer) img").first()?.attr("src") ?? "Unknown Coach"
                     let coachName = try doc.select("table:contains(Trainer) div font.largeWhite").first()?.text() ?? "Unknown Coach"
-                    let coach = Trainer(name: coachName, imageURL: self.baseUrl + coachImageURL)
+                    let coach = Trainer(name: coachName, image: self.baseUrl + coachImageURL)
                     
                     let leagueName = try doc.select("div.MainFrameTopicDown").first()?.text() ?? "Unknown League"
                     let coverImg = try doc.select("div.cutedImage img").first()?.attr("src") ?? "https://oekfb.com/images/mannschaften/0.jpg"

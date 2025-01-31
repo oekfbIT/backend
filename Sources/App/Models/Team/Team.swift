@@ -12,13 +12,7 @@ import Vapor
 struct Trainer: Codable {
     var name: String
     var email: String?
-    var imageURL: String?
-
-    enum CodingKeys: String, CodingKey {
-        case name
-        case email
-        case imageURL = "image_url"
-    }
+    var image: String?
 }
 
 final class Team: Model, Content {
@@ -80,7 +74,7 @@ final class Team: Model, Content {
 
     init() {}
 
-    init(id: UUID? = nil, sid: String, userId: UUID?, leagueId: UUID?, leagueCode: String?, points: Int, coverimg: String, logo: String, teamName: String, foundationYear: String?, membershipSince: String?, averageAge: String?, coach: Trainer? = nil, captain: String? = nil, trikot: Trikot, balance: Double? = nil, referCode: String? = String.randomString(length: 6).uppercased(), usremail: String?, usrpass: String?, usrtel: String?, kaution: Double? = nil) {
+    init(id: UUID? = nil, sid: String, userId: UUID?, leagueId: UUID?, leagueCode: String?, points: Int, coverimg: String, logo: String, teamName: String, foundationYear: String?, membershipSince: String?, averageAge: String?, coach: Trainer?, captain: String? = nil, trikot: Trikot, balance: Double? = nil, referCode: String? = String.randomString(length: 6).uppercased(), usremail: String?, usrpass: String?, usrtel: String?, kaution: Double? = nil) {
         self.id = id
         self.sid = sid
         self.$user.id = userId
