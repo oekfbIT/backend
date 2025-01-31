@@ -481,6 +481,6 @@ final class ClientController: RouteCollection {
                 return blockedPlayers
             }
     }
-ad
+
 
 }
