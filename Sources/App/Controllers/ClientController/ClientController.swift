@@ -466,6 +466,7 @@ final class ClientController: RouteCollection {
                             playerName: player.name,
                             playerImage: player.image,
                             playerSid: player.sid,
+                            playerEligibility: player.eligibility.rawValue,
                             teamName: team.teamName,
                             teamImage: team.logo,
                             teamSid: team.sid,
