@@ -19,6 +19,7 @@ final class ClientController: RouteCollection {
         route.get("selection", use: fetchLeagueSelection)
         route.get("clubs", "league", ":code", use: fetchLeagueClubs)
         route.get("clubs", "detail", ":id", use: fetchClub)
+        route.get("club", "trainer", ":id", use: teamTrainer)
         route.get("table", "league", ":code", use: fetchtable)
         route.get("news", "league", ":code", use: fetchNews)
         route.get("transfers", use: fetchTransfers)
@@ -482,5 +483,20 @@ final class ClientController: RouteCollection {
             }
     }
 
+    // MARK: Get Team Coach
+    func teamTrainer(req: Request) throws -> EventLoopFuture<Response> {
+        guard let teamID = req.parameters.get("id", as: UUID.self) else {
+            throw Abort(.badRequest, reason: "Invalid or missing team ID")
+        }
+
+        return Team.find(teamID, on: req.db)
+            .flatMapThrowing { team in
+                guard let coach = team?.coach else {
+                    throw Abort(.notFound, reason: "Coach not found for the given team")
+                }
+                return coach
+            }
+            .encodeResponse(for: req) // Ensures proper encoding of the response
+    }
 
 }

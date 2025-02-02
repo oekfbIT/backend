@@ -30,13 +30,13 @@ final class NewsItem: Model, Content, Codable {
 
     init() {}
 
-    init(id: UUID? = nil, image: String? = nil, text: String? = nil, title: String? = nil, tag: String? = nil, created: Date? = nil) {
+    init(id: UUID? = nil, image: String? = nil, text: String? = nil, title: String? = nil, tag: String? = nil) {
         self.id = id
         self.image = image
         self.text = text
         self.title = title
         self.tag = tag
-        self.created = created
+        self.created = Date()
     }
 }
 

@@ -9,7 +9,7 @@ import Foundation
 import Fluent
 import Vapor
 
-struct Trainer: Codable {
+struct Trainer: Content, Codable {
     var name: String
     var email: String?
     var image: String?
