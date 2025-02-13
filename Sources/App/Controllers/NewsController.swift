@@ -26,7 +26,7 @@ final class NewsController: RouteCollection {
         route.get(":id", use: repository.getbyID)
         route.delete(":id", use: repository.deleteID)
 
-        route.patch(":id", use: repository.updateID)
+        route.patch(":id", use: updateID)
         route.patch("batch", use: repository.updateBatch)
     
         route.get("all", use: getAllExceptStrafsenat)
@@ -37,6 +37,28 @@ final class NewsController: RouteCollection {
     func boot(routes: RoutesBuilder) throws {
         try setupRoutes(on: routes)
     }
+    
+    func updateID(req: Request) throws -> EventLoopFuture<NewsItem> {
+        guard let id = req.parameters.get("id", as: NewsItem.IDValue.self) else {
+            throw Abort(.badRequest)
+        }
+        
+        let updatedItem = try req.content.decode(NewsItem.self)
+        
+        return NewsItem.find(id, on: req.db)
+            .unwrap(or: Abort(.notFound))
+            .flatMap { existing in
+                // Update only provided fields
+                if let newText = updatedItem.text { existing.text = newText }
+                if let newTitle = updatedItem.title { existing.title = newTitle }
+                if let newImage = updatedItem.image { existing.image = newImage }
+                if let newTag = updatedItem.tag { existing.tag = newTag }
+                
+                return existing.update(on: req.db).map { existing }
+            }
+    }
+
+
     
     func getAllExceptStrafsenat(req: Request) throws -> EventLoopFuture<[NewsItem]> {
         return NewsItem.query(on: req.db)
