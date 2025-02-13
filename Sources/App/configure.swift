@@ -153,7 +153,7 @@ public func configure(_ app: Application) throws {
      // Start the scheduled jobs
      try app.queues.startScheduledJobs()
 
-    app.routes.defaultMaxBodySize = "50mb" // Adjust the value as needed
+    app.routes.defaultMaxBodySize = "100mb" // Adjust the value as needed
 
      // Register routes
      try routes(app)
