@@ -21,6 +21,7 @@ final class MatchEventController: RouteCollection {
         route.patch(":id", use: repository.updateID)
         route.patch("batch", use: repository.updateBatch)
         route.get("player", ":playerId", use: getPlayerEventsSummary) // New route for player events
+        route.get("detail", "player", ":playerId", use: getPlayerEvents) 
 
     }
 
@@ -74,6 +75,16 @@ final class MatchEventController: RouteCollection {
                         )
                     }
             }
+    }
+    
+    func getPlayerEvents(req: Request) throws -> EventLoopFuture<[MatchEvent]> {
+        // Extract the player's UUID from the request parameters
+        let playerId = try req.parameters.require("playerId", as: UUID.self)
+
+        // Query the database to find all events associated with the player
+        return MatchEvent.query(on: req.db)
+            .filter(\.$player.$id == playerId)
+            .all()
     }
 
     // Custom delete function to handle event deletion and score/card adjustment
