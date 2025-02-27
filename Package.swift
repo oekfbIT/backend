@@ -14,6 +14,7 @@ let package = Package(
         .package(url: "https://github.com/vapor/leaf.git", from: "4.2.4"),
         .package(url: "https://github.com/Mikroservices/Smtp.git", from: "3.0.0"),
         .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.6.0"),
+        .package(url: "https://github.com/swiftpackages/DotEnv.git", from: "3.0.0"),
         // Add Queues MongoDB Driver
         .package(url: "https://github.com/vapor-community/queues-mongo-driver.git", from: "1.0.0"),
     ],
@@ -27,6 +28,7 @@ let package = Package(
                 .product(name: "Vapor", package: "vapor"),
                 .product(name: "Smtp", package: "Smtp"),
                 .product(name: "SwiftSoup", package: "SwiftSoup"),
+                .product(name: "DotEnv", package: "DotEnv"),
                 // Add Queues MongoDB Driver product
                 .product(name: "QueuesMongoDriver", package: "queues-mongo-driver"),
             ]

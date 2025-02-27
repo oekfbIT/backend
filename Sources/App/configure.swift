@@ -24,21 +24,51 @@ public func configure(_ app: Application) throws {
     let decoder = JSONDecoder()
     decoder.keyDecodingStrategy = .convertFromSnakeCase
     decoder.dateDecodingStrategy = .iso8601
-
+    
     ContentConfiguration.global.use(encoder: encoder, for: .json)
     ContentConfiguration.global.use(decoder: decoder, for: .json)
-
-    try app.databases.use(.mongo(connectionString: Environment.get(ENV.databaseURL.key) ?? ENV.databaseURL.dev_default),
-                          as: .mongo)
- 
-    app_migrations.forEach { app.migrations.add($0) }
     
-    try app.autoMigrate().wait()
- 
+    // MARK: - Server Configuration
+    app.http.server.configuration.hostname = "0.0.0.0"
+    app.http.server.configuration.port = Int(Environment.get("PORT") ?? "8080") ?? 8080
+    
+    // MARK: - Database Configuration
+    guard let databaseURL = Environment.get("CONNECTION_STRING") else {
+        fatalError("DATABASE_URL not set in environment variables")
+    }
+    
+    // Adjust database URL based on whether it is local or remote (e.g., DigitalOcean)
+    var mongoConnectionString = databaseURL
+    if mongoConnectionString.contains("digitalocean") {
+        if !mongoConnectionString.contains("authSource") {
+            mongoConnectionString += "?authSource=admin"
+        }
+    }
+    
+    app.logger.info("Connecting to MongoDB at: \(mongoConnectionString)")
+    
+    try app.databases.use(.mongo(connectionString: mongoConnectionString), as: .mongo)
+    
+    
+    // MARK: - Leaf Configuration
     app.views.use(.leaf)
+    
+    // MARK: - Middleware Configuration
     app.middleware.use(ErrorMiddleware.default(environment: app.environment))
     app.passwords.use(.bcrypt)
-
+    
+    // MARK: - MongoKitten Configuration
+    do {
+        let mongoDatabase = try MongoDatabase.connect(mongoConnectionString, on: app.eventLoopGroup.next()).wait()
+        try app.queues.use(.mongodb(mongoDatabase))
+    } catch {
+        app.logger.error("Failed to connect to MongoDB: \(error.localizedDescription)")
+        fatalError("Failed to connect to MongoDB")
+    }
+    
+    app_migrations.forEach { app.migrations.add($0) }
+    try app.autoMigrate().wait()
+    
     // Configure multiple allowed origins
     let allowedOrigins: [String] = [
         "http://localhost:8081",
@@ -89,8 +119,7 @@ public func configure(_ app: Application) throws {
         "http://192.168.0.144:3000",
         "http://192.168.0.242"
     ]
-
-    // Initialize the custom CORS middleware
+    
     let corsMiddleware = CustomCORSMiddleware(
         allowedOrigins: allowedOrigins,
         allowedMethods: [.GET, .POST, .PUT, .OPTIONS, .DELETE, .PATCH],
@@ -107,27 +136,41 @@ public func configure(_ app: Application) throws {
         ],
         allowCredentials: true
     )
-
-    app.middleware.use(corsMiddleware) // CORS should run first
+        
     app.middleware.use(ErrorMiddleware.default(environment: app.environment))
+    app.middleware.use(corsMiddleware) // Move this after ErrorMiddleware
+    
+    
+    // MARK: - FIREBASE Configuration
+    guard let FIREBASE_APIKEY = Environment.get("FIREBASE_APIKEY") else {
+        fatalError("FIREBASE_APIKEY not set in environment variables")
+    }
+
+    guard let FIREBASE_EMAIL = Environment.get("FIREBASE_EMAIL") else {
+        fatalError("FIREBASE_EMAIL not set in environment variables")
+    }
+
+    guard let FIREBASE_PASSWORD = Environment.get("FIREBASE_PASSWORD") else {
+        fatalError("FIREBASE_PASSWORD not set in environment variables")
+    }
+
+    guard let FIREBASE_PROJECTID = Environment.get("FIREBASE_PROJECTID") else {
+        fatalError("FIREBASE_PROJECTID not set in environment variables")
+    }
 
     let firebaseManager = FirebaseManager(
         client: app.client,
-        apiKey: "AIzaSyBHum43yMHxKE15ctAI54LSCmiJ-6uDI8I",
-        email: "admin@oekfb.eu",
-        password: "hY-q2Giapxzng",
-        projectId: "oekfbbucket"
+        apiKey: FIREBASE_APIKEY,
+        email: FIREBASE_EMAIL,
+        password: FIREBASE_PASSWORD,
+        projectId: FIREBASE_PROJECTID
     )
     
     app.firebaseManager = firebaseManager
 
-    // Configure Queues with MongoDB
-     let mongoConnectionString = Environment.get(ENV.databaseURL.key) ?? ENV.databaseURL.dev_default
-     let mongoDatabase = try MongoDatabase.connect(mongoConnectionString, on: app.eventLoopGroup.next()).wait()
-     
-     // Setup Queues with MongoDB driver
-     try app.queues.use(.mongodb(mongoDatabase))
-     
+    
+    let mongoDatabase = try MongoDatabase.connect(mongoConnectionString, on: app.eventLoopGroup.next()).wait()
+    
     app.queues.schedule(UnlockPlayerJob())
         .weekly()
         .on(.monday)
@@ -137,25 +180,24 @@ public func configure(_ app: Application) throws {
         .weekly()
         .on(.thursday)
         .at(23, 0)
-
+    
     app.queues.schedule(DressUnlockJob())
         .weekly()
         .on(.monday)
         .at(6, 0)
-
+    
     
     // Test JOBS
     app.queues.schedule(UnlockPlayerJob())
         .weekly()
         .on(.wednesday)
         .at(13, 30)
-
-     // Start the scheduled jobs
-     try app.queues.startScheduledJobs()
-
+    
+    // Start the scheduled jobs
+    try app.queues.startScheduledJobs()
+    
     app.routes.defaultMaxBodySize = "100mb" // Adjust the value as needed
+    // Register routes
+    try routes(app)
+}
 
-     // Register routes
-     try routes(app)
-
- }
