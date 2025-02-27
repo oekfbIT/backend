@@ -101,6 +101,10 @@ public func configure(_ app: Application) throws {
         "https://test.oekfb.eu",
         "http://test.oekfb.eu",
         "http://test.oekfb.eu:3000",
+        
+        // ref OEKFB
+        "https://referee-8845q.ondigitalocean.app",
+        "https://referee-8845q.ondigitalocean.app:3000",
 
         // OEKFB main domain
         "https://oekfb.eu",
