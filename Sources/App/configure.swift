@@ -69,57 +69,86 @@ public func configure(_ app: Application) throws {
     
     // Configure multiple allowed origins
     let allowedOrigins: [String] = [
-        "http://localhost:8081",
-        "https://homepage-kbe6d.ondigitalocean.app",
-        "https://api.oekfb.eu",
-        "http://api.oekfb.eu",
+        // Localhost variations
         "http://localhost",
         "http://localhost:1234",
         "http://localhost:3000",
         "http://localhost:4000",
         "http://localhost:4001",
-        "http://localhost:5500",
         "http://localhost:4500",
+        "http://localhost:5500",
+        "http://localhost:8081",
+        
+        // Homepage on DigitalOcean
+        "https://homepage-kbe6d.ondigitalocean.app",
+
+        // OEKFB API
+        "https://api.oekfb.eu",
+        "http://api.oekfb.eu",
+
+        // Admin OEKFB
         "https://admin.oekfb.eu",
-        "https://test.oekfb.eu",
-        "http://admin.oekfb.eu:3000",
-        "http://test.oekfb.eu:3000",
-        "https://admin.oekfb.eu:3000",
         "http://admin.oekfb.eu",
-        "https://oekfb.eu:3000",
-        "https://oekfb.eu:4000",
+        "https://admin.oekfb.eu:3000",
+        "http://admin.oekfb.eu:3000",
+
+        // Admin OEKFB
+        "https://admin-owggu.ondigitalocean.app",
+        "https://admin-owggu.ondigitalocean.app",
+        "https://admin-owggu.ondigitalocean.app:3000",
+
+        // Test OEKFB
+        "https://test.oekfb.eu",
+        "http://test.oekfb.eu",
+        "http://test.oekfb.eu:3000",
+
+        // OEKFB main domain
         "https://oekfb.eu",
-        "http://oekfb.eu:3000",
-        "http://oekfb.eu:4000",
         "http://oekfb.eu",
+        "https://oekfb.eu:3000",
+        "http://oekfb.eu:3000",
+        "https://oekfb.eu:4000",
+        "http://oekfb.eu:4000",
+
+        // www OEKFB
         "https://www.oekfb.eu",
         "http://www.oekfb.eu",
-        "http://team.oekfb.eu",
+
+        // Team OEKFB
         "https://team.oekfb.eu",
+        "http://team.oekfb.eu",
+
+        // Referee OEKFB
         "https://ref.oekfb.eu",
-        "http://165.232.91.105:3000",
-        "http://165.232.91.105:4000",
-        "http://165.232.91.105:5000",
+
+        // Server IP 165.232.91.105
         "http://165.232.91.105",
+        "https://165.232.91.105",
+        "http://165.232.91.105:3000",
         "https://165.232.91.105:3000",
+        "http://165.232.91.105:4000",
         "https://165.232.91.105:4000",
+        "http://165.232.91.105:5000",
+        "https://165.232.91.105:5000",
         "https://165.232.91.105:8080",
         "https://165.232.91.105:8081",
-        "https://165.232.91.105:5000",
-        "https://165.232.91.105",
+
+        // Server IP 84.115.221.22
         "http://84.115.221.22",
-        "http://84.115.221.22:3000",
-        "http://84.115.221.22:4000",
-        "http://84.115.221.22:5000",
         "https://84.115.221.22",
+        "http://84.115.221.22:3000",
         "https://84.115.221.22:3000",
+        "http://84.115.221.22:4000",
         "https://84.115.221.22:4000",
+        "http://84.115.221.22:5000",
         "https://84.115.221.22:5000",
-        "http://192.168.0.144:4000",
+
+        // Local Network IPs
         "http://192.168.0.144:3000",
+        "http://192.168.0.144:4000",
         "http://192.168.0.242"
     ]
-    
+
     let corsMiddleware = CustomCORSMiddleware(
         allowedOrigins: allowedOrigins,
         allowedMethods: [.GET, .POST, .PUT, .OPTIONS, .DELETE, .PATCH],
