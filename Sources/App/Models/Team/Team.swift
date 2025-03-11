@@ -35,6 +35,7 @@ final class Team: Model, Content {
     @Field(key: FieldKeys.trikot) var trikot: Trikot
     @OptionalField(key: FieldKeys.balance) var balance: Double?
     @OptionalField(key: FieldKeys.referCode) var referCode: String?
+    @OptionalField(key: FieldKeys.overdraft) var overdraft: Bool?
 
     // Hidden Values
     @OptionalField(key: FieldKeys.usrpass) var usrpass: String?
@@ -70,11 +71,33 @@ final class Team: Model, Content {
         static var usremail: FieldKey { "usremail" }
         static var usrtel: FieldKey { "usrtel" }
         static var kaution: FieldKey { "kaution" }
+        static var overdraft: FieldKey { "overdraft" }
     }
 
     init() {}
 
-    init(id: UUID? = nil, sid: String, userId: UUID?, leagueId: UUID?, leagueCode: String?, points: Int, coverimg: String, logo: String, teamName: String, foundationYear: String?, membershipSince: String?, averageAge: String?, coach: Trainer?, captain: String? = nil, trikot: Trikot, balance: Double? = nil, referCode: String? = String.randomString(length: 6).uppercased(), usremail: String?, usrpass: String?, usrtel: String?, kaution: Double? = nil) {
+    init(id: UUID? = nil,
+         sid: String,
+         userId: UUID?,
+         leagueId: UUID?,
+         leagueCode: String?,
+         points: Int,
+         coverimg: String,
+         logo: String,
+         teamName: String,
+         foundationYear: String?,
+         membershipSince: String?,
+         averageAge: String?,
+         coach: Trainer?,
+         captain: String? = nil,
+         trikot: Trikot,
+         balance: Double? = nil,
+         referCode: String? = String.randomString(length: 6).uppercased(),
+         overdraft: Bool? = false,
+         usremail: String?,
+         usrpass: String?,
+         usrtel: String?,
+         kaution: Double? = nil) {
         self.id = id
         self.sid = sid
         self.$user.id = userId
@@ -92,6 +115,7 @@ final class Team: Model, Content {
         self.trikot = trikot
         self.balance = balance
         self.referCode = referCode
+        self.overdraft = overdraft
         self.usrpass = usrpass
         self.usremail = usremail
         self.usrtel = usrtel
@@ -147,6 +171,7 @@ extension Team: Mergeable {
         merged.captain = other.captain
         merged.trikot = other.trikot
         merged.balance = other.balance
+        merged.overdraft = other.overdraft
         merged.usrpass = other.usrpass
         merged.usremail = other.usremail
         merged.usrtel = other.usrtel
@@ -181,8 +206,8 @@ extension TeamMigration: Migration {
             .field(Team.FieldKeys.usremail,  .string)
             .field(Team.FieldKeys.usrtel,  .string)
             .field(Team.FieldKeys.kaution, .double)
-
-                    .create()
+            .field(Team.FieldKeys.overdraft, .bool)
+            .create()
     }
 
     func revert(on database: Database) -> EventLoopFuture<Void> {

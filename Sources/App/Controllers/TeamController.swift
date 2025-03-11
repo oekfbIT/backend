@@ -32,7 +32,9 @@ final class TeamController: RouteCollection {
         route.get(":id", "topup", ":amount", use: topUpBalance)
         route.post(":id", "league", ":leagueID", use: assignNewLeague) 
         
-        route.get("updateUser", ":teamID", ":newEmailAdress", use: updateUserEmail) // New route
+        route.get("updateUser", ":teamID", ":newEmailAdress", use: updateUserEmail)
+        route.get("overdraft",":id", use: setOverdraftLimit)
+
 
     }
 
@@ -246,6 +248,52 @@ final class TeamController: RouteCollection {
                     }
             }
     }
-
-
+    
+    func setOverdraftLimit(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        guard let teamID = req.parameters.get("id", as: UUID.self) else {
+            throw Abort(.badRequest)
+        }
+        
+        return Team.find(teamID, on: req.db)
+            .unwrap(or: Abort(.notFound))
+            .flatMap { team in
+                // First, ensure the balance exists.
+                guard let balance = team.balance else {
+                    return req.eventLoop.future(error: Abort(.badRequest, reason: "Team balance not available"))
+                }
+                
+                // Check if the overdraft flag is already set.
+                guard team.overdraft == false else {
+                    return req.eventLoop.future(error: Abort(.badRequest, reason: "Overdraft already set"))
+                }
+                
+                // Ensure the balance is below 0.
+                guard balance < 0 else {
+                    return req.eventLoop.future(error: Abort(.badRequest, reason: "Balance is non-negative; overdraft cannot be applied"))
+                }
+                
+                // Conditions met: set overdraft, generate invoice, and update balance.
+                team.overdraft = true
+                let year = Calendar.current.component(.year, from: Date())
+                let randomFiveDigitNumber = String(format: "%05d", Int.random(in: 0..<100000))
+                let invoiceNumber = "\(year)\(randomFiveDigitNumber)"
+                let rechnungAmount: Double = 50.0
+                
+                let rechnung = Rechnung(
+                    team: team.id,
+                    teamName: team.teamName,
+                    number: invoiceNumber,
+                    summ: rechnungAmount,
+                    topay: nil,
+                    kennzeichen: "Overdraft"
+                )
+                
+                return rechnung.save(on: req.db).flatMap {
+                    team.balance = balance - rechnungAmount
+                    return team.save(on: req.db).map {
+                        HTTPStatus.ok
+                    }
+                }
+            }
+    }
 }

@@ -59,3 +59,25 @@ struct DressUnlockJob: AsyncScheduledJob {
         }
     }
 }
+
+
+struct ResetTeamFlags: AsyncScheduledJob {
+    func run(context: QueueContext) async throws {
+        context.logger.info("Reset the team Flags.")
+        print("Reset the team Flags Job is running.")
+        
+        // Fetch teams with overdraft flag true
+        let teams = try await Team.query(on: context.application.db)
+            .filter(\.$overdraft == true)
+            .all()
+        
+        for team in teams {
+            // Check if the balance is available and is 0 or above.
+            if let balance = team.balance, balance >= 0 {
+                team.overdraft = false
+                try await team.save(on: context.application.db)
+                context.logger.info("Reset overdraft flag for team \(team.teamName) (ID: \(team.id?.uuidString ?? "unknown")).")
+            }
+        }
+    }
+}

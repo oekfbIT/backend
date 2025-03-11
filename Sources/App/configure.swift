@@ -172,24 +172,6 @@ public func configure(_ app: Application) throws {
         
     app.middleware.use(ErrorMiddleware.default(environment: app.environment))
     app.middleware.use(corsMiddleware) // Move this after ErrorMiddleware
-    
-    
-    // MARK: - FIREBASE Configuration
-//    guard let FIREBASE_APIKEY = Environment.get("FIREBASE_APIKEY") else {
-//        fatalError("FIREBASE_APIKEY not set in environment variables")
-//    }
-//
-//    guard let FIREBASE_EMAIL = Environment.get("FIREBASE_EMAIL") else {
-//        fatalError("FIREBASE_EMAIL not set in environment variables")
-//    }
-//
-//    guard let FIREBASE_PASSWORD = Environment.get("FIREBASE_PASSWORD") else {
-//        fatalError("FIREBASE_PASSWORD not set in environment variables")
-//    }
-//
-//    guard let FIREBASE_PROJECTID = Environment.get("FIREBASE_PROJECTID") else {
-//        fatalError("FIREBASE_PROJECTID not set in environment variables")
-//    }
 
     let FIREBASE_APIKEY = Environment.get("FIREBASE_APIKEY") ?? ""
     let FIREBASE_EMAIL = Environment.get("FIREBASE_EMAIL") ?? ""
@@ -223,7 +205,12 @@ public func configure(_ app: Application) throws {
         .weekly()
         .on(.monday)
         .at(6, 0)
-    
+
+    app.queues.schedule(ResetTeamFlags())
+        .weekly()
+        .on(.wednesday)
+        .at(6, 0)
+
     
     // Test JOBS
     app.queues.schedule(UnlockPlayerJob())
