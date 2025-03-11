@@ -150,7 +150,13 @@ public func configure(_ app: Application) throws {
         // Local Network IPs
         "http://192.168.0.144:3000",
         "http://192.168.0.144:4000",
-        "http://192.168.0.242"
+        "http://192.168.0.242",
+        
+        // Test Enviroments
+        "https://team-dev-wkxet.ondigitalocean.app",
+        // Team OEKFB
+        "https://dev.team.oekfb.eu",
+        "http://dev.team.oekfb.eu",
     ]
 
     let corsMiddleware = CustomCORSMiddleware(
