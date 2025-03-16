@@ -657,27 +657,43 @@ final class MatchController: RouteCollection {
 
     func noShowGame(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let matchId = try req.parameters.require("id", as: UUID.self)
+        
         struct NoShowRequest: Content {
             let winningTeam: String // "home" or "away"
         }
+        
         let noShowRequest = try req.content.decode(NoShowRequest.self)
 
         return Match.find(matchId, on: req.db)
             .unwrap(or: Abort(.notFound))
             .flatMap { match in
+                let winningTeamId: UUID
+
                 switch noShowRequest.winningTeam.lowercased() {
                 case "home":
                     match.score = Score(home: 6, away: 0)
+                    winningTeamId = match.$homeTeam.id
                 case "away":
                     match.score = Score(home: 0, away: 6)
+                    winningTeamId = match.$awayTeam.id
                 default:
                     return req.eventLoop.future(error: Abort(.badRequest, reason: "Invalid winning team specified"))
                 }
 
                 match.status = .cancelled
-                return match.save(on: req.db).transform(to: .ok)
+
+                return match.save(on: req.db)
+                    .flatMap {
+                        return Team.find(winningTeamId, on: req.db)
+                            .unwrap(or: Abort(.notFound))
+                            .flatMap { team in
+                                team.points += 3
+                                return team.save(on: req.db).transform(to: .ok)
+                            }
+                    }
             }
     }
+
     
     func spielabbruch(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let matchId = try req.parameters.require("id", as: UUID.self)
