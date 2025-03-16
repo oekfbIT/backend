@@ -272,9 +272,30 @@ final class TeamController: RouteCollection {
                     return req.eventLoop.future(error: Abort(.badRequest, reason: "Balance is non-negative; overdraft cannot be applied"))
                 }
                 
-                // Conditions met: set overdraft, generate invoice, and update balance.
+                // Set overdraft flag
                 team.overdraft = true
-                let year = Calendar.current.component(.year, from: Date())
+                
+                // Calculate the next upcoming Tuesday at 12:00 Vienna/Austria Time
+                let calendar = Calendar(identifier: .gregorian)
+                let now = Date()
+                var components = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: now)
+                let weekday = calendar.component(.weekday, from: now)
+                
+                let daysUntilTuesday = (3 - weekday + 7) % 7
+                let nextTuesday = calendar.date(byAdding: .day, value: daysUntilTuesday == 0 ? 7 : daysUntilTuesday, to: now)!
+                
+                var tuesdayComponents = calendar.dateComponents([.year, .month, .day], from: nextTuesday)
+                tuesdayComponents.hour = 12
+                tuesdayComponents.minute = 0
+                tuesdayComponents.second = 0
+                
+                let viennaTimeZone = TimeZone(identifier: "Europe/Vienna")!
+                let overdraftDate = calendar.date(from: tuesdayComponents)!
+                let viennaOverdraftDate = overdraftDate.addingTimeInterval(TimeInterval(viennaTimeZone.secondsFromGMT(for: overdraftDate)))
+                
+                team.overdraftDate = viennaOverdraftDate
+                
+                let year = calendar.component(.year, from: Date())
                 let randomFiveDigitNumber = String(format: "%05d", Int.random(in: 0..<100000))
                 let invoiceNumber = "\(year)\(randomFiveDigitNumber)"
                 let rechnungAmount: Double = 50.0
@@ -296,4 +317,5 @@ final class TeamController: RouteCollection {
                 }
             }
     }
+
 }

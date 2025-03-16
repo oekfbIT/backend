@@ -69,6 +69,13 @@ public func configure(_ app: Application) throws {
     
     // Configure multiple allowed origins
     let allowedOrigins: [String] = [
+        
+        // Test Enviroments
+        "https://team-dev-wkxet.ondigitalocean.app",
+        // Team OEKFB
+        "https://dev.team.oekfb.eu",
+        "http://dev.team.oekfb.eu",
+
         // Localhost variations
         "http://localhost",
         "http://localhost:1234",
@@ -150,14 +157,7 @@ public func configure(_ app: Application) throws {
         // Local Network IPs
         "http://192.168.0.144:3000",
         "http://192.168.0.144:4000",
-        "http://192.168.0.242",
-        
-        // Test Enviroments
-        "https://team-dev-wkxet.ondigitalocean.app",
-        // Team OEKFB
-        "https://dev.team.oekfb.eu",
-        "http://dev.team.oekfb.eu",
-    ]
+        "http://192.168.0.242",    ]
 
     let corsMiddleware = CustomCORSMiddleware(
         allowedOrigins: allowedOrigins,

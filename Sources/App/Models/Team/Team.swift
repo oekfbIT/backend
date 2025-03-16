@@ -36,6 +36,7 @@ final class Team: Model, Content {
     @OptionalField(key: FieldKeys.balance) var balance: Double?
     @OptionalField(key: FieldKeys.referCode) var referCode: String?
     @OptionalField(key: FieldKeys.overdraft) var overdraft: Bool?
+    @OptionalField(key: FieldKeys.overdraftDate) var overdraftDate: Date?
 
     // Hidden Values
     @OptionalField(key: FieldKeys.usrpass) var usrpass: String?
@@ -72,6 +73,7 @@ final class Team: Model, Content {
         static var usrtel: FieldKey { "usrtel" }
         static var kaution: FieldKey { "kaution" }
         static var overdraft: FieldKey { "overdraft" }
+        static var overdraftDate: FieldKey { "overdraftDate" }
     }
 
     init() {}
@@ -94,6 +96,7 @@ final class Team: Model, Content {
          balance: Double? = nil,
          referCode: String? = String.randomString(length: 6).uppercased(),
          overdraft: Bool? = false,
+         overdraftDate: Date? = nil,
          usremail: String?,
          usrpass: String?,
          usrtel: String?,
@@ -116,6 +119,7 @@ final class Team: Model, Content {
         self.balance = balance
         self.referCode = referCode
         self.overdraft = overdraft
+        self.overdraftDate = overdraftDate
         self.usrpass = usrpass
         self.usremail = usremail
         self.usrtel = usrtel
@@ -172,6 +176,7 @@ extension Team: Mergeable {
         merged.trikot = other.trikot
         merged.balance = other.balance
         merged.overdraft = other.overdraft
+        merged.overdraftDate = other.overdraftDate
         merged.usrpass = other.usrpass
         merged.usremail = other.usremail
         merged.usrtel = other.usrtel
@@ -207,6 +212,7 @@ extension TeamMigration: Migration {
             .field(Team.FieldKeys.usrtel,  .string)
             .field(Team.FieldKeys.kaution, .double)
             .field(Team.FieldKeys.overdraft, .bool)
+            .field(Team.FieldKeys.overdraftDate, .date)
             .create()
     }
 

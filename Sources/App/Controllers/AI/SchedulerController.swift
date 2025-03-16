@@ -75,6 +75,7 @@ struct ResetTeamFlags: AsyncScheduledJob {
             // Check if the balance is available and is 0 or above.
             if let balance = team.balance, balance >= 0 {
                 team.overdraft = false
+                team.overdraftDate = nil
                 try await team.save(on: context.application.db)
                 context.logger.info("Reset overdraft flag for team \(team.teamName) (ID: \(team.id?.uuidString ?? "unknown")).")
             }
