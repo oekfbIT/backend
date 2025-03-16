@@ -199,7 +199,7 @@ public func configure(_ app: Application) throws {
     
     app.queues.schedule(UnlockPlayerJob())
         .weekly()
-        .on(.monday)
+        .on(.tuesday)
         .at(8,0)
     
     app.queues.schedule(DressLockJob())

@@ -274,7 +274,7 @@ final class MatchController: RouteCollection {
         }
 
         var components = calendar.dateComponents([.year, .month, .day], from: futureDate)
-        components.hour = 12
+        components.hour = 7
         components.minute = 0
         components.second = 0
 
