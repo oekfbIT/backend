@@ -6,6 +6,16 @@ struct LeagueMatches: Codable, Content{
     var league: String
 }
 
+// Define the CardRequest struct inside the do-catch block
+struct CardRequest: Content {
+    let playerId: UUID
+    let teamId: UUID
+    let minute: Int
+    let name: String?
+    let image: String?
+    let number: String?
+}
+
 func updatePlayerCardStatus(in blanket: inout Blankett?, playerId: UUID, cardType: MatchEventType) {
     // Ensure blanket is not nil
     guard blanket != nil else { return }
@@ -254,9 +264,40 @@ final class MatchController: RouteCollection {
         return addCardEvent(req: req, cardType: .yellowCard)
     }
 
-    // Function to handle adding a yellow-red card event
     func addYellowRedCard(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        let calendar = Calendar.current
+        let currentDate = Date()
+
+        // Calculate the block date (8 days from now at 12:00 PM)
+        guard let futureDate = calendar.date(byAdding: .day, value: 8, to: currentDate) else {
+            throw Abort(.internalServerError, reason: "Failed to calculate block date")
+        }
+
+        var components = calendar.dateComponents([.year, .month, .day], from: futureDate)
+        components.hour = 12
+        components.minute = 0
+        components.second = 0
+
+        guard let blockDate = calendar.date(from: components) else {
+            throw Abort(.internalServerError, reason: "Failed to set block date to 12 PM")
+        }
+
+        // Decode request first
+        let cardRequest = try req.content.decode(CardRequest.self)
+
+        // First, call addCardEvent
         return addCardEvent(req: req, cardType: .yellowRedCard)
+            .flatMap { _ in
+                // If addCardEvent succeeds, find the player and update their details
+                Player.find(cardRequest.playerId, on: req.db)
+                    .unwrap(or: Abort(.notFound, reason: "Player not found"))
+                    .flatMap { player in
+                        player.blockdate = blockDate
+                        player.eligibility = .Gesperrt
+                        return player.save(on: req.db)
+                    }
+            }
+            .transform(to: .ok) // Ensure final response is HTTP 200 OK
     }
 
     // Helper function to handle card events
@@ -264,16 +305,6 @@ final class MatchController: RouteCollection {
         // Use a do-catch block to safely handle any errors thrown during parameter retrieval
         do {
             let matchId = try req.parameters.require("id", as: UUID.self)
-
-            // Define the CardRequest struct inside the do-catch block
-            struct CardRequest: Content {
-                let playerId: UUID
-                let teamId: UUID
-                let minute: Int
-                let name: String?
-                let image: String?
-                let number: String?
-            }
 
             // Decode the request content and handle any potential decoding errors
             let cardRequest = try req.content.decode(CardRequest.self)
