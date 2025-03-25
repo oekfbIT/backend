@@ -256,7 +256,39 @@ final class MatchController: RouteCollection {
 
     // Function to handle adding a red card event
     func addRedCard(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        let calendar = Calendar.current
+        let currentDate = Date()
+
+        // Calculate the block date (8 days from now at 12:00 PM)
+        guard let futureDate = calendar.date(byAdding: .day, value: 8, to: currentDate) else {
+            throw Abort(.internalServerError, reason: "Failed to calculate block date")
+        }
+
+        var components = calendar.dateComponents([.year, .month, .day], from: futureDate)
+        components.hour = 7
+        components.minute = 0
+        components.second = 0
+
+        guard let blockDate = calendar.date(from: components) else {
+            throw Abort(.internalServerError, reason: "Failed to set block date to 12 PM")
+        }
+
+        // Decode request first
+        let cardRequest = try req.content.decode(CardRequest.self)
+
+        // First, call addCardEvent
         return addCardEvent(req: req, cardType: .redCard)
+            .flatMap { _ in
+                // If addCardEvent succeeds, find the player and update their details
+                Player.find(cardRequest.playerId, on: req.db)
+                    .unwrap(or: Abort(.notFound, reason: "Player not found"))
+                    .flatMap { player in
+                        player.blockdate = blockDate
+                        player.eligibility = .Gesperrt
+                        return player.save(on: req.db)
+                    }
+            }
+            .transform(to: .ok)
     }
 
     // Function to handle adding a yellow card event
