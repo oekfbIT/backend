@@ -607,7 +607,7 @@ final class MatchController: RouteCollection {
 
                 // Check if Strafsenat already exists for this match
                 return Strafsenat.query(on: req.db)
-                    .filter(\.$matchID == matchID)
+                    .filter(\.$match.$id == matchID)
                     .first()
                     .flatMap { existingStrafsenat in
                         // If a Strafsenat already exists, skip creation

@@ -14,7 +14,7 @@ final class Strafsenat: Model, Content, Codable {
 
     @ID(custom: FieldKeys.id) var id: UUID?
     @OptionalField(key: FieldKeys.text) var text: String?
-    @Field(key: FieldKeys.matchID) var matchID: UUID
+    @Parent(key: FieldKeys.matchID) var match: Match
     @Field(key: FieldKeys.refID) var refID: UUID
     @Field(key: FieldKeys.offen) var offen: Bool
     @Timestamp(key: FieldKeys.created, on: .create) var created: Date?
@@ -29,13 +29,18 @@ final class Strafsenat: Model, Content, Codable {
     }
 
     init() {}
-
-    init(id: UUID? = nil, matchID: UUID, refID: UUID, text: String? = nil, created: Date? = nil, offen: Bool? = true) {
+    
+    init(id: UUID? = nil,
+         matchID: UUID,
+         refID: UUID,
+         text: String? = nil,
+         created: Date? = nil,
+         offen: Bool? = true) {
         self.id = id
-        self.matchID = matchID
-        self.offen = offen ?? true
+        self.$match.id = matchID
         self.refID = refID
         self.text = text
+        self.offen = offen ?? true
         self.created = created
     }
 }
@@ -43,7 +48,7 @@ final class Strafsenat: Model, Content, Codable {
 extension Strafsenat: Mergeable {
     func merge(from other: Strafsenat) -> Strafsenat {
         var merged = self
-        merged.matchID = other.matchID
+        merged.match = other.match
         merged.refID = other.refID
         merged.offen = other.offen
         merged.text = other.text ?? self.text
@@ -52,13 +57,12 @@ extension Strafsenat: Mergeable {
     }
 }
 
-// NewsItem Migration
 extension StrafsenatMigration: Migration {
     func prepare(on database: Database) -> EventLoopFuture<Void> {
-        database.schema(NewsItem.schema)
-            .field(Strafsenat.FieldKeys.id, .uuid, .identifier(auto: true))
-            .field(Strafsenat.FieldKeys.matchID, .uuid)
-            .field(Strafsenat.FieldKeys.refID, .uuid)
+        database.schema(Strafsenat.schema)
+            .id()
+            .field(Strafsenat.FieldKeys.matchID, .uuid, .references(Match.schema, .id))
+            .field(Strafsenat.FieldKeys.refID, .uuid, .required)
             .field(Strafsenat.FieldKeys.text, .string)
             .field(Strafsenat.FieldKeys.offen, .bool)
             .field(Strafsenat.FieldKeys.created, .datetime)

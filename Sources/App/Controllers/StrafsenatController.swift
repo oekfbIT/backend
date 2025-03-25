@@ -33,12 +33,62 @@ final class StrafsenatController: RouteCollection {
         route.patch(":id","close", use: close)
         route.patch(":id","open", use: open)
     }
-    
+   
+    struct TeamInfo: Content {
+        let id: UUID
+        let teamName: String
+        let image: String
+    }
 
-    func index(req: Request) throws -> EventLoopFuture<Page<Strafsenat>> {
-        return Strafsenat.query(on: req.db)
-            .sort(\.$created, .descending)
-            .paginate(for: req)
+    struct StrafsenatResponse: Content {
+        let id: UUID?
+        let text: String?
+        let matchID: UUID
+        let refID: UUID
+        let offen: Bool
+        let created: Date?
+        let hometeam: TeamInfo
+        let awayteam: TeamInfo
+    }
+
+    func index(req: Request) throws -> EventLoopFuture<[StrafsenatResponse]> {
+        let strafsenatsFuture = Strafsenat.query(on: req.db).all()
+        let matchesFuture = Match.query(on: req.db).all()
+        let teamsFuture = Team.query(on: req.db).all()
+
+        return strafsenatsFuture.and(matchesFuture).and(teamsFuture).map { result in
+            let ((strafsenats, matches), teams) = result
+
+            let matchMap = Dictionary(uniqueKeysWithValues: matches.compactMap { match in
+                match.id.map { ($0, match) }
+            })
+
+            let teamMap = Dictionary(uniqueKeysWithValues: teams.compactMap { team in
+                team.id.map { ($0, team) }
+            })
+
+            return strafsenats.compactMap { straf in
+                guard
+//                    let matchID = straf.$match.id,
+                    let match = matchMap[straf.$match.id],
+                    let homeTeam = teamMap[match.$homeTeam.id],
+                    let awayTeam = teamMap[match.$awayTeam.id]
+                else {
+                    return nil
+                }
+
+                return StrafsenatResponse(
+                    id: straf.id,
+                    text: straf.text,
+                    matchID: straf.$match.id,
+                    refID: straf.refID,
+                    offen: straf.offen,
+                    created: straf.created,
+                    hometeam: TeamInfo(id: homeTeam.id!, teamName: homeTeam.teamName, image: homeTeam.logo),
+                    awayteam: TeamInfo(id: awayTeam.id!, teamName: awayTeam.teamName, image: awayTeam.logo)
+                )
+            }
+        }
     }
 
     // Function to close the status (set offen to false)
