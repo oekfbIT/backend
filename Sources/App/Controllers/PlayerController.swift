@@ -63,7 +63,7 @@ final class PlayerController: RouteCollection {
                     let randomFiveDigitNumber = String(format: "%05d", Int.random(in: 0..<100000))
                     let invoiceNumber = "\(year)\(randomFiveDigitNumber)"
                     
-                    let rechnungAmount: Double = 5.0
+                    let rechnungAmount: Double = -5.0
 
                     let rechnung = Rechnung(
                         team: team.id!,
