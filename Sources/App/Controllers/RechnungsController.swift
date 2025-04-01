@@ -35,18 +35,17 @@ final class RechnungsController: RouteCollection {
         return Rechnung.find(id, on: req.db)
             .unwrap(or: Abort(.notFound, reason: "Rechnung not found"))
             .flatMap { rechnung in
-
                 return Team.find(rechnung.$team.id, on: req.db)
                     .unwrap(or: Abort(.notFound, reason: "Team not found"))
                     .flatMap { team in
-                        // Subtract the refund amount
+                        // Add the absolute value of the refund amount
                         if let currentBalance = team.balance {
-                            team.balance = currentBalance - rechnung.summ
+                            team.balance = currentBalance + abs(rechnung.summ)
                         } else {
                             return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Team balance is undefined"))
                         }
 
-                        // Optionally mark as refunded or delete
+                        // Save the updated team and delete the refunded rechnung
                         return team.save(on: req.db).flatMap {
                             return rechnung.delete(on: req.db).transform(to: .ok)
                         }
