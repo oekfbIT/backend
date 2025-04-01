@@ -21,12 +21,39 @@ final class RechnungsController: RouteCollection {
 
         route.patch(":id", use: repository.updateID)
         route.patch("batch", use: repository.updateBatch)
+        route.get("refund", ":id", use: refund)
+
     }
 
     func boot(routes: RoutesBuilder) throws {
         try setupRoutes(on: routes)
     }
         
+    func refund(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        let id = try req.parameters.require("id", as: UUID.self)
+        
+        return Rechnung.find(id, on: req.db)
+            .unwrap(or: Abort(.notFound, reason: "Rechnung not found"))
+            .flatMap { rechnung in
+
+                return Team.find(rechnung.$team.id, on: req.db)
+                    .unwrap(or: Abort(.notFound, reason: "Team not found"))
+                    .flatMap { team in
+                        // Subtract the refund amount
+                        if let currentBalance = team.balance {
+                            team.balance = currentBalance - rechnung.summ
+                        } else {
+                            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Team balance is undefined"))
+                        }
+
+                        // Optionally mark as refunded or delete
+                        return team.save(on: req.db).flatMap {
+                            return rechnung.delete(on: req.db).transform(to: .ok)
+                        }
+                    }
+            }
+    }
+
     func create(req: Request) throws -> EventLoopFuture<Rechnung> {
         // Decode the incoming Rechnung from the request body
         let rechnung = try req.content.decode(Rechnung.self)
