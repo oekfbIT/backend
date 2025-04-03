@@ -76,9 +76,9 @@ final class PlayerController: RouteCollection {
                     // Save the Rechnung and update the team's balance
                     return rechnung.save(on: req.db).flatMap {
                         if let currentBalance = team.balance {
-                            team.balance = currentBalance - rechnungAmount
+                            team.balance = currentBalance - 5
                         } else {
-                            team.balance = -rechnungAmount
+                            team.balance = -5
                         }
 
                         return team.save(on: req.db).map {
