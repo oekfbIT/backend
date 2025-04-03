@@ -31,21 +31,19 @@ final class RechnungsController: RouteCollection {
         
     func refund(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let id = try req.parameters.require("id", as: UUID.self)
-        
+
         return Rechnung.find(id, on: req.db)
             .unwrap(or: Abort(.notFound, reason: "Rechnung not found"))
             .flatMap { rechnung in
                 return Team.find(rechnung.$team.id, on: req.db)
                     .unwrap(or: Abort(.notFound, reason: "Team not found"))
                     .flatMap { team in
-                        // Add the absolute value of the refund amount
-                        if let currentBalance = team.balance {
-                            team.balance = currentBalance + abs(rechnung.summ)
-                        } else {
+                        guard let currentBalance = team.balance else {
                             return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Team balance is undefined"))
                         }
 
-                        // Save the updated team and delete the refunded rechnung
+                        team.balance = currentBalance - rechnung.summ
+
                         return team.save(on: req.db).flatMap {
                             return rechnung.delete(on: req.db).transform(to: .ok)
                         }
