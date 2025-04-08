@@ -475,6 +475,7 @@ final class ClientController: RouteCollection {
                             teamName: team.teamName,
                             teamImage: team.logo,
                             teamSid: team.sid,
+                            teamID: team.id,
                             blockdate: blockdate
                         )
                     }

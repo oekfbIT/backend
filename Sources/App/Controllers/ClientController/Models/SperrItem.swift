@@ -9,5 +9,6 @@ struct SperrItem: Codable, Content {
     let teamName: String?
     let teamImage: String?
     let teamSid: String?
+    let teamID: UUID?
     let blockdate: Date?
 }
