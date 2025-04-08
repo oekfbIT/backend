@@ -283,6 +283,7 @@ final class LeagueController: RouteCollection {
                 image: data.image,
                 number: data.number,
                 count: Double(data.count),
+                playerid: playerId,
                 teamimg: teamImg,
                 teamName: teamName,
                 teamId: teamId
@@ -320,7 +321,7 @@ struct LeaderBoard: Codable, Content {
     let image: String?
     let number: String?
     let count: Double?
-    
+    let playerid: UUID?
     let teamimg: String?
     let teamName: String?
     let teamId: String?

@@ -433,6 +433,7 @@ final class ClientController: RouteCollection {
                 image: data.image,
                 number: data.number,
                 count: Double(data.count),
+                playerid: playerId,
                 teamimg: teamImg,
                 teamName: teamName,
                 teamId: teamId

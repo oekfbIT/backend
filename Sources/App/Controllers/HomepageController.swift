@@ -608,16 +608,17 @@ final class HomepageController: RouteCollection {
     }
 
     private func mapEventsToLeaderBoard(_ events: [MatchEvent]) -> [LeaderBoard] {
-        var playerEventCounts: [UUID: (name: String?, image: String?, number: String?, count: Int)] = [:]
+        var playerEventCounts: [UUID: (name: String?, image: String?, number: String?, id: UUID, count: Int)] = [:]
 
         for event in events {
             let playerId = event.$player.id
             let playerInfo = (event.name, event.image, event.number)
 
-            if let existingCount = playerEventCounts[playerId]?.count {
-                playerEventCounts[playerId]?.count = existingCount + 1
+            if var existing = playerEventCounts[playerId] {
+                existing.count += 1
+                playerEventCounts[playerId] = existing
             } else {
-                playerEventCounts[playerId] = (playerInfo.0, playerInfo.1, playerInfo.2, 1)
+                playerEventCounts[playerId] = (playerInfo.0, playerInfo.1, playerInfo.2, playerId, 1)
             }
         }
 
@@ -627,6 +628,7 @@ final class HomepageController: RouteCollection {
                 image: playerData.image,
                 number: playerData.number,
                 count: playerData.count.asDouble(),
+                playerid: playerData.id,
                 teamimg: nil,
                 teamName: nil,
                 teamId: nil
@@ -635,6 +637,7 @@ final class HomepageController: RouteCollection {
 
         return leaderboard
     }
+
 }
 
 
