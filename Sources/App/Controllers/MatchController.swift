@@ -291,10 +291,48 @@ final class MatchController: RouteCollection {
             .transform(to: .ok)
     }
 
-    // Function to handle adding a yellow card event
     func addYellowCard(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        let calendar = Calendar.current
+        let currentDate = Date()
+
+        guard let futureDate = calendar.date(byAdding: .day, value: 8, to: currentDate) else {
+            throw Abort(.internalServerError, reason: "Failed to calculate block date")
+        }
+
+        var components = calendar.dateComponents([.year, .month, .day], from: futureDate)
+        components.hour = 7
+        components.minute = 0
+        components.second = 0
+
+        guard let blockDate = calendar.date(from: components) else {
+            throw Abort(.internalServerError, reason: "Failed to set block date to 12 PM")
+        }
+
+        let cardRequest = try req.content.decode(CardRequest.self)
+
         return addCardEvent(req: req, cardType: .yellowCard)
+            .flatMap {_ in 
+                MatchEvent.query(on: req.db)
+                    .filter(\.$player.$id == cardRequest.playerId)
+                    .filter(\.$type == .yellowCard)
+                    .count()
+                    .flatMap { yellowCardCount in
+                        let isFourthCard = (yellowCardCount % 4) == 0
+                        guard isFourthCard else {
+                            return req.eventLoop.makeSucceededFuture(.ok)
+                        }
+
+                        return Player.find(cardRequest.playerId, on: req.db)
+                            .unwrap(or: Abort(.notFound, reason: "Player not found"))
+                            .flatMap { player in
+                                player.blockdate = blockDate
+                                player.eligibility = .Gesperrt
+                                return player.save(on: req.db).transform(to: .ok)
+                            }
+                    }
+            }
     }
+
 
     func addYellowRedCard(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let calendar = Calendar.current
