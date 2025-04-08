@@ -288,8 +288,6 @@ final class ClientController: RouteCollection {
                                 details: match.details,
                                 referee: match.$referee.wrappedValue,
                                 season: match.$season.wrappedValue,
-                                home: match.homeTeam.id,
-                                away: match.awayTeam.id,
                                 homeBlanket: match.homeBlanket,
                                 awayBlanket: match.awayBlanket,
                                 events: events,
