@@ -134,7 +134,9 @@ extension ClientController {
                             name: match.awayBlanket?.name
                         ),
                         score: match.score,
-                        status: match.status
+                        status: match.status,
+                        firstHalfDate: match.firstHalfStartDate,
+                        secondHalfDate: match.secondHalfStartDate,
                     )
                 }
             }
@@ -180,7 +182,9 @@ extension ClientController {
                     name: match.awayBlanket?.name
                 ),
                 score: match.score,
-                status: match.status
+                status: match.status,
+                firstHalfDate: match.firstHalfStartDate,
+                secondHalfDate: match.secondHalfStartDate
             )
         }
     }

@@ -764,6 +764,8 @@ struct PublicMatchShort: Content, Codable {
     var awayBlanket: MiniBlankett?
     var score: Score?
     var status: GameStatus?
+    var firstHalfDate: Date?
+    var secondHalfDate: Date?
 }
 
 struct MiniBlankett: Codable {
