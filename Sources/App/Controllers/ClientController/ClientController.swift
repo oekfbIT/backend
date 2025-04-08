@@ -471,11 +471,12 @@ final class ClientController: RouteCollection {
                             playerName: player.name,
                             playerImage: player.image,
                             playerSid: player.sid,
+                            playerid: player.id,
                             playerEligibility: player.eligibility.rawValue,
                             teamName: team.teamName,
                             teamImage: team.logo,
                             teamSid: team.sid,
-                            teamID: team.id,
+                            teamid: team.id,
                             blockdate: blockdate
                         )
                     }

@@ -726,7 +726,6 @@ final class MatchController: RouteCollection {
             }
     }
 
-    
     func spielabbruch(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let matchId = try req.parameters.require("id", as: UUID.self)
         
