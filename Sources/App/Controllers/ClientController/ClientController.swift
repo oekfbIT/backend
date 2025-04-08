@@ -300,31 +300,36 @@ final class ClientController: RouteCollection {
             }
     }
 
-    // MARK: Player Detail
+    private func fetchMatchesForPlayer(_ playerID: UUID, db: Database) -> EventLoopFuture<[Match]> {
+        return Match.query(on: db)
+            .all()
+            .map { matches in
+                matches.filter { match in
+                    let homePlayers = match.homeBlanket?.players.map { $0.id } ?? []
+                    let awayPlayers = match.awayBlanket?.players.map { $0.id } ?? []
+                    return homePlayers.contains(playerID) || awayPlayers.contains(playerID)
+                }
+            }
+    }
+
     func fetchPlayer(req: Request) throws -> EventLoopFuture<PlayerDetailResponse> {
         guard let playerID = req.parameters.get("id", as: UUID.self) else {
             throw Abort(.badRequest, reason: "Invalid or missing player ID")
         }
 
-        // Fetch player with team
         let playerFuture: EventLoopFuture<Player> = Player.find(playerID, on: req.db)
             .unwrap(or: Abort(.notFound, reason: "Player not found"))
             .flatMap { player in
-                player.$team.load(on: req.db).map { player } // Ensure player's team is loaded
+                player.$team.load(on: req.db).map { player }
             }
 
-        // Fetch upcoming matches based on player's team
-        let upcomingMatchesFuture: EventLoopFuture<[PublicMatchShort]> = playerFuture.flatMap { player in
-            guard let teamID = player.$team.id else {
-                return req.eventLoop.future([]) // No team ID -> return empty list
+        let upcomingMatchesFuture: EventLoopFuture<[PublicMatchShort]> = fetchMatchesForPlayer(playerID, db: req.db)
+            .map { matches in
+                self.mapMatchesToShort(matches)
             }
-            return self.getAllMatchesForTeam(teamID: teamID, db: req.db)
-        }
 
-        // Fetch player statistics
         let playerStatsFuture: EventLoopFuture<PlayerStats> = self.getPlayerStats(playerID: playerID, db: req.db)
 
-        // Combine player details, stats, and upcoming matches
         return playerFuture.and(upcomingMatchesFuture).and(playerStatsFuture).map { (playerAndMatches, stats) in
             let (player, upcomingMatches) = playerAndMatches
 
@@ -344,16 +349,17 @@ final class ClientController: RouteCollection {
                 status: player.status,
                 isCaptain: player.isCaptain,
                 bank: player.bank,
-                stats: stats // Include stats fetched from getPlayerStats
+                stats: stats
             )
 
             return PlayerDetailResponse(
                 player: publicPlayer,
                 upcoming: upcomingMatches,
-                news: nil // Placeholder for news if needed
+                news: nil
             )
         }
     }
+
 
     
     // MARK: LEADERBOARD
