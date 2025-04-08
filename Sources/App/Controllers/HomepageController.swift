@@ -254,6 +254,8 @@ final class HomepageController: RouteCollection {
                         details: match.details,
                         referee: match.$referee.wrappedValue,
                         season: match.$season.wrappedValue,
+                        home: match.homeTeam.id,
+                        away: match.awayTeam.id,
                         homeBlanket: match.homeBlanket,
                         awayBlanket: match.awayBlanket,
                         events: match.events,
@@ -352,6 +354,8 @@ final class HomepageController: RouteCollection {
                                 details: match.details,
                                 referee: match.$referee.wrappedValue,
                                 season: match.$season.wrappedValue,
+                                home: match.homeTeam.id,
+                                away: match.awayTeam.id,
                                 homeBlanket: match.homeBlanket,
                                 awayBlanket: match.awayBlanket,
                                 events: events,
@@ -749,6 +753,8 @@ struct PublicMatch: Content, Codable {
     var details: MatchDetails
     var referee: Referee?
     var season: Season?
+    var home: UUID?
+    var away: UUID?
     var homeBlanket: Blankett?
     var awayBlanket: Blankett?
     var events: [MatchEvent]
