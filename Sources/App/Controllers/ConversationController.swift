@@ -143,15 +143,31 @@ final class ConversationController: RouteCollection {
     
     func createCustom(req: Request) throws -> EventLoopFuture<ConversationWrapper> {
         let conversation = try req.content.decode(Conversation.self)
-        return conversation.create(on: req.db).map {
-            ConversationWrapper(
-                id: conversation.id,
-                team: conversation.$team.id.map { TeamInfo(id: $0.uuidString, name: "", icon: "") }, // Fill in team fields if necessary
-                messages: conversation.messages,
-                subject: conversation.subject,
-                icon: conversation.icon,
-                open: conversation.open ?? true
-            )
+        
+        return conversation.create(on: req.db).flatMap {
+            // Eager load the team after the conversation is saved
+            conversation.$team.load(on: req.db).map {
+                let teamInfo: TeamInfo? = {
+                    if let team = conversation.team,
+                       let teamId = conversation.$team.id {
+                        return TeamInfo(
+                            id: teamId.uuidString,
+                            name: team.teamName,
+                            icon: team.logo
+                        )
+                    }
+                    return nil
+                }()
+                
+                return ConversationWrapper(
+                    id: conversation.id,
+                    team: teamInfo,
+                    messages: conversation.messages,
+                    subject: conversation.subject,
+                    icon: conversation.icon,
+                    open: conversation.open ?? true
+                )
+            }
         }
     }
 

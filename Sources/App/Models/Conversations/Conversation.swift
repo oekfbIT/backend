@@ -32,11 +32,10 @@ final class Conversation: Model, Content {
 
     init() {}
 
-    init(id: UUID? = nil, teamId: UUID?, subject: String, messages: [Message], open: Bool?) {
+    init(id: UUID? = nil, teamId: UUID?, subject: String, open: Bool?) {
         self.id = id
         self.$team.id = teamId
         self.subject = subject
-        self.messages = messages
         self.icon = self.$team.wrappedValue?.logo
         self.open = open
     }
