@@ -143,7 +143,7 @@ final class ConversationController: RouteCollection {
     
     func createCustom(req: Request) throws -> EventLoopFuture<ConversationWrapper> {
         let conversation = try req.content.decode(Conversation.self)
-        
+        conversation.open = true 
         return conversation.create(on: req.db).flatMap {
             // Eager load the team after the conversation is saved
             conversation.$team.load(on: req.db).map {
@@ -165,7 +165,7 @@ final class ConversationController: RouteCollection {
                     messages: conversation.messages,
                     subject: conversation.subject,
                     icon: conversation.icon,
-                    open: conversation.open ?? true
+                    open: true
                 )
             }
         }
@@ -211,20 +211,35 @@ final class ConversationController: RouteCollection {
         guard let id = req.parameters.get("conversationID", as: UUID.self) else {
             throw Abort(.badRequest)
         }
+
         return Conversation.query(on: req.db)
             .with(\.$team)
             .filter(\.$id == id)
             .first()
             .unwrap(or: Abort(.notFound))
-            .map { conversation in
-                ConversationWrapper(
-                    id: conversation.id,
-                    team: conversation.team.map { TeamInfo(id: $0.id!.uuidString, name: $0.teamName, icon: $0.logo) },
-                    messages: conversation.messages,
-                    subject: conversation.subject,
-                    icon: conversation.icon,
-                    open: conversation.open ?? true
-                )
+            .flatMap { conversation in
+                if let currentOpen = conversation.open {
+                    let toggled = !currentOpen
+                    conversation.open = toggled
+                    return conversation.save(on: req.db).map {
+                        ConversationWrapper(
+                            id: conversation.id,
+                            team: conversation.team.map {
+                                TeamInfo(
+                                    id: $0.id!.uuidString,
+                                    name: $0.teamName,
+                                    icon: $0.logo
+                                )
+                            },
+                            messages: conversation.messages,
+                            subject: conversation.subject,
+                            icon: conversation.icon,
+                            open: toggled
+                        )
+                    }
+                } else {
+                    return req.eventLoop.future(error: Abort(.unprocessableEntity, reason: "`open` is nil and cannot be toggled"))
+                }
             }
     }
 
