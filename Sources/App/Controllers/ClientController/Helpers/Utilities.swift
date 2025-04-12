@@ -136,7 +136,7 @@ extension ClientController {
                         score: match.score,
                         status: match.status,
                         firstHalfDate: match.firstHalfStartDate,
-                        secondHalfDate: match.secondHalfStartDate,
+                        secondHalfDate: match.secondHalfStartDate
                     )
                 }
             }
