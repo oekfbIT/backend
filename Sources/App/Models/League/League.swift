@@ -17,6 +17,45 @@ struct Hero: Codable {
     let href: String?
 }
 
+struct SliderData: Codable {
+    var id: UUID?
+    let image: String
+    let title: String
+    let description: String
+    let newsID: UUID?
+}
+
+struct NewSlideData: Content {
+    let image: String
+    let title: String
+    let description: String
+    let newsID: UUID?
+}
+
+struct HomepageData: Codable {
+    let wochenbericht: String
+    let youtubeLink: String?
+    var sliderdata: [SliderData]
+}
+
+// MARK: - League Model Extension
+
+extension League {
+    /// Checks all slides in `homepagedata` and assigns a new UUID to any slide that is missing an id.
+    func ensureSliderIDs() {
+        guard var homepage = self.homepagedata else { return }
+        homepage.sliderdata = homepage.sliderdata.map { slider in
+            var mutableSlider = slider
+            if mutableSlider.id == nil {
+                mutableSlider.id = UUID()
+            }
+            return mutableSlider
+        }
+        self.homepagedata = homepage
+    }
+}
+
+
 final class League: Model, Content, Codable {
     static let schema = "leagues"
 
@@ -91,20 +130,6 @@ extension LeagueMigration: Migration {
     func revert(on database: Database) -> EventLoopFuture<Void> {
         database.schema(League.schema).delete()
     }
-}
-
-
-struct HomepageData: Codable {
-    let wochenbericht: String
-    let youtubeLink: String?
-    let sliderdata: [SliderData]
-}
-
-struct SliderData: Codable {
-    let image: String
-    let title: String
-    let description: String
-    let newsID: UUID?
 }
 
 extension League {

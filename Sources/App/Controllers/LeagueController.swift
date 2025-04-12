@@ -32,6 +32,10 @@ final class LeagueController: RouteCollection {
         route.get(":id", "goalLeaderBoard", use: getGoalLeaderBoard)
         route.get(":id", "redCardLeaderBoard", use: getRedCardLeaderBoard)
         route.get(":id", "yellowCardLeaderBoard", use: getYellowCardLeaderBoard)
+
+        route.post(":id", "addSlide", use: addSlide)
+        route.post(":id", "deleteSlide", ":slideID", use: deleteSlide)
+
     }
     
     func getLeagueTable(req: Request) -> EventLoopFuture<[TableItem]> {
@@ -290,6 +294,82 @@ final class LeagueController: RouteCollection {
             )
         }
         .sorted { ($0.count ?? 0) > ($1.count ?? 0) }
+    }
+
+    // MARK: - New Functions for SliderData Management
+    
+    /// Adds a new slide to the league's homepage slider data.
+    func addSlide(req: Request) -> EventLoopFuture<HTTPStatus> {
+        guard let leagueID = req.parameters.get("id", as: UUID.self) else {
+            return req.eventLoop.makeFailedFuture(
+                Abort(.badRequest, reason: "Invalid or missing league ID")
+            )
+        }
+        
+        let newSlideInput: NewSlideData
+        do {
+            newSlideInput = try req.content.decode(NewSlideData.self)
+        } catch {
+            return req.eventLoop.makeFailedFuture(
+                Abort(.badRequest, reason: "Invalid slide data provided")
+            )
+        }
+        
+        // Create a new slide with an auto-generated id.
+        let slide = SliderData(
+            id: UUID(),
+            image: newSlideInput.image,
+            title: newSlideInput.title,
+            description: newSlideInput.description,
+            newsID: newSlideInput.newsID
+        )
+        
+        return League.find(leagueID, on: req.db)
+            .unwrap(or: Abort(.notFound, reason: "League not found"))
+            .flatMap { league in
+                // Ensure all existing slides have an id.
+                league.ensureSliderIDs()
+                
+                // Make sure there's a homepage to work with.
+                var homepage = league.homepagedata ?? HomepageData(wochenbericht: "", youtubeLink: nil, sliderdata: [])
+                homepage.sliderdata.append(slide)
+                league.homepagedata = homepage
+                return league.save(on: req.db).transform(to: .ok)
+            }
+    }
+    
+    /// Deletes an existing slide from the league's homepage slider data.
+    func deleteSlide(req: Request) -> EventLoopFuture<HTTPStatus> {
+        guard let leagueID = req.parameters.get("id", as: UUID.self),
+              let slideID = req.parameters.get("slideID", as: UUID.self) else {
+            return req.eventLoop.makeFailedFuture(
+                Abort(.badRequest, reason: "Invalid or missing parameters")
+            )
+        }
+        
+        return League.find(leagueID, on: req.db)
+            .unwrap(or: Abort(.notFound, reason: "League not found"))
+            .flatMap { league in
+                // Ensure all existing slides have an id.
+                league.ensureSliderIDs()
+                
+                guard var homepage = league.homepagedata else {
+                    return req.eventLoop.makeFailedFuture(
+                        Abort(.badRequest, reason: "Homepage data not found")
+                    )
+                }
+                
+                // Remove the slide matching the slideID.
+                if let index = homepage.sliderdata.firstIndex(where: { $0.id == slideID }) {
+                    homepage.sliderdata.remove(at: index)
+                    league.homepagedata = homepage
+                    return league.save(on: req.db).transform(to: .ok)
+                } else {
+                    return req.eventLoop.makeFailedFuture(
+                        Abort(.notFound, reason: "Slide not found")
+                    )
+                }
+            }
     }
 
 }
