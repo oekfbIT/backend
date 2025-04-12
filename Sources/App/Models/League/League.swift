@@ -25,6 +25,7 @@ struct SliderData: Codable {
     let newsID: UUID?
 }
 
+// POST BODY
 struct NewSlideData: Content {
     let image: String
     let title: String
