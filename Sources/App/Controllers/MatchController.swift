@@ -648,6 +648,7 @@ final class MatchController: RouteCollection {
             .unwrap(or: Abort(.notFound))
             .flatMap { match in
                 match.status = .completed
+                match.secondHalfEndDate = Date.viennaNow
                 return match.save(on: req.db).transform(to: .ok)
             }
     }
