@@ -293,7 +293,10 @@ final class ClientController: RouteCollection {
                                 events: events,
                                 score: match.score,
                                 status: match.status,
-                                bericht: match.bericht
+                                bericht: match.bericht,
+                                firstHalfDate: match.firstHalfStartDate,
+                                secondHalfDate: match.secondHalfStartDate
+                                
                             )
                         }
                 }

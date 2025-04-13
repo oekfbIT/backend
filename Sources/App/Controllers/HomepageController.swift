@@ -259,7 +259,9 @@ final class HomepageController: RouteCollection {
                         events: match.events,
                         score: match.score,
                         status: match.status,
-                        bericht: match.bericht
+                        bericht: match.bericht,
+                        firstHalfDate: match.firstHalfStartDate,
+                        secondHalfDate: match.secondHalfStartDate
                     )
                 }
             }
@@ -357,7 +359,10 @@ final class HomepageController: RouteCollection {
                                 events: events,
                                 score: match.score,
                                 status: match.status,
-                                bericht: match.bericht
+                                bericht: match.bericht,
+                                firstHalfDate: match.firstHalfStartDate,
+                                secondHalfDate: match.secondHalfStartDate
+
                             )
                         }
                 }
@@ -755,6 +760,8 @@ struct PublicMatch: Content, Codable {
     var score: Score
     var status: GameStatus
     var bericht: String?
+    var firstHalfDate: Date?
+    var secondHalfDate: Date?
 }
 
 struct PublicMatchShort: Content, Codable {

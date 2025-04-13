@@ -145,12 +145,18 @@ extension ClientController {
     // MARK: Upcoming Matches Helper
     func getUpcomingMatchesWithinNext7Days(from seasons: [Season]) -> [Match] {
         let allMatches = seasons.flatMap { $0.matches }
+        let calendar = Calendar.current
+
+        // Start of today (00:00)
         let now = Date()
-        guard let nextWeek = Calendar.current.date(byAdding: .day, value: 7, to: now) else { return [] }
+        guard let startOfToday = calendar.startOfDay(for: now) as Date?,
+              let endDate = calendar.date(byAdding: .day, value: 7, to: startOfToday) else {
+            return []
+        }
 
         return allMatches.filter { match in
             guard let matchDate = match.details.date else { return false }
-            return matchDate >= now && matchDate <= nextWeek
+            return matchDate >= startOfToday && matchDate <= endDate
         }
     }
 
