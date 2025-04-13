@@ -19,7 +19,7 @@ struct UnlockPlayerJob: AsyncScheduledJob {
         // Get all the players with eligibility Gesperrt, Check if their blockdate has passed, if yes set their eligibility to Spielberechtigt
         let players = try await Player.query(on: context.application.db)
             .filter(\.$eligibility == .Gesperrt)
-            .filter(\.$blockdate <= Date())
+            .filter(\.$blockdate <= Date.viennaNow)
             .all()
         
         for player in players {

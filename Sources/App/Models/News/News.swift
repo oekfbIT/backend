@@ -36,7 +36,7 @@ final class NewsItem: Model, Content, Codable {
         self.text = text
         self.title = title
         self.tag = tag
-        self.created = Date()
+        self.created = Date.viennaNow
     }
 }
 

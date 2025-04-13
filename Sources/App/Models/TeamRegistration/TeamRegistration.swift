@@ -63,7 +63,7 @@ final class TeamRegistration: Model, Content, Mergeable {
     
     init() {}
     
-    init(id: UUID? = nil, primary: ContactPerson? = nil, secondary: ContactPerson? = nil, verein: String? = nil, teamName: String, status: TeamRegistrationStatus, bundesland: Bundesland, initialPassword: String? , refereerLink: String? = nil, assignedLeague: UUID? = nil, customerSignedContract: String? = nil, adminSignedContract: String? = nil, teamLogo: String?, paidAmount: Double? = nil, user: UUID? = nil, team: UUID? = nil, isWelcomeEmailSent: Bool? = nil, isLoginDataSent: Bool? = nil, dateCreated: Date? = Date(), kaution: Double? = nil) {
+    init(id: UUID? = nil, primary: ContactPerson? = nil, secondary: ContactPerson? = nil, verein: String? = nil, teamName: String, status: TeamRegistrationStatus, bundesland: Bundesland, initialPassword: String? , refereerLink: String? = nil, assignedLeague: UUID? = nil, customerSignedContract: String? = nil, adminSignedContract: String? = nil, teamLogo: String?, paidAmount: Double? = nil, user: UUID? = nil, team: UUID? = nil, isWelcomeEmailSent: Bool? = nil, isLoginDataSent: Bool? = nil, dateCreated: Date? = Date.viennaNow, kaution: Double? = nil) {
         self.id = id
         self.primary = primary
         self.secondary = secondary

@@ -59,7 +59,7 @@ final class PlayerController: RouteCollection {
                     }
 
                     // Generate invoice number: current year + a random 5-digit number
-                    let year = Calendar.current.component(.year, from: Date())
+                    let year = Calendar.current.component(.year, from: Date.viennaNow)
                     let randomFiveDigitNumber = String(format: "%05d", Int.random(in: 0..<100000))
                     let invoiceNumber = "\(year)\(randomFiveDigitNumber)"
                     

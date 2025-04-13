@@ -148,7 +148,7 @@ extension ClientController {
         let calendar = Calendar.current
 
         // Start of today (00:00)
-        let now = Date()
+        let now = Date.viennaNow
         guard let startOfToday = calendar.startOfDay(for: now) as Date?,
               let endDate = calendar.date(byAdding: .day, value: 7, to: startOfToday) else {
             return []

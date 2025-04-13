@@ -66,7 +66,7 @@ extension Token: ModelTokenAuthenticatable {
             return true
         }
         
-        return expiryDate > Date()
+        return expiryDate > Date.viennaNow
     }
 }
 

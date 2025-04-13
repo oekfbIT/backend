@@ -102,7 +102,7 @@ extension User: Authenticatable {
     
     func createToken(source: SessionSource) throws -> Token {
         let calendar = Calendar(identifier: .gregorian)
-        let expiryDate = calendar.date(byAdding: .year, value: 1, to: Date())
+        let expiryDate = calendar.date(byAdding: .year, value: 1, to: Date.viennaNow)
         return try Token(userId: requireID(),
                          token: [UInt8].random(count: 16).base64,
                          source: source,

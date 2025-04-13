@@ -257,7 +257,7 @@ final class MatchController: RouteCollection {
     // Function to handle adding a red card event
     func addRedCard(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let calendar = Calendar.current
-        let currentDate = Date()
+        let currentDate = Date.viennaNow
 
         // Calculate the block date (8 days from now at 12:00 PM)
         guard let futureDate = calendar.date(byAdding: .day, value: 8, to: currentDate) else {
@@ -293,7 +293,7 @@ final class MatchController: RouteCollection {
 
     func addYellowCard(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let calendar = Calendar.current
-        let currentDate = Date()
+        let currentDate = Date.viennaNow
 
         guard let futureDate = calendar.date(byAdding: .day, value: 8, to: currentDate) else {
             throw Abort(.internalServerError, reason: "Failed to calculate block date")
@@ -333,10 +333,9 @@ final class MatchController: RouteCollection {
             }
     }
 
-
     func addYellowRedCard(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let calendar = Calendar.current
-        let currentDate = Date()
+        let currentDate = Date.viennaNow
 
         // Calculate the block date (8 days from now at 12:00 PM)
         guard let futureDate = calendar.date(byAdding: .day, value: 8, to: currentDate) else {
@@ -616,7 +615,7 @@ final class MatchController: RouteCollection {
             .unwrap(or: Abort(.notFound))
             .flatMap { match in
                 match.status = .first
-                match.firstHalfStartDate = Date()
+                match.firstHalfStartDate = Date.viennaNow
                 return match.save(on: req.db).transform(to: .ok)
             }
     }
@@ -627,7 +626,7 @@ final class MatchController: RouteCollection {
             .unwrap(or: Abort(.notFound))
             .flatMap { match in
                 match.status = .halftime
-                match.firstHalfEndDate = Date()
+                match.firstHalfEndDate = Date.viennaNow
                 return match.save(on: req.db).transform(to: .ok)
             }
     }
@@ -638,7 +637,7 @@ final class MatchController: RouteCollection {
             .unwrap(or: Abort(.notFound))
             .flatMap { match in
                 match.status = .second
-                match.secondHalfStartDate = Date()
+                match.secondHalfStartDate = Date.viennaNow
                 return match.save(on: req.db).transform(to: .ok)
             }
     }

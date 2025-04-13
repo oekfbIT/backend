@@ -171,14 +171,14 @@ final class TeamController: RouteCollection {
             .unwrap(or: Abort(.notFound))
             .flatMap { team in
                 // Get the current year and generate a random 5-digit number
-                let currentYear = Calendar.current.component(.year, from: Date())
+                let currentYear = Calendar.current.component(.year, from: Date.viennaNow)
                 let randomNumber = String.randomNum(length: 5)
                 let number = "\(currentYear)-\(randomNumber)"
                 
                 // Format the current date to "dd.MM.yyyy"
                 let dateFormatter = DateFormatter()
                 dateFormatter.dateFormat = "dd.MM.yyyy"
-                let currentDate = dateFormatter.string(from: Date())
+                let currentDate = dateFormatter.string(from: Date.viennaNow)
                 
                 // Set the kennzeichen
                 let kennzeichen = "\(currentDate) Guthaben Einzahlung"
@@ -277,7 +277,7 @@ final class TeamController: RouteCollection {
                 
                 // Calculate the next upcoming Tuesday at 12:00 Vienna/Austria Time
                 let calendar = Calendar(identifier: .gregorian)
-                let now = Date()
+                let now = Date.viennaNow
                 var components = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: now)
                 let weekday = calendar.component(.weekday, from: now)
                 
@@ -295,7 +295,7 @@ final class TeamController: RouteCollection {
                 
                 team.overdraftDate = viennaOverdraftDate
                 
-                let year = calendar.component(.year, from: Date())
+                let year = calendar.component(.year, from: Date.viennaNow)
                 let randomFiveDigitNumber = String(format: "%05d", Int.random(in: 0..<100000))
                 let invoiceNumber = "\(year)\(randomFiveDigitNumber)"
                 let rechnungAmount: Double = 50.0

@@ -139,7 +139,7 @@ extension League {
             return db.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "League ID is required"))
         }
 
-        let currentYear = Calendar.current.component(.year, from: Date())
+        let currentYear = Calendar.current.component(.year, from: Date.viennaNow)
         let nextYear = currentYear + 1
         let seasonName = "\(currentYear)/\(nextYear)"
         let season = Season(name: seasonName, details: 0)

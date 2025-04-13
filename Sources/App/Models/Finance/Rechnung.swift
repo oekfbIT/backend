@@ -54,7 +54,7 @@ final class Rechnung: Model, Content, Codable {
         self.summ = summ
         self.topay = topay ?? summ
         self.kennzeichen = kennzeichen
-        self.created = created ?? Date() // Set the created date to the current date if not provided
+        self.created = created ?? Date.viennaNow
         
         // Generate due date based on the created date
         let calendar = Calendar.current

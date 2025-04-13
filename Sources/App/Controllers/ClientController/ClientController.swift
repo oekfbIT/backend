@@ -33,7 +33,6 @@ final class ClientController: RouteCollection {
         route.get("leaderboard", ":id", "redCard", use: getRedCardLeaderBoard)
         route.get("leaderboard",":id", "yellowCard", use: getYellowCardLeaderBoard)
         route.get("blocked", "league", ":code", use: blockedPlayers)
-
     }
     
     // MARK: League Selection
@@ -469,7 +468,7 @@ final class ClientController: RouteCollection {
             .flatMapThrowing { league in
                 guard let teams = league?.teams else { return [] }
                 
-                let currentDate = Date() // Get the current date
+                let currentDate = Date.viennaNow
 
                 // Collect all players that meet the conditions
                 let blockedPlayers = teams.flatMap { team in

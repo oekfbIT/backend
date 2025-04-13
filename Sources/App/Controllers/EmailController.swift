@@ -157,7 +157,7 @@ final class EmailController {
         }
 
         // Calculate the year for the deposit return
-        let year = Calendar.current.component(.year, from: Date()) + 3
+        let year = Calendar.current.component(.year, from: Date.viennaNow) + 3
 
         // Debugging: Print the SMTP configuration
         print("SMTP Configuration: \(req.application.smtp.configuration)")

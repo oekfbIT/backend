@@ -116,7 +116,7 @@ final class HomepageController: RouteCollection {
 
     private func getUpcomingMatches(from seasons: [Season]) -> [Match] {
         let allMatches = seasons.flatMap { $0.matches }
-        let now = Date()
+        let now = Date.viennaNow
         guard let nextWeek = Calendar.current.date(byAdding: .day, value: 6, to: now) else { return [] }
 
         return allMatches.filter { match in

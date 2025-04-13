@@ -107,7 +107,7 @@ final class ConversationController: RouteCollection {
         var message = try req.content.decode(Message.self)
         message.id = UUID()
         message.read = false
-        message.created = Date()
+        message.created = Date.viennaNow
         
         return Conversation.find(conversationID, on: req.db)
             .unwrap(or: Abort(.notFound))
