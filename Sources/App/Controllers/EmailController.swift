@@ -139,6 +139,57 @@ final class EmailController {
         }
     }
 
+    func sendCancellationNotification(req: Request, recipient: String, match: Match) throws -> EventLoopFuture<HTTPStatus> {
+        // Apply the SMTP configuration
+        req.application.smtp.configuration = smtpConfig
+        
+        let matchDateString = match.details.date?.formatted(date: .abbreviated, time: .shortened) ?? "unbekanntes Datum"
+
+        let emailBody = """
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; }
+                p { margin-bottom: 10px; }
+                ul { padding-left: 20px; }
+                li { margin-bottom: 8px; }
+                a { font-size: 16px; color: #007bff; text-decoration: none; }
+            </style>
+        </head>
+        <body>
+            <p>Sehr geehrter Mannschaftsleiter,</p>
+
+            <p>Die gegnerische Mannschaft hat das Spiel am <strong>Spieltag:\(match.details.gameday), am \(matchDateString)</strong> offiziell abgesagt.</p>
+
+            <p>Sie müssen zu diesem Spieltermin nicht erscheinen. Ihrer Mannschaft wurden automatisch <strong>3 Punkte</strong> gutgeschrieben.</p>
+
+            <p>Sportliche Grüße,<br>
+            Ihr ÖKFB Team</p>
+        </body>
+        </html>
+        """
+
+        let email = try Email(
+            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
+            to: [EmailAddress(address: recipient)],
+            bcc: [EmailAddress(address: "office@oekfb.eu", name: "Admin")],
+            subject: "OEKFB Absage - Absagen Benachrichtigung",
+            body: emailBody,
+            isBodyHtml: true
+        )
+
+        // Sending the email
+        return req.smtp.send(email).flatMapThrowing { result in
+            switch result {
+            case .success:
+                return .ok
+            case .failure(let error):
+                print("Email failed to send: \(error.localizedDescription)")
+                throw Abort(.internalServerError, reason: "Failed to send email: \(error.localizedDescription)")
+            }
+        }
+    }
+
     func sendPaymentMail(req: Request, recipient: String, registration: TeamRegistration?) throws -> EventLoopFuture<HTTPStatus> {
         // Apply the SMTP configuration
         req.application.smtp.configuration = smtpConfig
@@ -218,8 +269,6 @@ final class EmailController {
             }
         }
     }
-
-
 
     func sendPaymentInstruction(req: Request, recipient: String, due: Double) throws -> EventLoopFuture<HTTPStatus> {
         // Apply the SMTP configuration

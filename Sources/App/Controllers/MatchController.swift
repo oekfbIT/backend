@@ -42,9 +42,11 @@ func updatePlayerCardStatus(in blanket: inout Blankett?, playerId: UUID, cardTyp
 
 final class MatchController: RouteCollection {
     let repository: StandardControllerRepository<Match>
+    let emailController: EmailController
 
     init(path: String) {
         self.repository = StandardControllerRepository<Match>(path: path)
+        self.emailController = EmailController()
     }
 
     func setupRoutes(on app: RoutesBuilder) throws {
@@ -772,7 +774,6 @@ final class MatchController: RouteCollection {
             }
         }
     }
-
     
     func teamCancelGame(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let matchId = try req.parameters.require("id", as: UUID.self)
@@ -783,18 +784,27 @@ final class MatchController: RouteCollection {
         
         let noShowRequest = try req.content.decode(NoShowRequest.self)
         
-        return Match.find(matchId, on: req.db)
+        return Match.query(on: req.db)
+            .with(\.$homeTeam)
+            .with(\.$awayTeam)
+            .filter(\.$id == matchId)
+            .first()
             .unwrap(or: Abort(.notFound))
             .flatMap { match in
                 let winningTeamId: UUID
-                
+                var opponentEmail: String? = nil
+
                 switch noShowRequest.winningTeam.lowercased() {
                 case "home":
                     match.score = Score(home: 6, away: 0)
                     winningTeamId = match.$homeTeam.id
+                    opponentEmail = match.homeTeam.usremail
+
                 case "away":
                     match.score = Score(home: 0, away: 6)
                     winningTeamId = match.$awayTeam.id
+                    opponentEmail = match.awayTeam.usremail
+
                 default:
                     return req.eventLoop.future(error: Abort(.badRequest, reason: "Invalid winning team specified"))
                 }
@@ -840,6 +850,13 @@ final class MatchController: RouteCollection {
                                 
                                 return rechnung.save(on: req.db).flatMap {
                                     team.balance = balance - Double(rechnungAmount)
+                                    
+                                    do {
+                                        try emailController.sendCancellationNotification(req: req, recipient: opponentEmail!, match: match)
+                                    } catch {
+                                        print("Unable to send email. ")
+                                    }
+                                    
                                     return team.save(on: req.db).map {
                                         HTTPStatus.ok
                                     }
@@ -991,7 +1008,6 @@ final class MatchController: RouteCollection {
             }
     }
 
-}
 
 
 extension MatchController {
