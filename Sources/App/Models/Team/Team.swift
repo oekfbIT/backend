@@ -35,6 +35,7 @@ final class Team: Model, Content {
     @Field(key: FieldKeys.trikot) var trikot: Trikot
     @OptionalField(key: FieldKeys.balance) var balance: Double?
     @OptionalField(key: FieldKeys.referCode) var referCode: String?
+    @OptionalField(key: FieldKeys.cancelled) var cancelled: Int?
     @OptionalField(key: FieldKeys.overdraft) var overdraft: Bool?
     @OptionalField(key: FieldKeys.overdraftDate) var overdraftDate: Date?
 
@@ -54,6 +55,7 @@ final class Team: Model, Content {
         static var userId: FieldKey { "user" }
         static var points: FieldKey { "points" }
         static var logo: FieldKey { "logo" }
+        static var cancelled: FieldKey { "cancelled" }
         static var coverimg: FieldKey { "coverimg" }
         static var leagueId: FieldKey { "league" }
         static var leagueCode: FieldKey { "leagueCode" }
@@ -96,6 +98,7 @@ final class Team: Model, Content {
          balance: Double? = nil,
          referCode: String? = String.randomString(length: 6).uppercased(),
          overdraft: Bool? = false,
+         cancelled: Int? = nil,
          overdraftDate: Date? = nil,
          usremail: String?,
          usrpass: String?,
@@ -118,6 +121,7 @@ final class Team: Model, Content {
         self.trikot = trikot
         self.balance = balance
         self.referCode = referCode
+        self.cancelled = cancelled
         self.overdraft = overdraft
         self.overdraftDate = overdraftDate
         self.usrpass = usrpass
@@ -173,6 +177,7 @@ extension Team: Mergeable {
         merged.averageAge = other.averageAge
         merged.coach = other.coach
         merged.captain = other.captain
+        merged.cancelled = other.cancelled
         merged.trikot = other.trikot
         merged.balance = other.balance
         merged.overdraft = other.overdraft
@@ -204,6 +209,7 @@ extension TeamMigration: Migration {
             .field(Team.FieldKeys.coach, .json)
             .field(Team.FieldKeys.captain, .string)
             .field(Team.FieldKeys.totalMatches, .int)
+            .field(Team.FieldKeys.cancelled, .int)
             .field(Team.FieldKeys.totalGoals, .int)
             .field(Team.FieldKeys.trikot, .json)
             .field(Team.FieldKeys.balance, .double)

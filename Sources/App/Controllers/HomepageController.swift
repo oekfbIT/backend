@@ -267,6 +267,36 @@ final class HomepageController: RouteCollection {
             }
     }
 
+    func fetchLeagueLivescore(req: Request) throws -> EventLoopFuture<[PublicMatch]> {
+        return Match.query(on: req.db)
+            .filter(\.$status ~~ [.first, .second, .halftime])
+            .with(\.$season) { seasonQuery in
+                seasonQuery.with(\.$league)
+            }
+            .with(\.$homeTeam)
+            .with(\.$awayTeam)
+            .with(\.$events)
+            .all()
+            .map { matches in
+                matches.map { match in
+                    PublicMatch(
+                        id: match.id,
+                        details: match.details,
+                        referee: match.$referee.wrappedValue,
+                        season: match.$season.wrappedValue,
+                        homeBlanket: match.homeBlanket,
+                        awayBlanket: match.awayBlanket,
+                        events: match.events,
+                        score: match.score,
+                        status: match.status,
+                        bericht: match.bericht,
+                        firstHalfDate: match.firstHalfStartDate,
+                        secondHalfDate: match.secondHalfStartDate
+                    )
+                }
+            }
+    }
+
     func fetchPlayerDetail(req: Request) throws -> EventLoopFuture<PublicPlayer> {
         guard let playerID = req.parameters.get("playerID", as: UUID.self) else {
             throw Abort(.badRequest, reason: "Invalid or missing player ID")

@@ -33,6 +33,7 @@ final class ClientController: RouteCollection {
         route.get("leaderboard", ":id", "redCard", use: getRedCardLeaderBoard)
         route.get("leaderboard",":id", "yellowCard", use: getYellowCardLeaderBoard)
         route.get("blocked", "league", ":code", use: blockedPlayers)
+        route.get("livescore",use: getLivescoreShort)
     }
     
     // MARK: League Selection
@@ -508,6 +509,45 @@ final class ClientController: RouteCollection {
                 return coach
             }
             .encodeResponse(for: req) // Ensures proper encoding of the response
+    }
+    
+    func getLivescoreShort(req: Request) throws -> EventLoopFuture<[LeagueMatchesShort]> {
+        return Match.query(on: req.db)
+            .filter(\.$status ~~ [.first, .second, .halftime])
+            .with(\.$season) { seasonQuery in
+                seasonQuery.with(\.$league)
+            }
+            .all()
+            .map { matches in
+                var leagueMatchesDict = [String: LeagueMatchesShort]()
+                
+                for match in matches {
+                    // Safely unwrap season, then league
+                    guard let league = match.season?.league else { continue }
+                    let leagueName = league.name ?? "Nicht Gennant"
+                    
+                    // Initialize the entry in leagueMatchesDict if needed
+                    if leagueMatchesDict[leagueName] == nil {
+                        leagueMatchesDict[leagueName] = LeagueMatchesShort(matches: [], league: leagueName)
+                    }
+                    
+                    // Build our short match object
+                    let short = PublicMatchShort(
+                        id: match.id,
+                        details: match.details,
+                        homeBlanket: MiniBlankett(id: match.$homeTeam.id, logo: match.homeBlanket?.logo, name: match.homeBlanket?.name),
+                        awayBlanket: MiniBlankett(id: match.$awayTeam.id, logo: match.awayBlanket?.logo, name: match.awayBlanket?.name),
+                        score: match.score,
+                        status: match.status,
+                        firstHalfDate: match.firstHalfStartDate,
+                        secondHalfDate: match.secondHalfStartDate
+                    )
+                    
+                    leagueMatchesDict[leagueName]?.matches.append(short)
+                }
+                
+                return Array(leagueMatchesDict.values)
+            }
     }
 
 }

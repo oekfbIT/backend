@@ -6,6 +6,10 @@ struct LeagueMatches: Codable, Content{
     var league: String
 }
 
+struct LeagueMatchesShort: Codable, Content{
+    var matches: [PublicMatchShort]
+    var league: String
+}
 // Define the CardRequest struct inside the do-catch block
 struct CardRequest: Content {
     let playerId: UUID
@@ -85,6 +89,7 @@ final class MatchController: RouteCollection {
         route.patch(":id", "endGame", use: endGame)
         route.patch(":id", "submit", use: completeGame)
         route.patch(":id", "noShowGame", use: noShowGame)
+        route.patch(":id", "teamcancel", use: teamCancelGame)
         route.patch(":id", "spielabbruch", use: spielabbruch)
         route.patch(":id", "done", use: done)
     }
@@ -203,7 +208,7 @@ final class MatchController: RouteCollection {
                 return req.eventLoop.makeSucceededFuture(leagueMatchesArray)
             }
     }
-
+    
     // Function to handle adding a goal and updating the score
     func addGoal(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let matchId = try req.parameters.require("id", as: UUID.self)
@@ -733,12 +738,12 @@ final class MatchController: RouteCollection {
         }
         
         let noShowRequest = try req.content.decode(NoShowRequest.self)
-
+        
         return Match.find(matchId, on: req.db)
             .unwrap(or: Abort(.notFound))
             .flatMap { match in
                 let winningTeamId: UUID
-
+                
                 switch noShowRequest.winningTeam.lowercased() {
                 case "home":
                     match.score = Score(home: 6, away: 0)
@@ -749,21 +754,101 @@ final class MatchController: RouteCollection {
                 default:
                     return req.eventLoop.future(error: Abort(.badRequest, reason: "Invalid winning team specified"))
                 }
-
+                
                 match.status = .cancelled
-
+                
                 return match.save(on: req.db)
                     .flatMap {
                         return Team.find(winningTeamId, on: req.db)
                             .unwrap(or: Abort(.notFound))
                             .flatMap { team in
                                 team.points += 3
-                                return team.save(on: req.db).transform(to: .ok)
+                                
+                                return team.save(on: req.db).map {
+                                    HTTPStatus.ok
+                                }
+                            }
+                    }
+            }
+        }
+    }
+
+    
+    func teamCancelGame(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        let matchId = try req.parameters.require("id", as: UUID.self)
+        
+        struct NoShowRequest: Content {
+            let winningTeam: String // "home" or "away"
+        }
+        
+        let noShowRequest = try req.content.decode(NoShowRequest.self)
+        
+        return Match.find(matchId, on: req.db)
+            .unwrap(or: Abort(.notFound))
+            .flatMap { match in
+                let winningTeamId: UUID
+                
+                switch noShowRequest.winningTeam.lowercased() {
+                case "home":
+                    match.score = Score(home: 6, away: 0)
+                    winningTeamId = match.$homeTeam.id
+                case "away":
+                    match.score = Score(home: 0, away: 6)
+                    winningTeamId = match.$awayTeam.id
+                default:
+                    return req.eventLoop.future(error: Abort(.badRequest, reason: "Invalid winning team specified"))
+                }
+                
+                match.status = .cancelled
+                
+                return match.save(on: req.db)
+                    .flatMap {
+                        return Team.find(winningTeamId, on: req.db)
+                            .unwrap(or: Abort(.notFound))
+                            .flatMap { team in
+                                team.points += 3
+                                
+                                // Check cancellation count
+                                let cancelled = team.cancelled ?? 0
+                                guard cancelled < 3 else {
+                                    return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Schon 3 Absagen gemacht diese Saison."))
+                                }
+                                
+                                let newCancelled = cancelled + 1
+                                team.cancelled = newCancelled
+                                
+                                // Determine invoice amount
+                                let rechnungAmount: Int
+                                switch newCancelled {
+                                case 1: rechnungAmount = 170
+                                case 2: rechnungAmount = 270
+                                case 3: rechnungAmount = 370
+                                default: rechnungAmount = 0
+                                }
+                                
+                                let invoiceNumber = UUID().uuidString
+                                let balance = team.balance ?? 0
+                                
+                                let rechnung = Rechnung(
+                                    team: team.id,
+                                    teamName: team.teamName,
+                                    number: invoiceNumber,
+                                    summ: Double(rechnungAmount),
+                                    topay: nil,
+                                    kennzeichen: "Spiel Absage: \(team.cancelled ?? 0)"
+                                )
+                                
+                                return rechnung.save(on: req.db).flatMap {
+                                    team.balance = balance - Double(rechnungAmount)
+                                    return team.save(on: req.db).map {
+                                        HTTPStatus.ok
+                                    }
+                                }
                             }
                     }
             }
     }
-
+    
     func spielabbruch(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let matchId = try req.parameters.require("id", as: UUID.self)
         
