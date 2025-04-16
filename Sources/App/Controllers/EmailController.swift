@@ -139,57 +139,6 @@ final class EmailController {
         }
     }
 
-    func sendCancellationNotification(req: Request, recipient: String, match: Match) throws -> EventLoopFuture<HTTPStatus> {
-        // Apply the SMTP configuration
-        req.application.smtp.configuration = smtpConfig
-        
-        let matchDateString = match.details.date?.formatted(date: .abbreviated, time: .shortened) ?? "unbekanntes Datum"
-
-        let emailBody = """
-        <html>
-        <head>
-            <style>
-                body { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; }
-                p { margin-bottom: 10px; }
-                ul { padding-left: 20px; }
-                li { margin-bottom: 8px; }
-                a { font-size: 16px; color: #007bff; text-decoration: none; }
-            </style>
-        </head>
-        <body>
-            <p>Sehr geehrter Mannschaftsleiter,</p>
-
-            <p>Die gegnerische Mannschaft hat das Spiel am <strong>Spieltag:\(match.details.gameday), am \(matchDateString)</strong> offiziell abgesagt.</p>
-
-            <p>Sie müssen zu diesem Spieltermin nicht erscheinen. Ihrer Mannschaft wurden automatisch <strong>3 Punkte</strong> gutgeschrieben.</p>
-
-            <p>Sportliche Grüße,<br>
-            Ihr ÖKFB Team</p>
-        </body>
-        </html>
-        """
-
-        let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
-            to: [EmailAddress(address: recipient)],
-            bcc: [EmailAddress(address: "office@oekfb.eu", name: "Admin")],
-            subject: "OEKFB Absage - Absagen Benachrichtigung",
-            body: emailBody,
-            isBodyHtml: true
-        )
-
-        // Sending the email
-        return req.smtp.send(email).flatMapThrowing { result in
-            switch result {
-            case .success:
-                return .ok
-            case .failure(let error):
-                print("Email failed to send: \(error.localizedDescription)")
-                throw Abort(.internalServerError, reason: "Failed to send email: \(error.localizedDescription)")
-            }
-        }
-    }
-
     func sendPaymentMail(req: Request, recipient: String, registration: TeamRegistration?) throws -> EventLoopFuture<HTTPStatus> {
         // Apply the SMTP configuration
         req.application.smtp.configuration = smtpConfig
@@ -533,4 +482,215 @@ final class EmailController {
     }
 
     
+}
+
+extension EmailController {
+    func sendCancellationNotification(req: Request, recipient: String, match: Match) throws -> EventLoopFuture<HTTPStatus> {
+        // Apply the SMTP configuration
+        req.application.smtp.configuration = smtpConfig
+        
+        let matchDateString = match.details.date?.formatted(date: .numeric, time: .shortened) ?? "unbekanntes Datum"
+
+        let emailBody = """
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; }
+                p { margin-bottom: 10px; }
+                ul { padding-left: 20px; }
+                li { margin-bottom: 8px; }
+                a { font-size: 16px; color: #007bff; text-decoration: none; }
+            </style>
+        </head>
+        <body>
+            <p>Sehr geehrter Mannschaftsleiter,</p>
+
+            <p>Die gegnerische Mannschaft hat das Spiel vom <strong>\(match.details.gameday). Spieltag, am \(matchDateString)</strong> offiziell abgesagt.</p>
+
+            <p>Sie müssen zu diesem Spieltermin nicht erscheinen. Ihrer Mannschaft wurden automatisch <strong>3 Punkte</strong> gutgeschrieben und mit 6 Toren gewonnen.</p>
+
+            <p>Sportliche Grüße,<br>
+            Ihr ÖKFB Team</p>
+        </body>
+        </html>
+        """
+
+        let email = try Email(
+            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
+            to: [EmailAddress(address: recipient)],
+            bcc: [EmailAddress(address: "baha@oekfb.eu", name: "Admin"), EmailAddress(address: "office@oekfb.eu", name: "Admin")],
+            subject: "OEKFB Absage - Absagen Benachrichtigung",
+            body: emailBody,
+            isBodyHtml: true
+        )
+
+        return req.smtp.send(email).flatMapThrowing { result in
+            switch result {
+            case .success:
+                return .ok
+            case .failure(let error):
+                print("Email failed to send: \(error.localizedDescription)")
+                throw Abort(.internalServerError, reason: "Failed to send email: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    func sendPostPone(req: Request, cancellerName: String, recipient: String, match: Match) throws -> EventLoopFuture<HTTPStatus> {
+        // Apply the SMTP configuration
+        req.application.smtp.configuration = smtpConfig
+        
+        let matchDateString = match.details.date?.formatted(date: .numeric, time: .shortened) ?? "unbekanntes Datum"
+
+        let emailBody = """
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; }
+                p { margin-bottom: 10px; }
+                ul { padding-left: 20px; }
+                li { margin-bottom: 8px; }
+                a { font-size: 16px; color: #007bff; text-decoration: none; }
+            </style>
+        </head>
+        <body>
+            <p>Sehr geehrter Mannschaftsleiter,</p>
+
+            <p>Die gegnerische Mannschaft: \(cancellerName) bittet, das Spiel vom <strong>\(match.details.gameday). Spieltag, am \(matchDateString)</strong> offiziell zu verschieben.</p>
+
+            <p>Eine Spielverlegung ist nur mit Ihrem Einverständnis möglich. Der ÖKFB-Administrator wird das Spiel auf ein vorab abgestimmtes Datum verschieben.</p>
+
+            <p>Bitte folgen Sie diesem Link oder loggen Sie sich ein unter <a href="https://team.oekfb.eu">team.oekfb.eu</a>, um diese Anfrage zu bestätigen oder abzulehnen.</p>
+
+            <p>Sportliche Grüße,<br>
+            Ihr ÖKFB Team</p>
+        </body>
+        </html>
+        """
+
+        let email = try Email(
+            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
+            to: [EmailAddress(address: recipient)],
+            bcc: [EmailAddress(address: "office@oekfb.eu", name: "Admin")],
+            subject: "OEKFB Spielverlegung Anfrage",
+            body: emailBody,
+            isBodyHtml: true
+        )
+
+        // Sending the email
+        return req.smtp.send(email).flatMapThrowing { result in
+            switch result {
+            case .success:
+                return .ok
+            case .failure(let error):
+                print("Email failed to send: \(error.localizedDescription)")
+                throw Abort(.internalServerError, reason: "Failed to send email: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    func approve(req: Request, approverName: String, recipient: String, match: Match) throws -> EventLoopFuture<HTTPStatus> {
+        // Apply the SMTP configuration
+        req.application.smtp.configuration = smtpConfig
+        
+        let matchDateString = match.details.date?.formatted(date: .numeric, time: .shortened) ?? "unbekanntes Datum"
+
+        let emailBody = """
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; }
+                p { margin-bottom: 10px; }
+                a { font-size: 16px; color: #007bff; text-decoration: none; }
+            </style>
+        </head>
+        <body>
+            <p>Sehr geehrter Mannschaftsleiter,</p>
+
+            <p>Die gegnerische Mannschaft: <strong>\(approverName)</strong> hat Ihrer Anfrage zur Spielverlegung vom <strong>\(match.details.gameday). Spieltag, am \(matchDateString)</strong> <strong>zugestimmt</strong>.</p>
+
+            <p>Das Spiel wird nun vom ÖKFB-Administrator auf ein vorab abgestimmtes Datum verschoben.</p>
+
+            <p>Weitere Informationen zum neuen Spieltermin erhalten Sie per E-Mail oder als interne Nachricht in Ihrem Posteingang.</p>
+
+            <p>Vielen Dank für Ihr sportliches Verhalten.</p>
+
+            <p>Sportliche Grüße,<br>
+            Ihr ÖKFB Team</p>
+        </body>
+        </html>
+        """
+
+
+        let email = try Email(
+            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
+            to: [EmailAddress(address: recipient)],
+            bcc: [EmailAddress(address: "office@oekfb.eu", name: "Admin")],
+            subject: "OEKFB Spielverlegung Anfrage - Zusagt",
+            body: emailBody,
+            isBodyHtml: true
+        )
+
+        // Sending the email
+        return req.smtp.send(email).flatMapThrowing { result in
+            switch result {
+            case .success:
+                return .ok
+            case .failure(let error):
+                print("Email failed to send: \(error.localizedDescription)")
+                throw Abort(.internalServerError, reason: "Failed to send email: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    func deny(req: Request, denierName: String, recipient: String, match: Match) throws -> EventLoopFuture<HTTPStatus> {
+        // Apply the SMTP configuration
+        req.application.smtp.configuration = smtpConfig
+        
+        let matchDateString = match.details.date?.formatted(date: .numeric, time: .shortened) ?? "unbekanntes Datum"
+
+        let emailBody = """
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; }
+                p { margin-bottom: 10px; }
+                a { font-size: 16px; color: #007bff; text-decoration: none; }
+            </style>
+        </head>
+        <body>
+            <p>Sehr geehrter Mannschaftsleiter,</p>
+
+            <p>Die gegnerische Mannschaft: <strong>\(denierName)</strong> hat der Spielverlegung vom <strong>\(match.details.gameday). Spieltag, am \(matchDateString)</strong> <strong>nicht zugestimmt</strong>.</p>
+
+            <p>Das Spiel findet daher wie ursprünglich geplant statt.</p>
+
+            <p>Bitte stellen Sie sicher, dass Ihre Mannschaft zum angesetzten Termin vollständig antritt.</p>
+
+            <p>Sportliche Grüße,<br>
+            Ihr ÖKFB Team</p>
+        </body>
+        </html>
+        """
+
+
+        let email = try Email(
+            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
+            to: [EmailAddress(address: recipient)],
+            bcc: [EmailAddress(address: "office@oekfb.eu", name: "Admin")],
+            subject: "OEKFB Spielverlegung Anfrage - Abgeleht",
+            body: emailBody,
+            isBodyHtml: true
+        )
+
+        // Sending the email
+        return req.smtp.send(email).flatMapThrowing { result in
+            switch result {
+            case .success:
+                return .ok
+            case .failure(let error):
+                print("Email failed to send: \(error.localizedDescription)")
+                throw Abort(.internalServerError, reason: "Failed to send email: \(error.localizedDescription)")
+            }
+        }
+    }
 }

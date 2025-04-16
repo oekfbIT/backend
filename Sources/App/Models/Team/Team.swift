@@ -36,6 +36,7 @@ final class Team: Model, Content {
     @OptionalField(key: FieldKeys.balance) var balance: Double?
     @OptionalField(key: FieldKeys.referCode) var referCode: String?
     @OptionalField(key: FieldKeys.cancelled) var cancelled: Int?
+    @OptionalField(key: FieldKeys.postponed) var postponed: Int?
     @OptionalField(key: FieldKeys.overdraft) var overdraft: Bool?
     @OptionalField(key: FieldKeys.overdraftDate) var overdraftDate: Date?
 
@@ -56,6 +57,7 @@ final class Team: Model, Content {
         static var points: FieldKey { "points" }
         static var logo: FieldKey { "logo" }
         static var cancelled: FieldKey { "cancelled" }
+        static var postponed: FieldKey { "postponed" }
         static var coverimg: FieldKey { "coverimg" }
         static var leagueId: FieldKey { "league" }
         static var leagueCode: FieldKey { "leagueCode" }
@@ -99,6 +101,7 @@ final class Team: Model, Content {
          referCode: String? = String.randomString(length: 6).uppercased(),
          overdraft: Bool? = false,
          cancelled: Int? = nil,
+         postponed: Int? = nil,
          overdraftDate: Date? = nil,
          usremail: String?,
          usrpass: String?,
@@ -122,6 +125,7 @@ final class Team: Model, Content {
         self.balance = balance
         self.referCode = referCode
         self.cancelled = cancelled
+        self.postponed = postponed
         self.overdraft = overdraft
         self.overdraftDate = overdraftDate
         self.usrpass = usrpass
@@ -160,6 +164,13 @@ final class Team: Model, Content {
             players: self.players.map { $0.asPublic() }
         )
     }
+    
+    func asPublicTeam() -> PublicTeamShort {
+        PublicTeamShort(id: self.id,
+                        sid: self.sid,
+                        logo: self.logo,
+                        teamName: self.teamName)
+    }
 }
 
 
@@ -178,6 +189,7 @@ extension Team: Mergeable {
         merged.coach = other.coach
         merged.captain = other.captain
         merged.cancelled = other.cancelled
+        merged.postponed = other.postponed
         merged.trikot = other.trikot
         merged.balance = other.balance
         merged.overdraft = other.overdraft
@@ -210,6 +222,7 @@ extension TeamMigration: Migration {
             .field(Team.FieldKeys.captain, .string)
             .field(Team.FieldKeys.totalMatches, .int)
             .field(Team.FieldKeys.cancelled, .int)
+            .field(Team.FieldKeys.postponed, .int)
             .field(Team.FieldKeys.totalGoals, .int)
             .field(Team.FieldKeys.trikot, .json)
             .field(Team.FieldKeys.balance, .double)

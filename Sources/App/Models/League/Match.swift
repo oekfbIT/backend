@@ -71,9 +71,6 @@ enum GameStatus: String, Codable {
 
 final class Match: Model, Content, Codable {
     static let schema = "matches"
-
-    // Add Blankett ? Add Bank ? Add minute Update ?
-    
     
     // PRE GAME
     @ID(custom: FieldKeys.id) var id: UUID?
