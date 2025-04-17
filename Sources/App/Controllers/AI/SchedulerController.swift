@@ -45,6 +45,36 @@ struct DressLockJob: AsyncScheduledJob {
     }
 }
 
+struct CancelLockJob: AsyncScheduledJob {
+    func run(context: QueueContext) async throws {
+        context.logger.info("Cancel Job is running.")
+        print("Cancel Job is running.")
+
+        // Job logic
+        // Get the first item for TransferSettings (as there should be only 1 on the system) and set the isDressChangeOpen to false
+        if let transferSetting = try await TransferSettings.query(on: context.application.db).first() {
+            transferSetting.isCancelPossible = false
+            try await transferSetting.save(on: context.application.db)
+            context.logger.info("TransferSettings isCancelPossible set to false.")
+        }
+    }
+}
+
+struct CancelUnlockJob: AsyncScheduledJob {
+    func run(context: QueueContext) async throws {
+        context.logger.info("Cancel Unclock Job is running.")
+        print("Cancel Unlock Job is running.")
+
+        // Job logic
+        // Get the first item for TransferSettings (as there should be only 1 on the system) and set the isDressChangeOpen to true
+        if let transferSetting = try await TransferSettings.query(on: context.application.db).first() {
+            transferSetting.isCancelPossible = true
+            try await transferSetting.save(on: context.application.db)
+            context.logger.info("TransferSettings isCancelPossible set to true.")
+        }
+    }
+}
+
 struct DressUnlockJob: AsyncScheduledJob {
     func run(context: QueueContext) async throws {
         context.logger.info("Dress Unlock Job is running.")

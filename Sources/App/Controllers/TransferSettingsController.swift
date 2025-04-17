@@ -33,6 +33,7 @@ final class TransferSettingsController: RouteCollection {
         route.get("toggle", use: toggleIsTransferOpen)
         
         route.get("isDressChangeOpen", use: isDressChangeOpen)
+        route.get("isCancelPossible", use: isCancelPossible)
 
     }
 
@@ -65,6 +66,14 @@ final class TransferSettingsController: RouteCollection {
             throw Abort(.notFound, reason: "No TransferSettings found.")
         }
         return settings.isDressChangeOpen
+    }
+
+    // New method to return true or false if the dress change is open
+    func isCancelPossible(req: Request) async throws -> Bool {
+        guard let settings = try await TransferSettings.query(on: req.db).first() else {
+            throw Abort(.notFound, reason: "No TransferSettings found.")
+        }
+        return settings.isCancelPossible
     }
 
 }

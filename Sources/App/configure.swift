@@ -212,6 +212,16 @@ public func configure(_ app: Application) throws {
         .on(.monday)
         .at(6, 0)
 
+    app.queues.schedule(CancelLockJob())
+        .weekly()
+        .on(.thursday)
+        .at(18, 0)
+    
+    app.queues.schedule(CancelUnlockJob())
+        .weekly()
+        .on(.monday)
+        .at(6, 0)
+
     app.queues.schedule(ResetTeamFlags())
         .weekly()
         .on(.wednesday)

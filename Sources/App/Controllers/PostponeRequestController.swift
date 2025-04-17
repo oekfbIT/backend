@@ -83,12 +83,15 @@ final class PostponeRequestController: RouteCollection {
                 }
                 .flatMap { opponentTeam, match in
                     print("sendingTO:", opponentTeam.usremail!)
-                    return try! self.emailController.sendPostPone(
-                        req: req,
-                        cancellerName: newRequest.requester.teamName,
-                        recipient: opponentTeam.usremail!,
-                        match: match
-                    ).map { _ in newRequest }
+                    match.postponerequest = true
+                    return match.save(on: req.db).flatMap {
+                        try! self.emailController.sendPostPone(
+                            req: req,
+                            cancellerName: newRequest.requester.teamName,
+                            recipient: opponentTeam.usremail!,
+                            match: match
+                        ).map { _ in newRequest }
+                    }
                 }
         }
     }

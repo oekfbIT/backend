@@ -775,97 +775,118 @@ final class MatchController: RouteCollection {
         }
     }
     
-    func teamCancelGame(req: Request) throws -> EventLoopFuture<HTTPStatus> {
-        let matchId = try req.parameters.require("id", as: UUID.self)
-        
-        struct NoShowRequest: Content {
-            let winningTeam: String // "home" or "away"
-        }
-        
-        let noShowRequest = try req.content.decode(NoShowRequest.self)
-        
-        return Match.query(on: req.db)
-            .with(\.$homeTeam)
-            .with(\.$awayTeam)
-            .filter(\.$id == matchId)
-            .first()
-            .unwrap(or: Abort(.notFound))
-            .flatMap { match in
-                let winningTeamId: UUID
-                var opponentEmail: String? = nil
+func teamCancelGame(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+    let matchId = try req.parameters.require("id", as: UUID.self)
 
-                switch noShowRequest.winningTeam.lowercased() {
-                case "home":
-                    match.score = Score(home: 6, away: 0)
-                    winningTeamId = match.$homeTeam.id
-                    opponentEmail = match.homeTeam.usremail
+    struct NoShowRequest: Content {
+        let winningTeam: String // "home" or "away"
+    }
 
-                case "away":
-                    match.score = Score(home: 0, away: 6)
-                    winningTeamId = match.$awayTeam.id
-                    opponentEmail = match.awayTeam.usremail
+    let noShowRequest = try req.content.decode(NoShowRequest.self)
 
-                default:
-                    return req.eventLoop.future(error: Abort(.badRequest, reason: "Invalid winning team specified"))
-                }
-                
-                match.status = .cancelled
-                
-                return match.save(on: req.db)
-                    .flatMap {
-                        return Team.find(winningTeamId, on: req.db)
-                            .unwrap(or: Abort(.notFound))
-                            .flatMap { team in
-                                team.points += 3
-                                
-                                // Check cancellation count
-                                let cancelled = team.cancelled ?? 0
-                                guard cancelled < 3 else {
-                                    return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Schon 3 Absagen gemacht diese Saison."))
-                                }
-                                
-                                let newCancelled = cancelled + 1
-                                team.cancelled = newCancelled
-                                
-                                // Determine invoice amount
-                                let rechnungAmount: Int
-                                switch newCancelled {
-                                case 1: rechnungAmount = 170
-                                case 2: rechnungAmount = 270
-                                case 3: rechnungAmount = 370
-                                default: rechnungAmount = 0
-                                }
-                                
-                                let invoiceNumber = UUID().uuidString
-                                let balance = team.balance ?? 0
-                                
-                                let rechnung = Rechnung(
-                                    team: team.id,
-                                    teamName: team.teamName,
-                                    number: invoiceNumber,
-                                    summ: Double(rechnungAmount),
-                                    topay: nil,
-                                    kennzeichen: "Spiel Absage: \(team.cancelled ?? 0)"
+    return Match.query(on: req.db)
+        .with(\.$homeTeam)
+        .with(\.$awayTeam)
+        .with(\.$referee) { $0.with(\.$user) }
+        .filter(\.$id == matchId)
+        .first()
+        .unwrap(or: Abort(.notFound))
+        .flatMap { match in
+            let winningTeamId: UUID
+            let losingTeamId: UUID
+            var opponentEmail: String? = nil
+
+            switch noShowRequest.winningTeam.lowercased() {
+            case "home":
+                match.score = Score(home: 6, away: 0)
+                winningTeamId = match.$homeTeam.id
+                losingTeamId = match.$awayTeam.id
+                opponentEmail = match.awayTeam.usremail
+
+            case "away":
+                match.score = Score(home: 0, away: 6)
+                winningTeamId = match.$awayTeam.id
+                losingTeamId = match.$homeTeam.id
+                opponentEmail = match.homeTeam.usremail
+
+            default:
+                return req.eventLoop.future(error: Abort(.badRequest, reason: "Invalid winning team specified"))
+            }
+
+            match.status = .cancelled
+
+            return match.save(on: req.db).flatMap {
+                Team.find(winningTeamId, on: req.db)
+                    .unwrap(or: Abort(.notFound, reason: "Winning team not found"))
+                    .and(Team.find(losingTeamId, on: req.db)
+                        .unwrap(or: Abort(.notFound, reason: "Losing team not found")))
+                    .flatMap { winningTeam, losingTeam in
+                        winningTeam.points += 3
+
+                        let cancelled = losingTeam.cancelled ?? 0
+                        guard cancelled < 3 else {
+                            return req.eventLoop.makeFailedFuture(
+                                Abort(.badRequest, reason: "Schon 3 Absagen gemacht diese Saison.")
+                            )
+                        }
+
+                        let newCancelled = cancelled + 1
+                        losingTeam.cancelled = newCancelled
+
+                        let rechnungAmount: Int
+                        switch newCancelled {
+                        case 1: rechnungAmount = 170
+                        case 2: rechnungAmount = 270
+                        case 3: rechnungAmount = 370
+                        default: rechnungAmount = 0
+                        }
+
+                        let invoiceNumber = UUID().uuidString
+                        let balance = losingTeam.balance ?? 0
+
+                        let rechnung = Rechnung(
+                            team: losingTeam.id,
+                            teamName: losingTeam.teamName,
+                            number: invoiceNumber,
+                            summ: Double(rechnungAmount),
+                            topay: nil,
+                            kennzeichen: "Spiel Absage: \(newCancelled)"
+                        )
+
+                        return rechnung.save(on: req.db).flatMap {
+                            losingTeam.balance = balance - Double(rechnungAmount)
+
+                            do {
+                                try emailController.sendCancellationNotification(
+                                    req: req,
+                                    recipient: opponentEmail!,
+                                    match: match
                                 )
-                                
-                                return rechnung.save(on: req.db).flatMap {
-                                    team.balance = balance - Double(rechnungAmount)
-                                    
-                                    do {
-                                        try emailController.sendCancellationNotification(req: req, recipient: opponentEmail!, match: match)
-                                    } catch {
-                                        print("Unable to send email. ")
-                                    }
-                                    
-                                    return team.save(on: req.db).map {
-                                        HTTPStatus.ok
-                                    }
+
+                                if let ref = match.referee,
+                                   let refUser = ref.user {
+                                    let refEmail = refUser.email
+                                    try emailController.informRefereeCancellation(
+                                        req: req,
+                                        email: refEmail,
+                                        name: ref.name ?? "Referee",
+                                        match: match
+                                    )
                                 }
+                            } catch {
+                                print("Unable to send email. \(error)")
                             }
+
+                            return losingTeam.save(on: req.db).flatMap {
+                                winningTeam.save(on: req.db).transform(to: .ok)
+                            }
+                        }
                     }
             }
-    }
-    
+        }
+}
+
+
     func spielabbruch(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let matchId = try req.parameters.require("id", as: UUID.self)
         

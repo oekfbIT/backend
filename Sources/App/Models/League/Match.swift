@@ -89,6 +89,7 @@ final class Match: Model, Content, Codable {
     @OptionalField(key: FieldKeys.awayBlanket) var awayBlanket: Blankett?
 
     @OptionalField(key: FieldKeys.paid) var paid: Bool?
+    @OptionalField(key: FieldKeys.postponerequest) var postponerequest: Bool?
 
     // Children
     @Children(for: \.$match) var events: [MatchEvent]
@@ -123,6 +124,7 @@ final class Match: Model, Content, Codable {
         static var secondHalfEndDate: FieldKey { "secondHalfEndDate" }
         static var homeBlanket: FieldKey { "homeBlanket" }
         static var awayBlanket: FieldKey { "awayBlanket" }
+        static var postponerequest: FieldKey { "postponerequest" }
     }
 
     init() {}
@@ -142,7 +144,8 @@ final class Match: Model, Content, Codable {
          secondHalfEndDate: Date? = nil,
          firstHalfStartDate: Date? = nil,
          secondHalfStartDate: Date? = nil,
-         paid: Bool? = false) {
+         paid: Bool? = false,
+         postponerequest: Bool? = false) {
         self.id = id
         self.$referee.id = refereeId
         self.$season.id = seasonId
@@ -159,6 +162,7 @@ final class Match: Model, Content, Codable {
         self.firstHalfEndDate = firstHalfEndDate
         self.secondHalfEndDate = secondHalfEndDate
         self.paid = paid
+        self.postponerequest = postponerequest
     }
 }
 
@@ -180,6 +184,8 @@ extension Match {
         case secondHalfEndDate = "second_half_end_date"
         case homeBlanket = "home_blanket"
         case awayBlanket = "away_blanket"
+        case postponerequest = "postponerequest"
+        
     }
 }
 
@@ -201,6 +207,7 @@ extension MatchMigration: Migration {
             .field(Match.FieldKeys.firstHalfEndDate, .date)
             .field(Match.FieldKeys.secondHalfEndDate, .date)
             .field(Match.FieldKeys.paid, .bool)
+            .field(Match.FieldKeys.postponerequest, .bool)
             .field(Match.FieldKeys.bericht, .string)
             .field(Match.FieldKeys.homeBlanket, .json)
             .field(Match.FieldKeys.awayBlanket, .json)
@@ -229,7 +236,8 @@ extension Match: Mergeable {
         merged.firstHalfEndDate = other.firstHalfEndDate ?? self.firstHalfEndDate
         merged.secondHalfEndDate = other.secondHalfEndDate ?? self.secondHalfEndDate
         merged.paid = other.paid ?? self.paid
-
+        merged.postponerequest = other.postponerequest ?? self.postponerequest
+        
         if let homeBlanket = other.homeBlanket {
             merged.homeBlanket = homeBlanket
             print("HOME BLANKET UPDATED")
