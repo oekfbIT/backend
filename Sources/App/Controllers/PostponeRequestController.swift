@@ -26,6 +26,7 @@ final class PostponeRequestController: RouteCollection {
 
         route.get(use: repository.index)
         route.get(":id", use: repository.getbyID)
+        route.get("test", use: test)
         route.delete(":id", use: repository.deleteID)
 
         route.patch(":id", use: repository.updateID)
@@ -42,6 +43,10 @@ final class PostponeRequestController: RouteCollection {
         try setupRoutes(on: routes)
     }
     
+    func test(req: Request) throws -> EventLoopFuture<[String]> {
+        return req.eventLoop.makeSucceededFuture(["Is Online"])
+    }
+
     func getOpenRequests(req: Request) throws -> EventLoopFuture<[PostponeRequest]> {
         guard let teamID = req.query[UUID.self, at: "teamID"] else {
             throw Abort(.badRequest, reason: "Missing or invalid teamID query param")
