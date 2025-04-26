@@ -1,26 +1,9 @@
-//
-//  File.swift
-//  
-//
-//  Created by Alon Yakoby on 29.05.24.
-//
-
 import Vapor
 import Smtp
 import NIO
 
-let vertragLink = "https://firebasestorage.googleapis.com/v0/b/oekfbbucket.appspot.com/o/adminfiles%2FOEKFB%20Anmelde%20Vertrag.pdf.pdf?alt=media&token=23ab12e2-f360-48f5-b4f9-aa1cb3d64305"
-
 final class EmailController {
-    
-    let baseConfig = BaseTemplate(logoUrl: "",
-                                  title: "",
-                                  description: "",
-                                  buttonText: "",
-                                  buttonUrl: "",
-                                  assurance: "",
-                                  disclaimer: "")
-    
+
     let smtpConfig = SmtpServerConfiguration(
         hostname: "smtp.easyname.com",
         port: 587,  // Use port 587 for STARTTLS
@@ -29,18 +12,36 @@ final class EmailController {
         helloMethod: .ehlo  // Use EHLO instead of HELO
     )
 
+    // A helper function to format date
+    private func formatDate(_ date: Date?) -> String {
+        guard let date = date else { return "unbekanntes Datum" }
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .short
+        dateFormatter.timeStyle = .short
+        return dateFormatter.string(from: date)
+    }
+
+    // Example of returning full email view
     func sendTestEmail(req: Request) throws -> EventLoopFuture<HTTPStatus> {
-        // Apply the SMTP configuration
         req.application.smtp.configuration = smtpConfig
         
-        // Print the SMTP configuration for debugging
         print("SMTP Configuration: \(req.application.smtp.configuration)")
 
+        let emailBody = """
+        <html>
+        <body>
+        <h2>Test Email</h2>
+        <p>This is a test email sent from Vapor application.</p>
+        </body>
+        </html>
+        """
+        
         let email = try Email(
             from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
-            to: [EmailAddress(address: "alon.yakoby@gmail.com", name: "Alon Yakoby")],
+            to: [EmailAddress(address: "office@oekfb.eu", name: "Admin")],
             subject: "Test Email",
-            body: "This is a test email sent from Vapor application."
+            body: emailBody,
+            isBodyHtml: true
         )
         
         return req.smtp.send(email).flatMapThrowing { result in
@@ -54,26 +55,29 @@ final class EmailController {
         }
     }
     
+    // Send email with registration details
     func sendEmailWithData(req: Request, recipient: String, email: String, password: String) throws -> EventLoopFuture<HTTPStatus> {
-        // Apply the SMTP configuration
         req.application.smtp.configuration = smtpConfig
         
-        // Print the SMTP configuration for debugging
         print("SMTP Configuration: \(req.application.smtp.configuration)")
 
-        // Prepare the email content
         let emailBody = """
-        Thank you for your registration.
-
-        Login: \(email)
-        Password: \(password)
+        <html>
+        <body>
+        <h2>Registration Details</h2>
+        <p>Thank you for your registration.</p>
+        <p><strong>Login:</strong> \(email)</p>
+        <p><strong>Password:</strong> \(password)</p>
+        </body>
+        </html>
         """
 
         let email = try Email(
             from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
             to: [EmailAddress(address: recipient)],
             subject: "Registration Details",
-            body: emailBody
+            body: emailBody,
+            isBodyHtml: true
         )
 
         return req.smtp.send(email).flatMapThrowing { result in
@@ -86,17 +90,13 @@ final class EmailController {
             }
         }
     }
-    
+
     func sendWelcomeMail(req: Request, recipient: String, registration: TeamRegistration?) throws -> EventLoopFuture<HTTPStatus> {
-        // Apply the SMTP configuration
         req.application.smtp.configuration = smtpConfig
         guard let registrationID = registration?.id else {
             throw Abort(.notFound)
-
         }
-        // Print the SMTP configuration for debugging
-        print("SMTP Configuration: \(req.application.smtp.configuration)")
-
+        
         let emailBody = """
         <html>
         <body>
@@ -138,31 +138,23 @@ final class EmailController {
             }
         }
     }
-
+    
+    // Return the full HTML body (completion-style return)
     func sendPaymentMail(req: Request, recipient: String, registration: TeamRegistration?) throws -> EventLoopFuture<HTTPStatus> {
-        // Apply the SMTP configuration
         req.application.smtp.configuration = smtpConfig
         
-        // Ensure registration and registration ID exist
         guard let registration = registration, let registrationID = registration.id else {
             throw Abort(.notFound, reason: "Team registration not found")
         }
 
-        // Calculate the amount
         let amount: Double = abs(Double(String(format: "%.2f", registration.paidAmount ?? 0.0)) ?? 0.0)
 
-        // Total amount to be paid including deposit
         var positivAmount: Double {
             return amount
         }
 
-        // Calculate the year for the deposit return
-        let year = Calendar.current.component(.year, from: Date.viennaNow) + 3
+        let year = Calendar.current.component(.year, from: Date()) + 3
 
-        // Debugging: Print the SMTP configuration
-        print("SMTP Configuration: \(req.application.smtp.configuration)")
-
-        // Email content
         let emailBody = """
         <html>
         <head>
@@ -198,7 +190,6 @@ final class EmailController {
         </html>
         """
 
-        // Creating the email object
         let email = try Email(
             from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
             to: [EmailAddress(address: recipient)],
@@ -207,531 +198,6 @@ final class EmailController {
             isBodyHtml: true
         )
 
-        // Sending the email
-        return req.smtp.send(email).flatMapThrowing { result in
-            switch result {
-            case .success:
-                return .ok
-            case .failure(let error):
-                print("Email failed to send: \(error.localizedDescription)")
-                throw Abort(.internalServerError, reason: "Failed to send email: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    func sendPaymentInstruction(req: Request, recipient: String, due: Double) throws -> EventLoopFuture<HTTPStatus> {
-        // Apply the SMTP configuration
-        req.application.smtp.configuration = smtpConfig
-
-        // Print the SMTP configuration for debugging
-        print("SMTP Configuration: \(req.application.smtp.configuration)")
-
-        // Prepare the email content in German
-        let emailBody = """
-        Sehr geehrter Mannschaftsleiter,
-
-        Herzlich Willkommen bei der Österreichischen Kleinfeld Fußball Bund. Bitte senden Sie uns den Vertrag im Anhang ausgefüllt zurück.
-        Wir benötigen noch folgende Unterlagen:
-
-        · Ausweiskopie beider Personen am Vertrag
-        · Logo des Teams
-        · Bilder der Trikots (Heim und Auswärts komplett inklusive Stutzen)
-
-        Falls Sie Trikots benötigen und noch keine haben, können Sie sich über die Angebote für ÖKFB Mannschaften hier erkundigen: www.kaddur.at
-
-        Wir freuen uns über Ihre baldige Rückmeldung und verbleiben.
-        
-        Dies ist eine automatisch generierte E-Mail. Sollten Sie Fragen haben oder Unterstützung benötigen, zögern Sie bitte nicht, uns unter support@oekfb.eu zu kontaktieren. Wir stehen Ihnen gerne zur Verfügung.
-        """
-
-        let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
-            to: [EmailAddress(address: recipient)],
-            subject: "OEKFB Anmeldung - Willkommen",
-            body: emailBody
-        )
-
-        return req.smtp.send(email).flatMapThrowing { result in
-            switch result {
-            case .success:
-                return .ok
-            case .failure(let error):
-                print("Email failed to send: \(error)")
-                throw Abort(.internalServerError, reason: "Failed to send email")
-            }
-        }
-    }
-    
-    
-    func sendRefLogin(req: Request, recipient: String, email: String, password: String) throws -> EventLoopFuture<HTTPStatus> {
-        // Apply the SMTP configuration
-        req.application.smtp.configuration = smtpConfig
-
-        // Print the SMTP configuration for debugging
-        print("SMTP Configuration: \(req.application.smtp.configuration)")
-
-        // Prepare the email content in German
-        let emailBody = """
-        Sehr geehrter Schiedsrichter,
-
-        Herzlich Willkommen bei der Österreichischen Kleinfeld Fußball Bund.
-        
-        Anbei sind ihre Login Daten:
-        
-        Email: \(email)
-        Passwort: \(password)
-        
-        Sie können sich einlogen unter https://ref.oekfb.eu.
-        
-        Dies ist eine automatisch generierte E-Mail. Sollten Sie Fragen haben oder Unterstützung benötigen, zögern Sie bitte nicht, uns unter support@oekfb.eu zu kontaktieren. Wir stehen Ihnen gerne zur Verfügung.
-        """
-
-        let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
-            to: [EmailAddress(address: recipient)],
-            subject: "OEKFB Anmeldung - Willkommen",
-            body: emailBody
-        )
-
-        return req.smtp.send(email).flatMapThrowing { result in
-            switch result {
-            case .success:
-                return .ok
-            case .failure(let error):
-                print("Email failed to send: \(error)")
-                throw Abort(.internalServerError, reason: "Failed to send email")
-            }
-        }
-    }
-
-    func sendTeamLogin(req: Request, recipient: String, email: String, password: String) throws -> EventLoopFuture<HTTPStatus> {
-        // Apply the SMTP configuration
-        req.application.smtp.configuration = smtpConfig
-
-        // Print the SMTP configuration for debugging
-        print("SMTP Configuration: \(req.application.smtp.configuration)")
-
-        // Prepare the email content in German
-        let emailBody = """
-        Sehr geehrter Mannschaftsleiter,
-
-        Herzlich Willkommen bei der Österreichischen Kleinfeld Fußball Bund.
-        
-        Anbei sind ihre Login Daten:
-        
-        Email: \(email)
-        Passwort: \(password)
-        
-        Sie können sich einlogen unter https://team.oekfb.eu.
-        
-        Dies ist eine automatisch generierte E-Mail. Sollten Sie Fragen haben oder Unterstützung benötigen, zögern Sie bitte nicht, uns unter support@oekfb.eu zu kontaktieren. Wir stehen Ihnen gerne zur Verfügung.
-        """
-
-        let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
-            to: [EmailAddress(address: recipient)],
-            subject: "OEKFB Anmeldung - Mannschaft Login Daten",
-            body: emailBody
-        )
-
-        return req.smtp.send(email).flatMapThrowing { result in
-            switch result {
-            case .success:
-                return .ok
-            case .failure(let error):
-                print("Email failed to send: \(error)")
-                throw Abort(.internalServerError, reason: "Failed to send email")
-            }
-        }
-    }
-
-    func sendUpdatePlayerData(req: Request, recipient: String, player: Player) throws -> EventLoopFuture<HTTPStatus> {
-        // Apply the SMTP configuration
-        req.application.smtp.configuration = smtpConfig
-
-        // Print the SMTP configuration for debugging
-        print("SMTP Configuration: \(req.application.smtp.configuration)")
-
-        // Prepare the email content in German with HTML formatting and styling
-        let emailBody = """
-        <!DOCTYPE html>
-        <html lang="de">
-        <head>
-            <meta charset="UTF-8">
-            <title>Spielerdaten Update</title>
-            <style>
-                body {
-                    font-family: Arial, sans-serif;
-                    line-height: 1.6;
-                    color: #333;
-                    margin: 0;
-                    padding: 20px;
-                    background-color: #f8f9fa;
-                }
-                p {
-                    margin: 0 0 15px 0;
-                }
-                ul {
-                    margin: 0 0 15px 20px;
-                    padding: 0;
-                    list-style-type: disc;
-                }
-                li {
-                    margin-bottom: 10px;
-                }
-                a {
-                    color: #007bff;
-                    text-decoration: none;
-                }
-                a:hover {
-                    text-decoration: underline;
-                }
-                .signature {
-                    margin-top: 30px;
-                }
-            </style>
-        </head>
-        <body>
-            <p>Sehr geehrter Mannschaftsleiter,</p>
-            
-            <p>bitte überprüfen Sie erneut die hochgeladenen Daten Ihres Spielers <strong>\(player.name)</strong> mit der SID Nummer <strong>\(player.sid)</strong>. Anscheinend fehlen bei der Anmeldung:</p>
-            
-            <ul>
-                <li>Das Profilbild des Spielers</li>
-                <li>Die E-Mail-Adresse des Spielers</li>
-                <li>Die Lesbarkeit des Ausweises des Spielers</li>
-            </ul>
-            
-            <p>Bitte beachten Sie, dass sowohl das Profilbild als auch eine lesbare Kopie des Ausweises des Spielers erneut hochgeladen werden müssen. Alle Dokumente müssen gemäß der Ligaordnung hochgeladen und überprüft werden, bevor der Spieler zugelassen werden kann. Bis zur Überprüfung bleibt der Status des Spielers auf „WARTEN“ und es wird kein Bild angezeigt.</p>
-
-            <p>Sie können sich auf <a href="https://team.oekfb.eu">team.oekfb.eu</a> einloggen, auf "Spieler bearbeiten" klicken und dort die fehlenden Dokumente hochladen. Diese Änderung ist mit keinen weiteren Kosten verbunden.</p>
-            
-            <p class="signature">Mit freundlichen Grüßen,<br>
-            Der Österreichischer Kleinfeld Fußball Bund</p>
-            <p>Dies ist eine automatisch generierte E-Mail. Sollten Sie Fragen haben oder Unterstützung benötigen, zögern Sie bitte nicht, uns unter support@oekfb.eu zu kontaktieren. Wir stehen Ihnen gerne zur Verfügung.</p>
-        </body>
-        </html>
-        """
-
-        let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
-            to: [EmailAddress(address: recipient)],
-            subject: "OEKFB Spieleranmeldung: \(player.sid)",
-            body: emailBody,
-            isBodyHtml: true
-        )
-
-        return req.smtp.send(email).flatMapThrowing { result in
-            switch result {
-            case .success:
-                return .ok
-            case .failure(let error):
-                print("Email failed to send: \(error)")
-                throw Abort(.internalServerError, reason: "Failed to send email")
-            }
-        }
-    }
-
-
-    
-    func sendTransferRequest(req: Request, recipient: String, transfer: Transfer) throws -> EventLoopFuture<HTTPStatus> {
-        // Apply the SMTP configuration
-        req.application.smtp.configuration = smtpConfig
-
-        // Print the SMTP configuration for debugging
-        print("SMTP Configuration: \(req.application.smtp.configuration)")
-
-        // Prepare the email content in German with a button
-        let emailBody = """
-        <html>
-        <body style="font-family: Arial, sans-serif; font-size: 14px; color: #333;">
-            <p>Hallo \(transfer.playerName),</p>
-
-            <p>Die Mannschaft <strong>\(transfer.teamName)</strong> hat dir eine Anfrage geschickt, ihrer Mannschaft beizutreten und deine derzeitige zu verlassen. Willst du diese Anfrage annehmen?</p>
-
-            <p>Um diese Anfrage anzunehmen oder abzulehnen, klicken Sie bitte auf den folgenden Button:</p>
-
-            <a href="https://oekfb.eu/transfer/\(transfer.id ?? UUID())" style="display: inline-block; padding: 10px 20px; font-size: 16px; color: white; background-color: #007bff; text-align: center; text-decoration: none; border-radius: 5px;">Transfer Anfrage beantworten</a>
-            
-            <p>Wir freuen uns über Ihre baldige Rückmeldung und verbleiben.</p>
-
-            <p>Mit freundlichen Grüßen,<br>Österreichische Kleinfeld Fußball Bund</p>
-            <p>Dies ist eine automatisch generierte E-Mail. Sollten Sie Fragen haben oder Unterstützung benötigen, zögern Sie bitte nicht, uns unter support@oekfb.eu zu kontaktieren. Wir stehen Ihnen gerne zur Verfügung.</p>
-
-        </body>
-        </html>
-        """
-
-        let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
-            to: [EmailAddress(address: recipient)],
-            subject: "OEKFB Anmeldung - Transfer Anfrage",
-            body: emailBody,
-            isBodyHtml: true // Indicate that the body contains HTML content
-        )
-
-        return req.smtp.send(email).flatMapThrowing { result in
-            switch result {
-            case .success:
-                return .ok
-            case .failure(let error):
-                print("Email failed to send: \(error)")
-                throw Abort(.internalServerError, reason: "Failed to send email")
-            }
-        }
-    }
-
-    
-}
-
-extension EmailController {
-    func sendCancellationNotification(req: Request, recipient: String, match: Match) throws -> EventLoopFuture<HTTPStatus> {
-        // Apply the SMTP configuration
-        req.application.smtp.configuration = smtpConfig
-        
-        let matchDateString = match.details.date?.formatted(date: .numeric, time: .shortened) ?? "unbekanntes Datum"
-        
-        let emailBody = """
-        <html>
-        <head>
-            <style>
-                body { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; }
-                p { margin-bottom: 10px; }
-                ul { padding-left: 20px; }
-                li { margin-bottom: 8px; }
-                a { font-size: 16px; color: #007bff; text-decoration: none; }
-            </style>
-        </head>
-        <body>
-            <p>Sehr geehrter Mannschaftsleiter,</p>
-        
-            <p>Die gegnerische Mannschaft hat das Spiel vom <strong>\(match.details.gameday). Spieltag, am \(matchDateString)</strong> offiziell abgesagt.</p>
-        
-            <p>Sie müssen zu diesem Spieltermin nicht erscheinen. Ihrer Mannschaft wurden automatisch <strong>3 Punkte</strong> gutgeschrieben und mit 6 Toren gewonnen.</p>
-        
-            <p>Sportliche Grüße,<br>
-            Ihr ÖKFB Team</p>
-        </body>
-        </html>
-        """
-        
-        let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
-            to: [EmailAddress(address: recipient)],
-            bcc: [EmailAddress(address: "baha@oekfb.eu", name: "Admin"), EmailAddress(address: "office@oekfb.eu", name: "Admin")],
-            subject: "OEKFB Absage - Absagen Benachrichtigung",
-            body: emailBody,
-            isBodyHtml: true
-        )
-        
-        return req.smtp.send(email).flatMapThrowing { result in
-            switch result {
-            case .success:
-                return .ok
-            case .failure(let error):
-                print("Email failed to send: \(error.localizedDescription)")
-                throw Abort(.internalServerError, reason: "Failed to send email: \(error.localizedDescription)")
-            }
-        }
-    }
-    
-    func sendPostPone(req: Request, cancellerName: String, recipient: String, match: Match) throws -> EventLoopFuture<HTTPStatus> {
-        // Apply the SMTP configuration
-        req.application.smtp.configuration = smtpConfig
-        
-        let matchDateString = match.details.date?.formatted(date: .numeric, time: .shortened) ?? "unbekanntes Datum"
-        
-        let emailBody = """
-        <html>
-        <head>
-            <style>
-                body { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; }
-                p { margin-bottom: 10px; }
-                ul { padding-left: 20px; }
-                li { margin-bottom: 8px; }
-                a { font-size: 16px; color: #007bff; text-decoration: none; }
-            </style>
-        </head>
-        <body>
-            <p>Sehr geehrter Mannschaftsleiter,</p>
-        
-            <p>Die gegnerische Mannschaft: \(cancellerName) bittet, das Spiel vom <strong>\(match.details.gameday). Spieltag, am \(matchDateString)</strong> offiziell zu verschieben.</p>
-        
-            <p>Eine Spielverlegung ist nur mit Ihrem Einverständnis möglich. Der ÖKFB-Administrator wird das Spiel auf ein vorab abgestimmtes Datum verschieben.</p>
-        
-            <p>Bitte folgen Sie diesem Link oder loggen Sie sich ein unter <a href="https://team.oekfb.eu">team.oekfb.eu</a>, um diese Anfrage zu bestätigen oder abzulehnen.</p>
-        
-            <p>Sportliche Grüße,<br>
-            Ihr ÖKFB Team</p>
-        </body>
-        </html>
-        """
-        
-        let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
-            to: [EmailAddress(address: recipient)],
-            bcc: [EmailAddress(address: "office@oekfb.eu", name: "Admin")],
-            subject: "OEKFB Spielverlegung Anfrage",
-            body: emailBody,
-            isBodyHtml: true
-        )
-        
-        // Sending the email
-        return req.smtp.send(email).flatMapThrowing { result in
-            switch result {
-            case .success:
-                return .ok
-            case .failure(let error):
-                print("Email failed to send: \(error.localizedDescription)")
-                throw Abort(.internalServerError, reason: "Failed to send email: \(error.localizedDescription)")
-            }
-        }
-    }
-    
-    func approve(req: Request, approverName: String, recipient: String, match: Match) throws -> EventLoopFuture<HTTPStatus> {
-        // Apply the SMTP configuration
-        req.application.smtp.configuration = smtpConfig
-        
-        let matchDateString = match.details.date?.formatted(date: .numeric, time: .shortened) ?? "unbekanntes Datum"
-        
-        let emailBody = """
-        <html>
-        <head>
-            <style>
-                body { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; }
-                p { margin-bottom: 10px; }
-                a { font-size: 16px; color: #007bff; text-decoration: none; }
-            </style>
-        </head>
-        <body>
-            <p>Sehr geehrter Mannschaftsleiter,</p>
-        
-            <p>Die gegnerische Mannschaft: <strong>\(approverName)</strong> hat Ihrer Anfrage zur Spielverlegung vom <strong>\(match.details.gameday). Spieltag, am \(matchDateString)</strong> <strong>zugestimmt</strong>.</p>
-        
-            <p>Sie müssen zu diesem Spieltermin nicht erscheinen. Ihrer Mannschaft wurden automatisch <strong>3 Punkte</strong> gutgeschrieben und mit 6 Toren gewonnen.</p>
-        
-            <p>Vielen Dank für Ihr sportliches Verhalten.</p>
-        
-            <p>Sportliche Grüße,<br>
-            Ihr ÖKFB Team</p>
-        </body>
-        </html>
-        """
-        
-        
-        let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
-            to: [EmailAddress(address: recipient)],
-            bcc: [EmailAddress(address: "office@oekfb.eu", name: "Admin")],
-            subject: "OEKFB Spielverlegung Anfrage - Zusagt",
-            body: emailBody,
-            isBodyHtml: true
-        )
-        
-        // Sending the email
-        return req.smtp.send(email).flatMapThrowing { result in
-            switch result {
-            case .success:
-                return .ok
-            case .failure(let error):
-                print("Email failed to send: \(error.localizedDescription)")
-                throw Abort(.internalServerError, reason: "Failed to send email: \(error.localizedDescription)")
-            }
-        }
-    }
-    
-    func deny(req: Request, denierName: String, recipient: String, match: Match) throws -> EventLoopFuture<HTTPStatus> {
-        // Apply the SMTP configuration
-        req.application.smtp.configuration = smtpConfig
-        
-        let matchDateString = match.details.date?.formatted(date: .numeric, time: .shortened) ?? "unbekanntes Datum"
-        
-        let emailBody = """
-        <html>
-        <head>
-            <style>
-                body { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; }
-                p { margin-bottom: 10px; }
-                a { font-size: 16px; color: #007bff; text-decoration: none; }
-            </style>
-        </head>
-        <body>
-            <p>Sehr geehrter Mannschaftsleiter,</p>
-        
-            <p>Die gegnerische Mannschaft: <strong>\(denierName)</strong> hat der Spielverlegung vom <strong>\(match.details.gameday). Spieltag, am \(matchDateString)</strong> <strong>nicht zugestimmt</strong>.</p>
-        
-            <p>Das Spiel findet daher wie ursprünglich geplant statt.</p>
-        
-            <p>Bitte stellen Sie sicher, dass Ihre Mannschaft zum angesetzten Termin vollständig antritt.</p>
-        
-            <p>Sportliche Grüße,<br>
-            Ihr ÖKFB Team</p>
-        </body>
-        </html>
-        """
-        
-        
-        let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
-            to: [EmailAddress(address: recipient)],
-            bcc: [EmailAddress(address: "office@oekfb.eu", name: "Admin")],
-            subject: "OEKFB Spielverlegung Anfrage - Abgeleht",
-            body: emailBody,
-            isBodyHtml: true
-        )
-        
-        // Sending the email
-        return req.smtp.send(email).flatMapThrowing { result in
-            switch result {
-            case .success:
-                return .ok
-            case .failure(let error):
-                print("Email failed to send: \(error.localizedDescription)")
-                throw Abort(.internalServerError, reason: "Failed to send email: \(error.localizedDescription)")
-            }
-        }
-    }
-    
-    func informRefereeCancellation(req: Request, email: String, name: String, match: Match) throws -> EventLoopFuture<HTTPStatus> {
-        // Apply the SMTP configuration
-        req.application.smtp.configuration = smtpConfig
-        
-        let matchDateString = match.details.date?.formatted(date: .numeric, time: .shortened) ?? "unbekanntes Datum"
-
-        let emailBody = """
-        <html>
-        <head>
-            <style>
-                body { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; }
-                p { margin-bottom: 10px; }
-                a { font-size: 16px; color: #007bff; text-decoration: none; }
-            </style>
-        </head>
-        <body>
-            <p>Sehr geehrter \(name),</p>
-
-            <p>Das Spiel: <strong>\(match.homeBlanket?.name ?? "Heimteam") vs \(match.awayBlanket?.name ?? "Auswärtsteam")</strong> am 
-            <strong>\(match.details.gameday). Spieltag, \(matchDateString)</strong> wurde <strong>abgesagt</strong>.</p>
-
-            <p>Sie müssen zu diesem Spieltermin nicht erscheinen. Bitte loggen Sie sich bei <a href="https://ref.oekfb.eu">ref.oekfb.eu</a> ein und überprüfen Sie den Spielplan.</p>
-
-            <p>Sportliche Grüße,<br>
-            Ihr ÖKFB-Team</p>
-        </body>
-        </html>
-        """
-
-
-        let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
-            to: [EmailAddress(address: email)],
-            bcc: [],
-            subject: "OEKFB Spielabsage - \(matchDateString)",
-            body: emailBody,
-            isBodyHtml: true
-        )
-
-        // Sending the email
         return req.smtp.send(email).flatMapThrowing { result in
             switch result {
             case .success:
