@@ -32,6 +32,7 @@ final class ClientController: RouteCollection {
         route.get("leaderboard", ":id", "goal", use: getGoalLeaderBoard)
         route.get("leaderboard", ":id", "redCard", use: getRedCardLeaderBoard)
         route.get("leaderboard",":id", "yellowCard", use: getYellowCardLeaderBoard)
+        route.get("leaderboard",":id", "yellowRedCard", use: getYellowRedCardLeaderBoard)
         route.get("blocked", "league", ":code", use: blockedPlayers)
         route.get("livescore",use: getLivescoreShort)
     }
@@ -376,6 +377,10 @@ final class ClientController: RouteCollection {
 
     func getYellowCardLeaderBoard(req: Request) -> EventLoopFuture<[LeaderBoard]> {
         return getLeaderBoard(req: req, eventType: .yellowCard)
+    }
+
+    func getYellowRedCardLeaderBoard(req: Request) -> EventLoopFuture<[LeaderBoard]> {
+        return getLeaderBoard(req: req, eventType: .yellowRedCard)
     }
 
     private func getLeaderBoard(req: Request, eventType: MatchEventType) -> EventLoopFuture<[LeaderBoard]> {
