@@ -801,13 +801,13 @@ func teamCancelGame(req: Request) throws -> EventLoopFuture<HTTPStatus> {
                 match.score = Score(home: 6, away: 0)
                 winningTeamId = match.$homeTeam.id
                 losingTeamId = match.$awayTeam.id
-                opponentEmail = match.awayTeam.usremail
+                opponentEmail = match.homeTeam.usremail
 
             case "away":
                 match.score = Score(home: 0, away: 6)
                 winningTeamId = match.$awayTeam.id
                 losingTeamId = match.$homeTeam.id
-                opponentEmail = match.homeTeam.usremail
+                opponentEmail = match.awayTeam.usremail
 
             default:
                 return req.eventLoop.future(error: Abort(.badRequest, reason: "Invalid winning team specified"))
