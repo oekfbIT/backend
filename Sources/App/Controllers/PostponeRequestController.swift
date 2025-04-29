@@ -26,6 +26,7 @@ final class PostponeRequestController: RouteCollection {
 
         route.get(use: repository.index)
         route.get(":id", use: repository.getbyID)
+        route.get(":id", use: getTeamPostponeRequests)
         route.get("test", use: test)
         route.delete(":id", use: repository.deleteID)
 
@@ -51,6 +52,19 @@ final class PostponeRequestController: RouteCollection {
         guard let teamID = req.query[UUID.self, at: "teamID"] else {
             throw Abort(.badRequest, reason: "Missing or invalid teamID query param")
         }
+
+        return PostponeRequest.query(on: req.db)
+            .filter(\.$status == true)
+            .all()
+            .map { requests in
+                requests.filter {
+                    $0.requester.id == teamID || $0.requestee.id == teamID
+                }
+            }
+    }
+    
+    func getTeamPostponeRequests(req: Request) throws -> EventLoopFuture<[PostponeRequest]> {
+        let teamID = try req.parameters.require("id", as: UUID.self)
 
         return PostponeRequest.query(on: req.db)
             .filter(\.$status == true)
