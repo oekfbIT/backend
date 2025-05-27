@@ -16,6 +16,7 @@ final class NewsItem: Model, Content, Codable {
     @OptionalField(key: FieldKeys.image) var image: String?
     @OptionalField(key: FieldKeys.text) var text: String?
     @OptionalField(key: FieldKeys.title) var title: String?
+    @OptionalField(key: FieldKeys.youtube) var youtube: String?
     @OptionalField(key: FieldKeys.tag) var tag: String?
     @Timestamp(key: FieldKeys.created, on: .create) var created: Date?
 
@@ -26,17 +27,19 @@ final class NewsItem: Model, Content, Codable {
         static var title: FieldKey { "title" }
         static var tag: FieldKey { "tag" }
         static var created: FieldKey { "created" }
+        static var youtube: FieldKey { "youtube" }
     }
 
     init() {}
 
-    init(id: UUID? = nil, image: String? = nil, text: String? = nil, title: String? = nil, tag: String? = nil) {
+    init(id: UUID? = nil, image: String? = nil, text: String? = nil, title: String? = nil, tag: String? = nil, youtube: String? = nil) {
         self.id = id
         self.image = image
         self.text = text
         self.title = title
         self.tag = tag
         self.created = Date.viennaNow
+        self.youtube = youtube
     }
 }
 
@@ -48,6 +51,7 @@ extension NewsItem: Mergeable {
         merged.text = other.text ?? self.text
         merged.title = other.title ?? self.title
         merged.created = other.created ?? self.created
+        merged.youtube = other.youtube ?? self.youtube
         return merged
     }
 }
@@ -60,6 +64,7 @@ extension NewsItemMigration: Migration {
             .field(NewsItem.FieldKeys.image, .string)
             .field(NewsItem.FieldKeys.text, .string)
             .field(NewsItem.FieldKeys.title, .string)
+            .field(NewsItem.FieldKeys.youtube, .string)
             .field(NewsItem.FieldKeys.tag, .string)
             .field(NewsItem.FieldKeys.created, .datetime)
             .create()
