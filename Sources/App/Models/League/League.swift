@@ -134,7 +134,7 @@ extension LeagueMigration: Migration {
 }
 
 extension League {
-    func createSeason(db: Database, numberOfRounds: Int) -> EventLoopFuture<Void> {
+    func createSeason(db: Database, numberOfRounds: Int, switchBool: Bool) -> EventLoopFuture<Void> {
         guard let leagueID = self.id else {
             return db.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "League ID is required"))
         }
@@ -164,7 +164,7 @@ extension League {
                 let totalGameDays = (teamsCopy.count - 1) * numberOfRounds
 
                 for round in 0..<numberOfRounds {
-                    var homeAwaySwitch = false
+                    var homeAwaySwitch = switchBool
 
                     for roundIndex in 0..<(teamsCopy.count - 1) {
                         for matchIndex in 0..<(teamsCopy.count / 2) {

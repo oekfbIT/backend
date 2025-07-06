@@ -23,7 +23,7 @@ final class LeagueController: RouteCollection {
         route.delete(":id", use: repository.deleteID)
         route.patch(":id", use: repository.updateID)
         route.patch("batch", use: repository.updateBatch)
-        route.post(":id", "createSeason", ":number", use: createSeason)
+        route.post(":id", "createSeason", ":number", ":switch", use: createSeason)
         route.get(":id", "seasons", use: getLeagueWithSeasons)
         route.get("code", ":code", use: getLeaguebyCode)
         route.get(":id", "teamCount", use: getNumberOfTeams)
@@ -145,14 +145,15 @@ final class LeagueController: RouteCollection {
 
     func createSeason(req: Request) -> EventLoopFuture<HTTPStatus> {
         guard let leagueID = req.parameters.get("id", as: UUID.self),
-              let numberOfRounds = req.parameters.get("number", as: Int.self) else {
+              let numberOfRounds = req.parameters.get("number", as: Int.self),
+              let switchBool = req.parameters.get("switch", as: Bool.self) else {
             return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing parameters"))
         }
         
         return League.find(leagueID, on: req.db)
             .unwrap(or: Abort(.notFound, reason: "League not found"))
             .flatMap { league in
-                league.createSeason(db: req.db, numberOfRounds: numberOfRounds).map {
+                league.createSeason(db: req.db, numberOfRounds: numberOfRounds, switchBool: switchBool).map {
                     return .ok
                 }
             }
@@ -379,6 +380,11 @@ final class LeagueController: RouteCollection {
 struct LeagueWithSeasons: Content {
     var league: League
     var seasons: [Season]
+}
+
+struct Table: Codable, Content {
+    let items: [TableItem]
+    let league: PublicLeagueOverview
 }
 
 struct TableItem: Codable, Content {
