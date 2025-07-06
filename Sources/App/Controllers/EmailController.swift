@@ -451,7 +451,7 @@ final class EmailController {
 
             <p>Um diese Anfrage anzunehmen oder abzulehnen, klicken Sie bitte auf den folgenden Button:</p>
 
-            <a href="https://oekfb.eu/transfer/\(transfer.id ?? UUID())" style="display: inline-block; padding: 10px 20px; font-size: 16px; color: white; background-color: #007bff; text-align: center; text-decoration: none; border-radius: 5px;">Transfer Anfrage beantworten</a>
+            <a href="https://oekfb.eu/#/transfer/\(transfer.id ?? UUID())" style="display: inline-block; padding: 10px 20px; font-size: 16px; color: white; background-color: #007bff; text-align: center; text-decoration: none; border-radius: 5px;">Transfer Anfrage beantworten</a>
             
             <p>Wir freuen uns über Ihre baldige Rückmeldung und verbleiben.</p>
 
