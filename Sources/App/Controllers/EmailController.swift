@@ -109,7 +109,7 @@ final class EmailController {
           <li>Ausweiskopie beider Personen am Vertrag (<a href="\(vertragLink)" style="font-size: 16px; color: #007bff; text-decoration: none;">Vertrag Downloaden</a>)</li>
           <li>Logo des Teams</li>
           <li>Bilder der Trikots (Heim und Auswärts komplett inklusive Stutzen)</li>
-          <li>Sie können diese Dokumente über diesen link Hochladen (<a href="https://oekfb.eu/team/upload/\(registrationID)" style="font-size: 16px; color: #007bff; text-decoration: none;">Upload Page</a>)</li>
+          <li>Sie können diese Dokumente über diesen link Hochladen (<a href="https://oekfb.eu/#/team/upload/\(registrationID)" style="font-size: 16px; color: #007bff; text-decoration: none;">Upload Page</a>)</li>
         </ul>
 
         <p>Falls Sie Trikots benötigen und noch keine haben, können Sie sich über die Angebote für ÖKFB Mannschaften hier erkundigen: <a href="https://www.kaddur.at">www.kaddur.at</a></p>
