@@ -32,6 +32,8 @@ final class PlayerController: RouteCollection {
         route.get("internal", ":id", use: getPlayerWithIdentification)
         route.get("reject", ":id", use: sendUpdatePlayerEmail)
         route.get("pending", use: getPlayersWithEmail)
+    
+        route.post("copy", use: copyPlayer)
     }
 
     func boot(routes: RoutesBuilder) throws {
@@ -90,7 +92,43 @@ final class PlayerController: RouteCollection {
             }
         }
     }
+    
+    // Handler
+    func copyPlayer(req: Request) throws -> EventLoopFuture<Player.Public> {
+        let payload = try req.content.decode(CopyPlayerRequest.self)
 
+        let teamFuture = Team.find(payload.teamID, on: req.db)
+            .unwrap(or: Abort(.notFound, reason: "Destination team not found"))
+        let playerFuture = Player.find(payload.playerID, on: req.db)
+            .unwrap(or: Abort(.notFound, reason: "Player not found"))
+
+        return teamFuture.and(playerFuture).flatMap { _, original in
+            let copy = Player(
+                sid: original.sid,
+                image: original.image,
+                team_oeid: original.team_oeid,
+                email: original.email,
+                name: original.name,
+                number: original.number,
+                birthday: original.birthday,
+                teamID: payload.teamID,
+                nationality: original.nationality,
+                position: original.position,
+                eligibility: original.eligibility,
+                registerDate: original.registerDate,
+                identification: original.identification,
+                status: original.status,
+                isCaptain: original.isCaptain,
+                bank: original.bank,
+                blockdate: original.blockdate
+            )
+            copy.transferred = original.transferred
+
+            return copy.save(on: req.db).flatMap {
+                copy.$team.load(on: req.db).transform(to: copy.asPublic())
+            }
+        }
+    }
 
     func sendUpdatePlayerEmail(req: Request) -> EventLoopFuture<HTTPStatus> {
         // Extract player ID from request parameters
@@ -241,4 +279,9 @@ final class PlayerController: RouteCollection {
             }
     }
 
+}
+
+struct CopyPlayerRequest: Content {
+    let teamID: UUID
+    let playerID: UUID
 }

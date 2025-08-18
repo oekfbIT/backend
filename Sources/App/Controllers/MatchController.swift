@@ -361,19 +361,29 @@ final class MatchController: RouteCollection {
         // Decode request first
         let cardRequest = try req.content.decode(CardRequest.self)
 
-        // First, call addCardEvent
         return addCardEvent(req: req, cardType: .yellowRedCard)
             .flatMap { _ in
-                // If addCardEvent succeeds, find the player and update their details
                 Player.find(cardRequest.playerId, on: req.db)
                     .unwrap(or: Abort(.notFound, reason: "Player not found"))
                     .flatMap { player in
                         player.blockdate = blockDate
                         player.eligibility = .Gesperrt
-                        return player.save(on: req.db)
+                        return player.save(on: req.db).flatMap {
+                            MatchEvent.query(on: req.db)
+                                .filter(\.$player.$id == player.id ?? UUID())
+                                .filter(\.$type == .yellowCard)
+                                .sort(\._$id, .descending) // Or sort by a timestamp field if available
+                                .first()
+                                .flatMap { yellowCard in
+                                    guard let card = yellowCard else {
+                                        return req.eventLoop.makeSucceededFuture(())
+                                    }
+                                    return card.delete(on: req.db)
+                                }
+                        }
                     }
             }
-            .transform(to: .ok) // Ensure final response is HTTP 200 OK
+            .transform(to: .ok)
     }
 
     // Helper function to handle card events
