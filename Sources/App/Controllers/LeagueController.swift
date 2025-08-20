@@ -35,9 +35,46 @@ final class LeagueController: RouteCollection {
 
         route.post(":id", "addSlide", use: addSlide)
         route.post(":id", "deleteSlide", ":slideID", use: deleteSlide)
+        
+        route.post("resetLeagues", use: resetLeaks)
 
     }
     
+    func resetLeaks(req: Request) -> EventLoopFuture<HTTPStatus> {
+        req.logger.info("Starting resetLeaks job")
+
+        return League.query(on: req.db).all().flatMap { leagues in
+            req.logger.info("Found \(leagues.count) leagues")
+
+            let leagueFutures = leagues.map { league in
+                req.logger.info("Processing league: \(league.name) [id: \(league.id?.uuidString ?? "nil")]")
+
+                return league.$teams.query(on: req.db).all().flatMap { teams in
+                    req.logger.info(" → Found \(teams.count) teams for league \(league.name)")
+
+                    let updateFutures = teams.map { team in
+                        let oldCode = team.leagueCode ?? "nil"
+                        let newCode = league.name
+                        req.logger.info("   - Updating team '\(team.teamName)' [id: \(team.id?.uuidString ?? "nil")] from leagueCode='\(oldCode)' → '\(newCode)'")
+
+                        team.leagueCode = newCode
+                        return team.save(on: req.db).map {
+                            req.logger.info("   ✓ Saved team '\(team.teamName)' with new leagueCode '\(newCode)'")
+                        }
+                    }
+
+                    return updateFutures.flatten(on: req.eventLoop)
+                }
+            }
+
+            return leagueFutures.flatten(on: req.eventLoop)
+        }
+        .map {
+            req.logger.info("resetLeaks job completed successfully")
+            return .ok
+        }
+    }
+
     func getLeagueTable(req: Request) -> EventLoopFuture<[TableItem]> {
         guard let leagueID = req.parameters.get("id", as: UUID.self) else {
             return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league ID"))
