@@ -90,7 +90,7 @@ final class ScraperDetailController: RouteCollection {
                 state: .auszuwerten,
                 teamcount: 14,
                 code: String(id),
-                name: leagueName
+                name: leagueName, visibility: true
             )
             
             print("Extracted team links:")

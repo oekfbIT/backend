@@ -112,7 +112,7 @@ final class EmailController {
           <li>Sie können diese Dokumente über diesen link Hochladen (<a href="https://oekfb.eu/#/team/upload/\(registrationID)" style="font-size: 16px; color: #007bff; text-decoration: none;">Upload Page</a>)</li>
         </ul>
 
-        <p>Falls Sie Trikots benötigen und noch keine haben, können Sie sich über die Angebote für ÖKFB Mannschaften hier erkundigen: <a href="https://www.kaddur.at">www.kaddur.at</a></p>
+        <p>Falls Sie Trikots benötigen und noch keine haben, können Sie sich über die Angebote für ÖKFB Mannschaften hier erkundigen: <a href="https://erima.shop/oekfb</a></p>
 
         <p>Wir freuen uns über Ihre baldige Rückmeldung und verbleiben.</p>
         <p>Dies ist eine automatisch generierte E-Mail. Sollten Sie Fragen haben oder Unterstützung benötigen, zögern Sie bitte nicht, uns unter support@oekfb.eu zu kontaktieren. Wir stehen Ihnen gerne zur Verfügung.</p>
@@ -237,7 +237,7 @@ final class EmailController {
         · Logo des Teams
         · Bilder der Trikots (Heim und Auswärts komplett inklusive Stutzen)
 
-        Falls Sie Trikots benötigen und noch keine haben, können Sie sich über die Angebote für ÖKFB Mannschaften hier erkundigen: www.kaddur.at
+        Falls Sie Trikots benötigen und noch keine haben, können Sie sich über die Angebote für ÖKFB Mannschaften hier erkundigen: https://erima.shop/oekfb
 
         Wir freuen uns über Ihre baldige Rückmeldung und verbleiben.
         

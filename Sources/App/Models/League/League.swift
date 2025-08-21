@@ -70,6 +70,7 @@ final class League: Model, Content, Codable {
     @OptionalField(key: FieldKeys.hourly) var hourly: Double?
     @OptionalField(key: FieldKeys.youtube) var youtube: String?
     @OptionalField(key: FieldKeys.teamcount) var teamcount: Int?
+    @OptionalField(key: FieldKeys.visibility) var visibility: Bool?
     @Field(key: FieldKeys.name) var name: String
     @Children(for: \.$league) var teams: [Team]
     @Children(for: \.$league) var seasons: [Season]
@@ -83,11 +84,12 @@ final class League: Model, Content, Codable {
         static var name: FieldKey { "name" }
         static var homepageData: FieldKey { "homepageData" }
         static var youtube: FieldKey { "youtube" }
+        static var visibility: FieldKey { "visibility" }
     }
 
     init() {}
 
-    init(id: UUID? = nil, state: Bundesland?, teamcount: Int?, code: String, name: String, wochenbericht: String? = nil, homepagedata: HomepageData? = nil, youtube: String? = nil) {
+    init(id: UUID? = nil, state: Bundesland?, teamcount: Int?, code: String, name: String, wochenbericht: String? = nil, homepagedata: HomepageData? = nil, youtube: String? = nil, visibility: Bool?) {
         self.id = id
         self.state = state
         self.code = code
@@ -95,6 +97,7 @@ final class League: Model, Content, Codable {
         self.teamcount = teamcount ?? 14
         self.homepagedata = homepagedata
         self.youtube = youtube
+        self.visibility = visibility
     }
 }
 
@@ -123,6 +126,7 @@ extension LeagueMigration: Migration {
             .field(League.FieldKeys.code, .string)
             .field(League.FieldKeys.hourly, .double)
             .field(League.FieldKeys.teamcount, .int)
+            .field(League.FieldKeys.visibility, .bool)
             .field(League.FieldKeys.homepageData, .json)
             .field(League.FieldKeys.youtube, .string)
             .create()
@@ -142,7 +146,7 @@ extension League {
         let currentYear = Calendar.current.component(.year, from: Date.viennaNow)
         let nextYear = currentYear + 1
         let seasonName = "\(currentYear)/\(nextYear)"
-        let season = Season(name: seasonName, details: 0)
+        let season = Season(name: seasonName, details: 0, primary: false)
         season.$league.id = leagueID
 
         return season.save(on: db).flatMap {
