@@ -38,6 +38,8 @@ final class ClientController: RouteCollection {
         
         // Current season table at the root (not behind `path` group). If you want it under the same group, change to `route.get(...)`.
         route.get("leagues", ":code", "current", "table", use: getcurrentSeasonTable)
+        // e.g. in routes.swift
+        route.get("matches", "league", ":code", "primary", use: fetchPrimarySeasonMatches)
     }
     
     // MARK: Current Season Table (Primary Season)
@@ -348,6 +350,29 @@ final class ClientController: RouteCollection {
                 }
         }
     }
+    
+    func fetchPrimarySeasonMatches(req: Request) throws -> EventLoopFuture<[PublicMatchShort]> {
+        guard let leagueCode = req.parameters.get("code", as: String.self) else {
+            throw Abort(.badRequest, reason: "Invalid or missing league code")
+        }
+
+        return fetchLeagueByCode(leagueCode, db: req.db).flatMap { league in
+            league.$seasons.query(on: req.db)
+                .filter(\.$primary == true)
+                .with(\.$matches) { match in
+                    match.with(\.$homeTeam)
+                         .with(\.$awayTeam)
+                }
+                .first()
+                .map { season in
+                    guard let primarySeason = season else {
+                        return []
+                    }
+                    return self.mapMatchesToShort(primarySeason.matches)
+                }
+        }
+    }
+
 
     // MARK: Match Detail
     func fetchMatch(req: Request) throws -> EventLoopFuture<PublicMatch> {
