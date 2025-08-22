@@ -35,8 +35,85 @@ final class ClientController: RouteCollection {
         route.get("leaderboard",":id", "yellowRedCard", use: getYellowRedCardLeaderBoard)
         route.get("blocked", "league", ":code", use: blockedPlayers)
         route.get("livescore",use: getLivescoreShort)
+        
+        // Current season table at the root (not behind `path` group). If you want it under the same group, change to `route.get(...)`.
+        route.get("leagues", ":code", "current", "table", use: getcurrentSeasonTable)
     }
     
+    // MARK: Current Season Table (Primary Season)
+    func getcurrentSeasonTable(req: Request) -> EventLoopFuture<[TableItem]> {
+        guard let code = req.parameters.get("code", as: String.self) else {
+            return req.eventLoop.future(error: Abort(.badRequest, reason: "Invalid or missing league code"))
+        }
+
+        return fetchLeagueAndCurrentSeason(code, db: req.db).flatMap { (league, season) in
+            // Pull matches for the primary season and all league teams
+            season.$matches.query(on: req.db).all().and(league.$teams.query(on: req.db).all())
+                .map { (matches, teams) in
+                    // Local stats calculator, scoped to this season’s matches
+                    func stats(for teamID: UUID, in matches: [Match]) -> (wins: Int, draws: Int, losses: Int, scored: Int, against: Int) {
+                        var w = 0, d = 0, l = 0, s = 0, a = 0
+                        for m in matches {
+                            // use relation ids (no direct `homeTeamId`/`awayTeamId` fields)
+                            
+                            let homeId = m.$homeTeam.id
+                            let awayId = m.$awayTeam.id
+                            
+                            guard homeId == teamID || awayId == teamID else { continue }
+
+                            // Skip live/unplayed statuses; count the rest (e.g., finished)
+                            switch m.status {
+                            case .pending, .first, .halftime, .second:
+                                continue
+                            default:
+                                break
+                            }
+
+                            let isHome = (homeId == teamID)
+                            let mine  = isHome ? m.score.home : m.score.away
+                            let opp   = isHome ? m.score.away : m.score.home
+
+                            s += mine; a += opp
+                            if mine > opp { w += 1 }
+                            else if mine == opp { d += 1 }
+                            else { l += 1 }
+                        }
+                        return (w, d, l, s, a)
+                    }
+
+                    var table: [TableItem] = teams.compactMap { team in
+                        guard let tid = team.id else { return nil }
+                        let st = stats(for: tid, in: matches)
+                        let pts = st.wins * 3 + st.draws
+
+                        return TableItem(
+                            image: team.logo,
+                            name: team.teamName,
+                            points: pts,
+                            id: tid,
+                            goals: st.scored,
+                            ranking: 0,
+                            wins: st.wins,
+                            draws: st.draws,
+                            losses: st.losses,
+                            scored: st.scored,
+                            against: st.against,
+                            difference: st.scored - st.against
+                        )
+                    }
+
+                    // sort by points, then goal difference
+                    table.sort {
+                        if $0.points == $1.points { return $0.difference > $1.difference }
+                        return $0.points > $1.points
+                    }
+                    // assign rankings
+                    for i in table.indices { table[i].ranking = i + 1 }
+                    return table
+                }
+        }
+    }
+
     // MARK: League Selection
     func fetchLeagueSelection(req: Request) throws -> EventLoopFuture<[PublicLeagueOverview]> {
         return League.query(on: req.db).all().mapEach { league in
@@ -272,7 +349,7 @@ final class ClientController: RouteCollection {
         }
     }
 
-    // MARK: MAtch Detail
+    // MARK: Match Detail
     func fetchMatch(req: Request) throws -> EventLoopFuture<PublicMatch> {
         guard let matchID = req.parameters.get("id", as: UUID.self) else {
             throw Abort(.badRequest, reason: "Invalid or missing match ID")
@@ -552,6 +629,25 @@ final class ClientController: RouteCollection {
                 }
                 
                 return Array(leagueMatchesDict.values)
+            }
+    }
+
+    // Fetch league by code AND its current (primary) season
+    func fetchLeagueAndCurrentSeason(_ code: String, db: Database) -> EventLoopFuture<(League, Season)> {
+        // 1) Get the league
+        return League.query(on: db)
+            .filter(\.$code == code)
+            .first()
+            .unwrap(or: Abort(.notFound, reason: "League with code \(code) not found"))
+            .flatMap { league in
+                // 2) Get the season where primary == true
+                league.$seasons
+                    .query(on: db)
+                    .filter(\.$primary == true) // Optional<Bool> field; Fluent handles this
+                    .with(\.$matches)           // eager-load matches for later stats
+                    .first()
+                    .unwrap(or: Abort(.notFound, reason: "No primary season found for league \(code)"))
+                    .map { season in (league, season) }
             }
     }
 
