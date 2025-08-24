@@ -39,7 +39,9 @@ final class HomepageController: RouteCollection {
     // MARK: - Homepage Data
 
     func fetchLeagueList(req: Request) throws -> EventLoopFuture<[PublicLeagueOverview]> {
-        return League.query(on: req.db).all().mapEach { league in
+        return League.query(on: req.db)
+            .filter(\.$visibility == true)
+            .all().mapEach { league in
             PublicLeagueOverview(
                 id: league.id,
                 state: league.state,
