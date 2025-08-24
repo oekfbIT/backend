@@ -112,6 +112,7 @@ extension League: Mergeable {
         merged.teamcount = other.teamcount
         merged.homepagedata = other.homepagedata
         merged.youtube = other.youtube
+        merged.visibility = other.visibility
         return merged
     }
 }
