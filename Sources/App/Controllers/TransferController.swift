@@ -48,67 +48,74 @@ final class TransferController: RouteCollection {
     }
 
     // POST /transfers/create
-    // Accepts CreateTransferDTO (snake_case accepted), sets status=warten, fills origin from current player's team, emails the player.
+    // Accepts CreateTransferDTO { team, player, teamName, teamImage, playerName, playerImage }
+    // - Ignores client-provided origin
+    // - Allows only if player.transferred != true (nil or false is OK)
+    // - Sets status = .warten, fills origin from player's current team
     func createTransfer(req: Request) throws -> EventLoopFuture<Transfer> {
+        struct CreateTransferDTO: Content {
+            let team: UUID         // target team
+            let player: UUID
+            let teamName: String?
+            let teamImage: String?
+            let playerName: String?
+            let playerImage: String?
+        }
+
         let dto = try req.content.decode(CreateTransferDTO.self)
 
-        // Prevent duplicates where a transfer was already accepted for this player this season
-        return Transfer.query(on: req.db)
-            .filter(\.$player == dto.player)
-            .filter(\.$status == .angenommen)
-            .first()
-            .flatMap { existing in
-                guard existing == nil else {
-                    return req.eventLoop.makeFailedFuture(
-                        Abort(.badRequest, reason: "Dieser Spieler wurde diese Saison schon einen Transfer gehabt.")
-                    )
+        return req.db.transaction { db in
+            // 1) Load player (+ current team id)
+            return Player.find(dto.player, on: db).unwrap(or: Abort(.notFound, reason: "Player not found.")).flatMap { player in
+                // Gate on the boolean flag
+                if player.transferred == true {
+                    return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Player already has an active transfer."))
                 }
 
-                // Fetch player -> current team (origin)
-                return Player.find(dto.player, on: req.db).flatMap { player in
-                    guard let player = player, let playerTeamID = player.$team.id else {
-                        return req.eventLoop.makeFailedFuture(Abort(.notFound, reason: "Player or player's current team not found."))
-                    }
+                guard let originTeamID = player.$team.id else {
+                    return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Player's current team not set."))
+                }
 
-                    return Team.find(playerTeamID, on: req.db).flatMap { playerTeam in
-                        guard let playerTeam = playerTeam else {
-                            return req.eventLoop.makeFailedFuture(Abort(.notFound, reason: "Player's current team details not found."))
-                        }
+                // 2) Load origin team details
+                return Team.find(originTeamID, on: db).unwrap(or: Abort(.notFound, reason: "Player's current team details not found.")).flatMap { originTeam in
+                    // 3) Create new transfer
+                    var transfer = Transfer(
+                        team: dto.team,
+                        player: dto.player,
+                        status: .warten,
+                        playerName: dto.playerName ?? player.name,
+                        playerImage: dto.playerImage ?? player.image ?? "",
+                        teamName: dto.teamName ?? "",                  // allow nulls (backend can show fallback)
+                        teamImage: dto.teamImage ?? "",
+                        origin: originTeam.id,
+                        originName: originTeam.teamName,
+                        originImage: originTeam.logo
+                    )
 
-                        var newTransfer = Transfer(
-                            team: dto.team,
-                            player: dto.player,
-                            status: .warten,
-                            playerName: dto.playerName,
-                            playerImage: dto.playerImage,
-                            teamName: dto.teamName,
-                            teamImage: dto.teamImage,
-                            origin: playerTeam.id,
-                            originName: playerTeam.teamName,
-                            originImage: playerTeam.logo
-                        )
-
-                        return newTransfer.create(on: req.db).flatMap {
-                            // Send email if we have one; surface error if sending fails to match previous behavior.
+                    // 4) Persist transfer + update player atomically
+                    return transfer.create(on: db).flatMap {
+                        player.transferred = true
+                        player.eligibility = .Warten
+                        return player.update(on: db).flatMap {
+                            // 5) Try email, but don't hard-fail if missing
                             if let recipientEmail = player.email {
                                 do {
-                                    try self.emailController.sendTransferRequest(req: req, recipient: recipientEmail, transfer: newTransfer)
-                                    return req.eventLoop.makeSucceededFuture(newTransfer)
+                                    try self.emailController.sendTransferRequest(req: req, recipient: recipientEmail, transfer: transfer)
                                 } catch {
-                                    return req.eventLoop.makeFailedFuture(
-                                        Abort(.internalServerError, reason: "Failed to send transfer email.")
-                                    )
+                                    req.logger.warning("Failed to send transfer email: \(error.localizedDescription)")
+                                    // Intentionally do not fail the request
                                 }
                             } else {
-                                return req.eventLoop.makeFailedFuture(
-                                    Abort(.badRequest, reason: "Player does not have an email address.")
-                                )
+                                req.logger.info("Player has no email; skipping transfer email.")
                             }
+                            return req.eventLoop.makeSucceededFuture(transfer)
                         }
                     }
                 }
             }
+        }
     }
+
 
     // GET /transfers/reject/:id
     func rejectTransfer(req: Request) -> EventLoopFuture<HTTPStatus> {

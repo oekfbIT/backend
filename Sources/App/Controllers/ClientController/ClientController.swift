@@ -132,7 +132,8 @@ final class ClientController: RouteCollection {
                 state: league.state,
                 code: league.code,
                 teamcount: league.teamcount,
-                name: league.name
+                name: league.name,
+                visibility: league.visibility
             )
         }
     }
