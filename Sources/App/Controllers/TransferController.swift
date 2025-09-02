@@ -95,7 +95,6 @@ final class TransferController: RouteCollection {
                     // 4) Persist transfer + update player atomically
                     return transfer.create(on: db).flatMap {
                         player.transferred = true
-                        player.eligibility = .Warten
                         return player.update(on: db).flatMap {
                             // 5) Try email, but don't hard-fail if missing
                             if let recipientEmail = player.email {
