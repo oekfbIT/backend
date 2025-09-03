@@ -3,6 +3,7 @@ import Fluent
 
 struct PlayerDetailResponse: Codable, Content {
     let player: PublicPlayer
-    var upcoming: [PublicMatchShort]?
+    var upcoming: [PublicSeasonMatches]?
     var news: [NewsItem]?
 }
+

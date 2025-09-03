@@ -189,6 +189,7 @@ final class ClientController: RouteCollection {
                         id: team.id,
                         sid: team.sid,
                         logo: team.logo,
+                        points: team.points,
                         teamName: team.teamName
                     )
                 }
@@ -196,77 +197,6 @@ final class ClientController: RouteCollection {
         }
     }
     
-    // MARK: Club Detail
-    func fetchClub(req: Request) throws -> EventLoopFuture<ClubDetailResponse> {
-        guard let teamID = req.parameters.get("id", as: UUID.self) else {
-            throw Abort(.badRequest, reason: "Invalid or missing team ID")
-        }
-        
-        let teamFuture = fetchTeam(byID: teamID, db: req.db)
-        let leagueFuture = teamFuture.flatMap { self.fetchLeagueForTeam($0, db: req.db) }
-        let playersFuture = teamFuture
-            .flatMap { self.fetchPlayers(for: $0, db: req.db) }
-            .map { players in
-                players.map { player in
-                    MiniPlayer(
-                        id: player.id,
-                        sid: player.sid,
-                        image: player.image,
-                        team_oeid: player.team_oeid,
-                        name: player.name,
-                        number: player.number,
-                        birthday: player.birthday,
-                        nationality: player.nationality,
-                        position: player.position,
-                        eligibility: player.eligibility,
-                        registerDate: player.registerDate,
-                        status: player.status,
-                        isCaptain: player.isCaptain,
-                        bank: player.bank
-                    )
-                }
-            }
-        let teamStatsFuture = teamFuture.flatMap { self.getTeamStats(teamID: $0.id!, db: req.db) }
-        let upcomingMatchesFuture = teamFuture.flatMap { self.getAllMatchesForTeam(teamID: $0.id!, db: req.db) }
-        let newsFuture = teamFuture.and(leagueFuture).flatMap { (team, league) in
-            self.fetchTeamAndLeagueNews(teamName: team.teamName, leagueCode: league?.code, db: req.db)
-        }
-
-        return teamFuture
-            .and(leagueFuture)
-            .and(playersFuture)
-            .and(teamStatsFuture)
-            .and(upcomingMatchesFuture)
-            .and(newsFuture)
-            .map { result in
-                let (((((team, league), players), teamStats), upcomingMatches), news) = result
-                
-                let club = PublicTeamFull(
-                    id: team.id,
-                    sid: team.sid,
-                    leagueCode: team.leagueCode,
-                    points: team.points,
-                    logo: team.logo,
-                    coverimg: team.coverimg,
-                    teamName: team.teamName,
-                    foundationYear: team.foundationYear,
-                    membershipSince: team.membershipSince,
-                    averageAge: team.averageAge,
-                    coach: team.coach,
-                    captain: team.captain,
-                    trikot: team.trikot,
-                    players: players, // Mapped MiniPlayer array
-                    stats: teamStats
-                )
-                
-                return ClubDetailResponse(
-                    club: club,
-                    upcoming: upcomingMatches,
-                    news: news
-                )
-            }
-    }
-
     // MARK: Table
     func fetchtable(req: Request) -> EventLoopFuture<[TableItem]> {
         
@@ -437,56 +367,6 @@ final class ClientController: RouteCollection {
                 }
             }
     }
-
-    func fetchPlayer(req: Request) throws -> EventLoopFuture<PlayerDetailResponse> {
-        guard let playerID = req.parameters.get("id", as: UUID.self) else {
-            throw Abort(.badRequest, reason: "Invalid or missing player ID")
-        }
-
-        let playerFuture: EventLoopFuture<Player> = Player.find(playerID, on: req.db)
-            .unwrap(or: Abort(.notFound, reason: "Player not found"))
-            .flatMap { player in
-                player.$team.load(on: req.db).map { player }
-            }
-
-        let upcomingMatchesFuture: EventLoopFuture<[PublicMatchShort]> = fetchMatchesForPlayer(playerID, db: req.db)
-            .map { matches in
-                self.mapMatchesToShort(matches)
-            }
-
-        let playerStatsFuture: EventLoopFuture<PlayerStats> = self.getPlayerStats(playerID: playerID, db: req.db)
-
-        return playerFuture.and(upcomingMatchesFuture).and(playerStatsFuture).map { (playerAndMatches, stats) in
-            let (player, upcomingMatches) = playerAndMatches
-
-            let publicPlayer = PublicPlayer(
-                id: player.id,
-                sid: player.sid,
-                image: player.image,
-                team_oeid: player.team_oeid,
-                name: player.name,
-                number: player.number,
-                birthday: player.birthday,
-                team: player.team?.asPublicTeam(),
-                nationality: player.nationality,
-                position: player.position,
-                eligibility: player.eligibility,
-                registerDate: player.registerDate,
-                status: player.status,
-                isCaptain: player.isCaptain,
-                bank: player.bank,
-                stats: stats
-            )
-
-            return PlayerDetailResponse(
-                player: publicPlayer,
-                upcoming: upcomingMatches,
-                news: nil
-            )
-        }
-    }
-
-
     
     // MARK: LEADERBOARD
     func getGoalLeaderBoard(req: Request) -> EventLoopFuture<[LeaderBoard]> {
@@ -677,7 +557,7 @@ final class ClientController: RouteCollection {
             }
     }
 
-    // Fetch league by code AND its current (primary) season
+    // Fetch league by code AND its current (primary) season`
     func fetchLeagueAndCurrentSeason(_ code: String, db: Database) -> EventLoopFuture<(League, Season)> {
         // 1) Get the league
         return League.query(on: db)
@@ -697,86 +577,322 @@ final class ClientController: RouteCollection {
     }
 
 }
-/*
+
 extension ClientController {
-    // MARK: Public handlers (primary season only)
-    func getGoalLeaderBoardPrimarySeason(req: Request) -> EventLoopFuture<[LeaderBoard]> {
-        getLeaderBoardForPrimarySeason(req: req, eventType: .goal)
+    // Map DB -> Public DTOs
+    private func toPublicShort(_ m: Match) -> PublicMatchShort {
+        PublicMatchShort(
+            id: m.id,
+            details: m.details,
+            // Use team relation IDs; take logo/name from the blankets you already store
+            homeBlanket: MiniBlankett(
+                id: m.$homeTeam.id,
+                logo: m.homeBlanket?.logo,
+                name: m.homeBlanket?.name
+            ),
+            awayBlanket: MiniBlankett(
+                id: m.$awayTeam.id,
+                logo: m.awayBlanket?.logo,
+                name: m.awayBlanket?.name
+            ),
+            score: m.score,
+            status: m.status,
+            firstHalfDate: m.firstHalfStartDate,
+            secondHalfDate: m.secondHalfStartDate
+        )
     }
 
-    func getRedCardLeaderBoardPrimarySeason(req: Request) -> EventLoopFuture<[LeaderBoard]> {
-        getLeaderBoardForPrimarySeason(req: req, eventType: .redCard)
+    // All matches for a team in a specific season
+    private func fetchTeamMatches(inSeason seasonID: UUID, teamID: UUID, db: Database) -> EventLoopFuture<[PublicMatchShort]> {
+        Match.query(on: db)
+            .filter(\.$season.$id == seasonID)
+            .group(.or) { or in
+                or.filter(\.$homeTeam.$id == teamID)
+                  .filter(\.$awayTeam.$id == teamID)
+            }
+            .all()
+            .map { $0.map(self.toPublicShort) }
     }
 
-    func getYellowCardLeaderBoardPrimarySeason(req: Request) -> EventLoopFuture<[LeaderBoard]> {
-        getLeaderBoardForPrimarySeason(req: req, eventType: .yellowCard)
+    // MARK: Club Detail (season-grouped)
+    func fetchClub(req: Request) throws -> EventLoopFuture<ClubDetailResponse> {
+        guard let teamID = req.parameters.get("id", as: UUID.self) else {
+            throw Abort(.badRequest, reason: "Invalid or missing team ID")
+        }
+
+        let teamFuture = fetchTeam(byID: teamID, db: req.db)
+        let leagueFuture = teamFuture.flatMap { self.fetchLeagueForTeam($0, db: req.db) }
+
+        let playersFuture = teamFuture
+            .flatMap { self.fetchPlayers(for: $0, db: req.db) }
+            .map { players in
+                players.map { player in
+                    MiniPlayer(
+                        id: player.id,
+                        sid: player.sid,
+                        image: player.image,
+                        team_oeid: player.team_oeid,
+                        name: player.name,
+                        number: player.number,
+                        birthday: player.birthday,
+                        nationality: player.nationality,
+                        position: player.position,
+                        eligibility: player.eligibility,
+                        registerDate: player.registerDate,
+                        status: player.status,
+                        isCaptain: player.isCaptain,
+                        bank: player.bank
+                    )
+                }
+            }
+
+        let teamStatsFuture = teamFuture.flatMap { self.getTeamStats(teamID: $0.id!, db: req.db) }
+
+        // NEW: build [PublicSeasonMatches] from the team's league seasons
+        let seasonsFuture: EventLoopFuture<[PublicSeasonMatches]> = teamFuture.and(leagueFuture).flatMap { (team, league) in
+            guard let league = league, let leagueID = league.id, let tID = team.id else {
+                return req.eventLoop.makeSucceededFuture([])
+            }
+
+            return Season.query(on: req.db)
+                .filter(\.$league.$id == leagueID)
+                .all()
+                .flatMap { seasons in
+                    let perSeason: [EventLoopFuture<PublicSeasonMatches>] = seasons.compactMap { season in
+                        guard let sID = season.id else { return nil }
+                        return self.fetchTeamMatches(inSeason: sID, teamID: tID, db: req.db)
+                            .map { matches in
+                                PublicSeasonMatches(
+                                    leagueName: league.name,
+                                    leagueID: leagueID,
+                                    seasonID: sID,
+                                    seasonName: season.name,
+                                    primary: season.primary ?? false,
+                                    matches: matches
+                                )
+                            }
+                    }
+                    return perSeason.flatten(on: req.eventLoop)
+                }
+                // Optional: primary season first
+                .map { $0.sorted { ($0.primary && !$1.primary) } }
+        }
+
+        let newsFuture = teamFuture.and(leagueFuture).flatMap { (team, league) in
+            self.fetchTeamAndLeagueNews(teamName: team.teamName, leagueCode: league?.code, db: req.db)
+        }
+
+        // Assemble response (note upcoming now = seasons)
+        return teamFuture
+            .and(leagueFuture)
+            .and(playersFuture)
+            .and(teamStatsFuture)
+            .and(seasonsFuture)
+            .and(newsFuture)
+            .map { result in
+                let (((((team, _league), players), teamStats), seasons), news) = result
+
+                let club = PublicTeamFull(
+                    id: team.id,
+                    sid: team.sid,
+                    leagueCode: team.leagueCode,
+                    points: team.points,
+                    logo: team.logo,
+                    coverimg: team.coverimg,
+                    teamName: team.teamName,
+                    foundationYear: team.foundationYear,
+                    membershipSince: team.membershipSince,
+                    averageAge: team.averageAge,
+                    coach: team.coach,
+                    captain: team.captain,
+                    trikot: team.trikot,
+                    players: players,
+                    stats: teamStats
+                )
+
+                return ClubDetailResponse(
+                    club: club,
+                    upcoming: seasons, // now [PublicSeasonMatches]
+                    news: news
+                )
+            }
+    }
+}
+
+
+// MARK: - Tiny TTL cache (soft LRU-ish)
+private actor _LRUCache<Value> {
+    struct Entry { let value: Value; let expiresAt: Date }
+    private var store: [String: Entry] = [:]
+    private let ttl: TimeInterval
+
+    init(ttl: TimeInterval) { self.ttl = ttl }
+
+    func get(_ key: String) -> Value? {
+        guard let e = store[key] else { return nil }
+        if e.expiresAt > Date() { return e.value }
+        store[key] = nil
+        return nil
     }
 
-    func getYellowRedCardLeaderBoardPrimarySeason(req: Request) -> EventLoopFuture<[LeaderBoard]> {
-        getLeaderBoardForPrimarySeason(req: req, eventType: .yellowRedCard)
+    func set(_ key: String, _ value: Value) {
+        store[key] = .init(value: value, expiresAt: Date().addingTimeInterval(ttl))
+        // very soft cap to avoid unbounded growth
+        if store.count > 256, let first = store.keys.first {
+            store.removeValue(forKey: first)
+        }
     }
+}
 
-    private func getLeaderBoardForPrimarySeason(
-        req: Request,
-        eventType: MatchEventType
-    ) -> EventLoopFuture<[LeaderBoard]> {
-        guard let leagueID = req.parameters.get("id", as: UUID.self) else {
-            return req.eventLoop.makeFailedFuture(
-                Abort(.badRequest, reason: "Invalid or missing league ID")
-            )
+// Reuse caches across requests in this process
+private enum Cache {
+    // Cache the expensive (player, league) => [PublicSeasonMatches] assembly
+    static let seasons = _LRUCache<[PublicSeasonMatches]>(ttl: 30) // seconds
+}
+
+// MARK: - Public DTOs you already use (shown for reference)
+// struct PublicPlayer { ... }
+// struct PublicSeasonMatches { let leagueName: String; let leagueID: UUID; let seasonID: UUID; let seasonName: String; let primary: Bool; let matches: [PublicMatchShort] }
+// struct PlayerDetailResponse { let player: PublicPlayer; let upcoming: [PublicSeasonMatches]; let news: [PublicNews]? }
+
+// MARK: - Helper (nil-safe date compare)
+private func _date(_ match: Match) -> Date {
+    match.details.date ?? .distantFuture
+}
+
+extension ClientController {
+    // Build (and cache) the seasons+matches view for a given player within a league
+    private func seasonsForPlayerFast(
+        player: Player,
+        league: League,
+        req: Request
+    ) -> EventLoopFuture<[PublicSeasonMatches]> {
+        guard let leagueID = league.id, let playerID = player.id else {
+            return req.eventLoop.makeSucceededFuture([])
+        }
+
+        let cacheKey = "player:\(playerID.uuidString)|league:\(leagueID.uuidString)"
+        if let cached = Caches.seasons.get(cacheKey) {
+            return req.eventLoop.makeSucceededFuture(cached)
         }
 
         return Season.query(on: req.db)
             .filter(\.$league.$id == leagueID)
-            .filter(\.$primary == true)
-            .with(\.$matches)
-            .first()
-            .flatMap { season in
-                guard let season = season else {
-                    return req.eventLoop.makeSucceededFuture([LeaderBoard]())
+            .all()
+            .flatMap { seasons in
+                let seasonIDs = seasons.compactMap(\.id)
+                guard !seasonIDs.isEmpty else {
+                    return req.eventLoop.makeSucceededFuture([])
                 }
 
-                let matchIDs = season.matches.compactMap { $0.id }
-                guard !matchIDs.isEmpty else {
-                    return req.eventLoop.makeSucceededFuture([LeaderBoard]())
-                }
+                let q = Match.query(on: req.db)
+                    .filter(\.$season.$id ~~ seasonIDs)
 
-                return Team.query(on: req.db)
-                    .filter(\.$league.$id == leagueID)
-                    .with(\.$players)
-                    .all()
-                    .flatMap { teams in   // ✅ plural
-                        var playerTeamDict: [UUID: (String?, String?, String?)] = [:]
-
-                        for team in teams {   // ✅ iterate [Team]
-                            let tIDString = team.id?.uuidString
-                            for player in team.players {
-                                if let pid = player.id {
-                                    playerTeamDict[pid] = (team.logo, team.teamName, tIDString)
-                                }
-                            }
-                        }
-
-                        let playerIDs = Array(playerTeamDict.keys)
-
-                        return MatchEvent.query(on: req.db)
-                            .filter(\.$match.$id ~~ matchIDs)
-                            .filter(\.$type == eventType)
-                            .apply { query in
-                                if !playerIDs.isEmpty {
-                                    query.filter(\.$player.$id ~~ playerIDs)
-                                }
-                            }
-                            .all()
-                            .map { events in
-                                self.mapEventsToLeaderBoard(events, playerTeamDict: playerTeamDict)
-                            }
+                // narrow by player's current team if known (reduces scanned rows)
+                if let teamID = player.$team.id {
+                    q.group(.or) { or in
+                        or.filter(\.$homeTeam.$id == teamID)
+                          .filter(\.$awayTeam.$id == teamID)
                     }
+                }
+
+                return q.all().map { matches in
+                    // keep only matches where blankets include this player
+                    let relevant = matches.filter { m in
+                        let homeIDs = m.homeBlanket?.players.compactMap(\.id) ?? []
+                        let awayIDs = m.awayBlanket?.players.compactMap(\.id) ?? []
+                        return homeIDs.contains(playerID) || awayIDs.contains(playerID)
+                    }
+
+                    // group by season id
+                    let bySeason = Dictionary(grouping: relevant, by: { $0.$season.id ?? UUID() })
+
+                    // primary season first
+                    let orderedSeasons = seasons.sorted { ($0.primary ?? false) && !($1.primary ?? false) }
+
+                    let payload: [PublicSeasonMatches] = orderedSeasons.compactMap { s in
+                        guard let sid = s.id else { return nil }
+                        let ms = (bySeason[sid] ?? [])
+                            .sorted {
+                                let d0 = $0.details.date ?? .distantFuture
+                                let d1 = $1.details.date ?? .distantFuture
+                                if d0 != d1 { return d0 < d1 }
+                                return ($0.id?.uuidString ?? "") < ($1.id?.uuidString ?? "")
+                            }
+                            .map(self.toPublicShort)
+
+                        return PublicSeasonMatches(
+                            leagueName: league.name,
+                            leagueID: leagueID,
+                            seasonID: sid,
+                            seasonName: s.name,
+                            primary: s.primary ?? false,
+                            matches: ms
+                        )
+                    }
+
+                    Caches.seasons.set(cacheKey, payload)
+                    return payload
+                }
             }
     }
 
+    // MARK: Player Detail (season-grouped + cached)
+    func fetchPlayer(req: Request) throws -> EventLoopFuture<PlayerDetailResponse> {
+        guard let playerID = req.parameters.get("id", as: UUID.self) else {
+            throw Abort(.badRequest, reason: "Invalid or missing player ID")
+        }
 
+        // player (+team)
+        let playerF: EventLoopFuture<Player> = Player.find(playerID, on: req.db)
+            .unwrap(or: Abort(.notFound, reason: "Player not found"))
+            .flatMap { player in
+                player.$team.load(on: req.db).map { player }
+            }
 
+        // league via player's team (may be nil)
+        let leagueF: EventLoopFuture<League?> = playerF.flatMap { player in
+            guard let team = player.team else { return req.eventLoop.makeSucceededFuture(nil) }
+            return self.fetchLeagueForTeam(team, db: req.db)
+        }
 
+        // stats
+        let statsF: EventLoopFuture<PlayerStats> = self.getPlayerStats(playerID: playerID, db: req.db)
+
+        // seasons + matches (uses cache)
+        let seasonsF: EventLoopFuture<[PublicSeasonMatches]> = playerF.and(leagueF).flatMap { (player, league) in
+            guard let league = league else { return req.eventLoop.makeSucceededFuture([]) }
+            return self.seasonsForPlayerFast(player: player, league: league, req: req)
+        }
+
+        return playerF.and(seasonsF).and(statsF).map { (playerAndSeasons, stats) in
+            let (player, seasons) = playerAndSeasons
+
+            let publicPlayer = PublicPlayer(
+                id: player.id,
+                sid: player.sid,
+                image: player.image,
+                team_oeid: player.team_oeid,
+                name: player.name,
+                number: player.number,
+                birthday: player.birthday,
+                team: player.team?.asPublicTeam(),
+                nationality: player.nationality,
+                position: player.position,
+                eligibility: player.eligibility,
+                registerDate: player.registerDate,
+                status: player.status,
+                isCaptain: player.isCaptain,
+                bank: player.bank,
+                stats: stats
+            )
+
+            return PlayerDetailResponse(
+                player: publicPlayer,
+                upcoming: seasons,
+                news: nil
+            )
+        }
+    }
 }
-*/
+

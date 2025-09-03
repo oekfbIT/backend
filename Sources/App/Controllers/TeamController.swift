@@ -104,16 +104,18 @@ final class TeamController: RouteCollection {
             }
     }
 
-    
     func getWithMatches(req: Request) throws -> EventLoopFuture<[Match]> {
         guard let teamID = req.parameters.get("id", as: UUID.self) else {
             throw Abort(.badRequest)
         }
-        
+
         return Match.query(on: req.db)
+            // join the optional parent Season (inner join => drops matches without a season)
+            .join(parent: \Match.$season)
+            .filter(Season.self, \.$primary == true)
             .group(.or) { group in
-                group.filter(\Match.$homeTeam.$id == teamID)
-                group.filter(\Match.$awayTeam.$id == teamID)
+                group.filter(\.$homeTeam.$id == teamID)
+                group.filter(\.$awayTeam.$id == teamID)
             }
             .all()
     }
@@ -130,7 +132,6 @@ final class TeamController: RouteCollection {
             .first()
             .unwrap(or: Abort(.notFound))
     }
-
     
     // Function to get all teams with their players
     func getAllTeamsWithPlayers(req: Request) throws -> EventLoopFuture<[Team.Public]> {

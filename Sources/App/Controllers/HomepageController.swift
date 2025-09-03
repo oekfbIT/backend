@@ -134,6 +134,7 @@ final class HomepageController: RouteCollection {
                 id: team.id,
                 sid: team.sid,
                 logo: team.logo,
+                points: team.points,
                 teamName: team.teamName
             )
         }
@@ -178,6 +179,7 @@ final class HomepageController: RouteCollection {
                                 id: team.id,
                                 sid: team.sid,
                                 logo: team.logo,
+                                points: team.points,
                                 teamName: team.teamName
                             )
                         }
@@ -718,6 +720,7 @@ struct PublicTeamShort: Content, Codable {
     var id: UUID?
     var sid: String?
     var logo: String
+    var points: Int?
     var teamName: String
 }
 

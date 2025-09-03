@@ -169,6 +169,7 @@ final class Team: Model, Content {
         PublicTeamShort(id: self.id,
                         sid: self.sid,
                         logo: self.logo,
+                        points: self.points,
                         teamName: self.teamName)
     }
 }

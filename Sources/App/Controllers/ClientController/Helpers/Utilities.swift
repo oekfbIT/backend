@@ -167,6 +167,7 @@ extension ClientController {
                 id: team.id,
                 sid: team.sid,
                 logo: team.logo,
+                points: team.points,
                 teamName: team.teamName
             )
         }

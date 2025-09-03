@@ -23,10 +23,10 @@ final class EmailController {
     
     let smtpConfig = SmtpServerConfiguration(
         hostname: "smtp.easyname.com",
-        port: 587,  // Use port 587 for STARTTLS
+        port: 587,
         signInMethod: .credentials(username: "office@oekfb.eu", password: "oekfb$2024"),
         secure: .startTls,
-        helloMethod: .ehlo  // Use EHLO instead of HELO
+        helloMethod: .ehlo
     )
 
     func sendTestEmail(req: Request) throws -> EventLoopFuture<HTTPStatus> {
@@ -534,20 +534,31 @@ extension EmailController {
         }
     }
 
-    func sendPostPone(req: Request, cancellerName: String, recipient: String, match: Match) throws -> EventLoopFuture<HTTPStatus> {
+    func sendPostPone(req: Request, postpone: PostponeRequest, cancellerName: String, recipient: String, match: Match) throws -> EventLoopFuture<HTTPStatus> {
         req.application.smtp.configuration = smtpConfig
         
         let matchDateString = formatDate(match.details.date)
         
         let emailBody = """
         <html>
-        <body>
-            <p>Die gegnerische Mannschaft: \(cancellerName) bittet, das Spiel vom <strong>\(match.details.gameday). Spieltag, am \(matchDateString)</strong> offiziell zu verschieben.</p>
-            <p>Bitte bestätigen oder lehnen Sie die Anfrage ab.</p>
-        </body>
+          <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+            <p>
+              Die gegnerische Mannschaft <strong>\(cancellerName)</strong> bittet darum, 
+              das Spiel vom <strong>\(match.details.gameday). Spieltag, am \(matchDateString)</strong> 
+              offiziell zu verschieben.
+            </p>
+            <p>
+              Bitte bestätigen oder lehnen Sie die Anfrage ab, indem Sie den folgenden Link aufrufen:
+            </p>
+            <p>
+              <a href="https://www.oekfb.eu/#/postpone/\(postpone.id)">
+                Spielverschiebung ansehen
+              </a>
+            </p>
+          </body>
         </html>
         """
-        
+
         let email = try Email(
             from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
             to: [EmailAddress(address: recipient)],
@@ -590,6 +601,7 @@ extension EmailController {
             isBodyHtml: true
         )
         
+        print("sendingto: \(recipient)")
         return req.smtp.send(email).flatMapThrowing { result in
             switch result {
             case .success:
