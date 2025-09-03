@@ -799,8 +799,8 @@ extension ClientController {
                 return q.all().map { matches in
                     // keep only matches where blankets include this player
                     let relevant = matches.filter { m in
-                        let homeIDs = m.homeBlanket?.players.compactMap(\.id) ?? []
-                        let awayIDs = m.awayBlanket?.players.compactMap(\.id) ?? []
+                        let homeIDs = m.homeBlanket?.players.map(\.id) ?? []
+                        let awayIDs = m.awayBlanket?.players.map(\.id) ?? []
                         return homeIDs.contains(playerID) || awayIDs.contains(playerID)
                     }
 
