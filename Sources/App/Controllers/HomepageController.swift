@@ -26,6 +26,7 @@ final class HomepageController: RouteCollection {
         route.get("homepage", "season", ":seasonID", use: fetchNewsItem)
 
         route.get("homepage", ":id", "tabelle", use: getLeagueTable)
+        route.get("homepage", ":id", "tabelle", "primary", use: getLeagueTableForPrimarySeason)
         route.get(":id", "homepage", "matches", use: fetchLeagueMatches)
         route.get("match", ":id", "details", use: fetchMatchDetail)
 
@@ -676,6 +677,159 @@ final class HomepageController: RouteCollection {
         }
 
         return leaderboard
+    }
+
+}
+
+
+extension HomepageController {
+    // MARK: - Season Helper
+    private func primarySeasonID(for leagueID: UUID, db: Database) -> EventLoopFuture<UUID> {
+        Season.query(on: db)
+            .filter(\.$league.$id == leagueID)
+            .filter(\.$primary == true)
+            .first()
+            .unwrap(or: Abort(.notFound, reason: "Primary season not found for league"))
+            .flatMapThrowing { try $0.requireID() }
+    }
+
+    // MARK: - Player (Primary Season)
+    func getPlayerStatsInPrimarySeason(playerID: UUID, leagueID: UUID, db: Database) -> EventLoopFuture<PlayerStats> {
+        primarySeasonID(for: leagueID, db: db).flatMap { seasonID in
+            MatchEvent.query(on: db)
+                .filter(\.$player.$id == playerID)
+                .join(Match.self, on: \MatchEvent.$match.$id == \Match.$id)
+                .filter(Match.self, \.$season.$id == seasonID)
+                .all()
+                .map { events in
+                    var stats = PlayerStats(matchesPlayed: 0, goalsScored: 0, redCards: 0, yellowCards: 0, yellowRedCrd: 0)
+                    var matchSet = Set<UUID>()
+
+                    for event in events {
+                        matchSet.insert(event.$match.id)
+                        switch event.type {
+                        case .goal:           stats.goalsScored += 1
+                        case .redCard:        stats.redCards += 1
+                        case .yellowCard:     stats.yellowCards += 1
+                        case .yellowRedCard:  stats.yellowRedCrd += 1
+                        default: break
+                        }
+                    }
+                    stats.matchesPlayed = matchSet.count
+                    return stats
+                }
+        }
+    }
+
+    // MARK: - Team (Primary Season)
+    func getTeamStatsInPrimarySeason(teamID: UUID, leagueID: UUID, db: Database) -> EventLoopFuture<TeamStats> {
+        let validStatuses: [GameStatus] = [.completed, .abbgebrochen, .submitted, .cancelled, .done]
+
+        return primarySeasonID(for: leagueID, db: db).flatMap { seasonID in
+            Match.query(on: db)
+                .filter(\.$season.$id == seasonID)
+                .group(.or) { group in
+                    group.filter(\.$homeTeam.$id == teamID)
+                    group.filter(\.$awayTeam.$id == teamID)
+                }
+                .filter(\.$status ~~ validStatuses)
+                .with(\.$events)
+                .all()
+                .map { matches in
+                    var stats = TeamStats(
+                        wins: 0, draws: 0, losses: 0,
+                        totalScored: 0, totalAgainst: 0,
+                        goalDifference: 0, totalPoints: 0,
+                        totalYellowCards: 0, totalRedCards: 0
+                    )
+
+                    for match in matches {
+                        let isHome = match.$homeTeam.id == teamID
+                        let scored  = isHome ? match.score.home : match.score.away
+                        let against = isHome ? match.score.away : match.score.home
+
+                        stats.totalScored += scored
+                        stats.totalAgainst += against
+
+                        if scored > against {
+                            stats.wins += 1; stats.totalPoints += 3
+                        } else if scored == against {
+                            stats.draws += 1; stats.totalPoints += 1
+                        } else {
+                            stats.losses += 1
+                        }
+
+                        for event in match.events {
+                            guard let assign = event.assign else { continue }
+                            if (isHome && assign == .home) || (!isHome && assign == .away) {
+                                switch event.type {
+                                case .yellowCard: stats.totalYellowCards += 1
+                                case .redCard:    stats.totalRedCards += 1
+                                default: break
+                                }
+                            }
+                        }
+                    }
+
+                    stats.goalDifference = stats.totalScored - stats.totalAgainst
+                    return stats
+                }
+        }
+    }
+
+    // MARK: - League Table (Primary Season)
+    func getLeagueTableForPrimarySeason(req: Request) -> EventLoopFuture<[TableItem]> {
+        guard let leagueID = req.parameters.get("id", as: UUID.self) else {
+            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league ID"))
+        }
+
+        return primarySeasonID(for: leagueID, db: req.db).flatMap { _ in
+            League.find(leagueID, on: req.db)
+                .unwrap(or: Abort(.notFound, reason: "League not found"))
+                .flatMap { league in
+                    league.$teams.query(on: req.db).all().flatMap { teams in
+                        let teamStatsFutures = teams.map { team in
+                            self.getTeamStatsInPrimarySeason(teamID: team.id!, leagueID: leagueID, db: req.db)
+                                .map { stats in (team, stats) }
+                        }
+
+                        return req.eventLoop.flatten(teamStatsFutures).map { teamStatsPairs in
+                            var tableItems: [TableItem] = []
+
+                            for (team, stats) in teamStatsPairs {
+                                let tableItem = TableItem(
+                                    image: team.logo,
+                                    name: team.teamName,
+                                    points: stats.totalPoints, // season-scoped points
+                                    id: team.id!,
+                                    goals: stats.totalScored,
+                                    ranking: 0,
+                                    wins: stats.wins,
+                                    draws: stats.draws,
+                                    losses: stats.losses,
+                                    scored: stats.totalScored,
+                                    against: stats.totalAgainst,
+                                    difference: stats.goalDifference
+                                )
+                                tableItems.append(tableItem)
+                            }
+
+                            tableItems.sort {
+                                if $0.points == $1.points {
+                                    return $0.difference > $1.difference
+                                }
+                                return $0.points > $1.points
+                            }
+
+                            for i in 0..<tableItems.count {
+                                tableItems[i].ranking = i + 1
+                            }
+
+                            return tableItems
+                        }
+                    }
+                }
+        }
     }
 
 }
