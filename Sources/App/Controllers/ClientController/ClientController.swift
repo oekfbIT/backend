@@ -29,10 +29,10 @@ final class ClientController: RouteCollection {
         route.get("match", "detail", ":id", use: fetchMatch)
         route.get("player", "detail", ":id", use: fetchPlayer)
         
-        route.get("leaderboard", ":id", "goal", use: getGoalLeaderBoard)
-        route.get("leaderboard", ":id", "redCard", use: getRedCardLeaderBoard)
-        route.get("leaderboard",":id", "yellowCard", use: getYellowCardLeaderBoard)
-        route.get("leaderboard",":id", "yellowRedCard", use: getYellowRedCardLeaderBoard)
+        route.get("leaderboard", ":id", "goal", use: getGoalLeaderBoardSeason)
+        route.get("leaderboard", ":id", "redCard", use: getRedCardLeaderBoardSeason)
+        route.get("leaderboard",":id", "yellowCard", use: getYellowCardLeaderBoardSeason)
+        route.get("leaderboard",":id", "yellowRedCard", use: getYellowRedCardLeaderBoardSeason)
         route.get("blocked", "league", ":code", use: blockedPlayers)
         route.get("livescore",use: getLivescoreShort)
         
@@ -367,97 +367,6 @@ final class ClientController: RouteCollection {
                 }
             }
     }
-    
-    // MARK: LEADERBOARD
-    func getGoalLeaderBoard(req: Request) -> EventLoopFuture<[LeaderBoard]> {
-        return getLeaderBoard(req: req, eventType: .goal)
-    }
-
-    func getRedCardLeaderBoard(req: Request) -> EventLoopFuture<[LeaderBoard]> {
-        return getLeaderBoard(req: req, eventType: .redCard)
-    }
-
-    func getYellowCardLeaderBoard(req: Request) -> EventLoopFuture<[LeaderBoard]> {
-        return getLeaderBoard(req: req, eventType: .yellowCard)
-    }
-
-    func getYellowRedCardLeaderBoard(req: Request) -> EventLoopFuture<[LeaderBoard]> {
-        return getLeaderBoard(req: req, eventType: .yellowRedCard)
-    }
-
-    private func getLeaderBoard(req: Request, eventType: MatchEventType) -> EventLoopFuture<[LeaderBoard]> {
-        guard let leagueID = req.parameters.get("id", as: UUID.self) else {
-            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league ID"))
-        }
-
-        return Team.query(on: req.db)
-            .filter(\.$league.$id == leagueID)
-            .with(\.$players)
-            .all()
-            .flatMap { teams in
-                // Build PlayerID -> (teamLogo, teamName, teamId)
-                var playerTeamDict: [UUID: (String?, String?, String?)] = [:]
-                for team in teams {
-                    let tIDString = team.id?.uuidString
-                    for player in team.players {
-                        if let pid = player.id {
-                            playerTeamDict[pid] = (team.logo, team.teamName, tIDString)
-                        }
-                    }
-                }
-                
-                let playerIDs = playerTeamDict.keys.map { $0 }
-                return MatchEvent.query(on: req.db)
-                    .filter(\.$player.$id ~~ playerIDs)
-                    .filter(\.$type == eventType)
-                    .all()
-                    .map { events in
-                        self.mapEventsToLeaderBoard(events, playerTeamDict: playerTeamDict)
-                    }
-            }
-    }
-
-    // 3) Supply the team info
-    private func mapEventsToLeaderBoard(
-        _ events: [MatchEvent],
-        playerTeamDict: [UUID: (String?, String?, String?)]
-    ) -> [LeaderBoard] {
-        
-        var playerEventCounts: [UUID: (name: String?, image: String?, number: String?, count: Int)] = [:]
-        
-        for event in events {
-            let pid = event.$player.id
-            let info = (event.name, event.image, event.number)
-            
-            if let existing = playerEventCounts[pid] {
-                playerEventCounts[pid] = (
-                    existing.name,
-                    existing.image,
-                    existing.number,
-                    existing.count + 1
-                )
-            } else {
-                playerEventCounts[pid] = (info.0, info.1, info.2, 1)
-            }
-        }
-
-        return playerEventCounts.compactMap { (playerId, data) in
-            let (teamImg, teamName, teamId) = playerTeamDict[playerId] ?? (nil, nil, nil)
-            
-            return LeaderBoard(
-                name: data.name,
-                image: data.image,
-                number: data.number,
-                count: Double(data.count),
-                playerid: playerId,
-                teamimg: teamImg,
-                teamName: teamName,
-                teamId: teamId
-            )
-        }
-        .sorted { ($0.count ?? 0) > ($1.count ?? 0) }
-    }
-
     
 // MARK: BLOCKED PLAYERS
     func blockedPlayers(req: Request) throws -> EventLoopFuture<[SperrItem]> {
@@ -941,4 +850,170 @@ extension ClientController {
             }
     }
 
+}
+
+
+// MARK: LEADERBOARD
+extension ClientController {
+    
+    func getGoalLeaderBoard(req: Request) -> EventLoopFuture<[LeaderBoard]> {
+        return getLeaderBoard(req: req, eventType: .goal)
+    }
+
+    func getRedCardLeaderBoard(req: Request) -> EventLoopFuture<[LeaderBoard]> {
+        return getLeaderBoard(req: req, eventType: .redCard)
+    }
+
+    func getYellowCardLeaderBoard(req: Request) -> EventLoopFuture<[LeaderBoard]> {
+        return getLeaderBoard(req: req, eventType: .yellowCard)
+    }
+
+    func getYellowRedCardLeaderBoard(req: Request) -> EventLoopFuture<[LeaderBoard]> {
+        return getLeaderBoard(req: req, eventType: .yellowRedCard)
+    }
+
+    private func getLeaderBoard(req: Request, eventType: MatchEventType) -> EventLoopFuture<[LeaderBoard]> {
+        guard let leagueID = req.parameters.get("id", as: UUID.self) else {
+            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league ID"))
+        }
+
+        return Team.query(on: req.db)
+            .filter(\.$league.$id == leagueID)
+            .with(\.$players)
+            .all()
+            .flatMap { teams in
+                // Build PlayerID -> (teamLogo, teamName, teamId)
+                var playerTeamDict: [UUID: (String?, String?, String?)] = [:]
+                for team in teams {
+                    let tIDString = team.id?.uuidString
+                    for player in team.players {
+                        if let pid = player.id {
+                            playerTeamDict[pid] = (team.logo, team.teamName, tIDString)
+                        }
+                    }
+                }
+                
+                let playerIDs = playerTeamDict.keys.map { $0 }
+                return MatchEvent.query(on: req.db)
+                    .filter(\.$player.$id ~~ playerIDs)
+                    .filter(\.$type == eventType)
+                    .all()
+                    .map { events in
+                        self.mapEventsToLeaderBoard(events, playerTeamDict: playerTeamDict)
+                    }
+            }
+    }
+
+    // 3) Supply the team info
+    private func mapEventsToLeaderBoard(
+        _ events: [MatchEvent],
+        playerTeamDict: [UUID: (String?, String?, String?)]
+    ) -> [LeaderBoard] {
+        
+        var playerEventCounts: [UUID: (name: String?, image: String?, number: String?, count: Int)] = [:]
+        
+        for event in events {
+            let pid = event.$player.id
+            let info = (event.name, event.image, event.number)
+            
+            if let existing = playerEventCounts[pid] {
+                playerEventCounts[pid] = (
+                    existing.name,
+                    existing.image,
+                    existing.number,
+                    existing.count + 1
+                )
+            } else {
+                playerEventCounts[pid] = (info.0, info.1, info.2, 1)
+            }
+        }
+
+        return playerEventCounts.compactMap { (playerId, data) in
+            let (teamImg, teamName, teamId) = playerTeamDict[playerId] ?? (nil, nil, nil)
+            
+            return LeaderBoard(
+                name: data.name,
+                image: data.image,
+                number: data.number,
+                count: Double(data.count),
+                playerid: playerId,
+                teamimg: teamImg,
+                teamName: teamName,
+                teamId: teamId
+            )
+        }
+        .sorted { ($0.count ?? 0) > ($1.count ?? 0) }
+    }
+
+}
+
+// MARK: LEADERBOARD (Primary Season only)
+extension ClientController {
+
+    // Public endpoints (season-only copies)
+    func getGoalLeaderBoardSeason(req: Request) -> EventLoopFuture<[LeaderBoard]> {
+        return getLeaderBoardSeason(req: req, eventType: .goal)
+    }
+
+    func getRedCardLeaderBoardSeason(req: Request) -> EventLoopFuture<[LeaderBoard]> {
+        return getLeaderBoardSeason(req: req, eventType: .redCard)
+    }
+
+    func getYellowCardLeaderBoardSeason(req: Request) -> EventLoopFuture<[LeaderBoard]> {
+        return getLeaderBoardSeason(req: req, eventType: .yellowCard)
+    }
+
+    func getYellowRedCardLeaderBoardSeason(req: Request) -> EventLoopFuture<[LeaderBoard]> {
+        return getLeaderBoardSeason(req: req, eventType: .yellowRedCard)
+    }
+
+    // Private core (filters to league's primary season)
+    private func getLeaderBoardSeason(req: Request, eventType: MatchEventType) -> EventLoopFuture<[LeaderBoard]> {
+        guard let leagueID = req.parameters.get("id", as: UUID.self) else {
+            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league ID"))
+        }
+
+        // 1) Resolve the league's primary season
+        return Season.query(on: req.db)
+            .filter(\.$league.$id == leagueID)
+            .filter(\.$primary == true)
+            .first()
+            .unwrap(or: Abort(.notFound, reason: "No primary season found for this league"))
+            .flatMap { primarySeason in
+                // 2) Gather teams + players for this league (same as original)
+                return Team.query(on: req.db)
+                    .filter(\.$league.$id == leagueID)
+                    .with(\.$players)
+                    .all()
+                    .flatMap { teams in
+                        // Build PlayerID -> (teamLogo, teamName, teamId)
+                        var playerTeamDict: [UUID: (String?, String?, String?)] = [:]
+                        for team in teams {
+                            let tIDString = team.id?.uuidString
+                            for player in team.players {
+                                if let pid = player.id {
+                                    playerTeamDict[pid] = (team.logo, team.teamName, tIDString)
+                                }
+                            }
+                        }
+
+                        let playerIDs = Array(playerTeamDict.keys)
+                        if playerIDs.isEmpty {
+                            return req.eventLoop.makeSucceededFuture([])
+                        }
+
+                        // 3) Query events for those players & event type, restricted to the primary season
+                        return MatchEvent.query(on: req.db)
+                            .filter(\.$player.$id ~~ playerIDs)
+                            .filter(\.$type == eventType)
+                            // join to Match and filter by season id
+                            .join(parent: \MatchEvent.$match)
+                            .filter(Match.self, \.$season.$id == primarySeason.id!)
+                            .all()
+                            .map { events in
+                                self.mapEventsToLeaderBoard(events, playerTeamDict: playerTeamDict)
+                            }
+                    }
+            }
+    }
 }
