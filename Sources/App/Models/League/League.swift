@@ -63,7 +63,7 @@ final class League: Model, Content, Codable {
     @OptionalField(key: FieldKeys.state) var state: Bundesland?
 
     @OptionalField(key: FieldKeys.code) var code: String?
-
+    
     @OptionalField(key: FieldKeys.homepageData) var homepagedata: HomepageData?
     
     @OptionalField(key: FieldKeys.hourly) var hourly: Double?

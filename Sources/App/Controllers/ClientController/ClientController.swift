@@ -614,7 +614,7 @@ extension ClientController {
             .map { $0.map(self.toPublicShort) }
     }
 
-    // MARK: Club Detail (season-grouped)
+    // MARK: - Club Detail (season-grouped) – updated to use TeamStatsPair
     func fetchClub(req: Request) throws -> EventLoopFuture<ClubDetailResponse> {
         guard let teamID = req.parameters.get("id", as: UUID.self) else {
             throw Abort(.badRequest, reason: "Invalid or missing team ID")
@@ -646,9 +646,10 @@ extension ClientController {
                 }
             }
 
-        let teamStatsFuture = teamFuture.flatMap { self.getTeamStats(teamID: $0.id!, db: req.db) }
+        // UPDATED: use the pair-returning stats function
+        let teamStatsFuture = teamFuture.flatMap { self.getTeamStatsPair(teamID: $0.id!, db: req.db) }
 
-        // NEW: build [PublicSeasonMatches] from the team's league seasons
+        // Build [PublicSeasonMatches] from the team's league seasons
         let seasonsFuture: EventLoopFuture<[PublicSeasonMatches]> = teamFuture.and(leagueFuture).flatMap { (team, league) in
             guard let league = league, let leagueID = league.id, let tID = team.id else {
                 return req.eventLoop.makeSucceededFuture([])
@@ -674,7 +675,6 @@ extension ClientController {
                     }
                     return perSeason.flatten(on: req.eventLoop)
                 }
-                // Optional: primary season first
                 .map { $0.sorted { ($0.primary && !$1.primary) } }
         }
 
@@ -682,15 +682,15 @@ extension ClientController {
             self.fetchTeamAndLeagueNews(teamName: team.teamName, leagueCode: league?.code, db: req.db)
         }
 
-        // Assemble response (note upcoming now = seasons)
+        // Assemble response
         return teamFuture
             .and(leagueFuture)
             .and(playersFuture)
-            .and(teamStatsFuture)
+            .and(teamStatsFuture)    // <-- pair now
             .and(seasonsFuture)
             .and(newsFuture)
             .map { result in
-                let (((((team, _league), players), teamStats), seasons), news) = result
+                let (((((team, _league), players), teamStatsPair), seasons), news) = result
 
                 let club = PublicTeamFull(
                     id: team.id,
@@ -707,12 +707,12 @@ extension ClientController {
                     captain: team.captain,
                     trikot: team.trikot,
                     players: players,
-                    stats: teamStats
+                    stats: teamStatsPair     // <-- pair assigned here
                 )
 
                 return ClubDetailResponse(
                     club: club,
-                    upcoming: seasons, // now [PublicSeasonMatches]
+                    upcoming: seasons,
                     news: news
                 )
             }
@@ -857,7 +857,7 @@ extension ClientController {
         }
 
         // stats
-        let statsF: EventLoopFuture<PlayerStats> = self.getPlayerStats(playerID: playerID, db: req.db)
+        let statsF: EventLoopFuture<PlayerStatsPair> = self.getPlayerStatsBundle(playerID: playerID, db: req.db)
 
         // seasons + matches (uses cache)
         let seasonsF: EventLoopFuture<[PublicSeasonMatches]> = playerF.and(leagueF).flatMap { (player, league) in
@@ -884,7 +884,8 @@ extension ClientController {
                 status: player.status,
                 isCaptain: player.isCaptain,
                 bank: player.bank,
-                stats: stats
+                allstats: stats.all,
+                seasonstats: stats.season
             )
 
             return PlayerDetailResponse(
@@ -896,3 +897,48 @@ extension ClientController {
     }
 }
 
+extension ClientController {
+    
+    func getPlayerStatsBundle(playerID: UUID, db: Database) -> EventLoopFuture<PlayerStatsPair> {
+        MatchEvent.query(on: db)
+            .filter(\.$player.$id == playerID)
+            .with(\.$match) { $0.with(\.$season) } // eager-load Season
+            .all()
+            .map { events in
+                var allStats = PlayerStats(matchesPlayed: 0, goalsScored: 0, redCards: 0, yellowCards: 0, yellowRedCrd: 0)
+                var seasonStats = PlayerStats(matchesPlayed: 0, goalsScored: 0, redCards: 0, yellowCards: 0, yellowRedCrd: 0)
+
+                var allMatchSet = Set<UUID>()
+                var seasonMatchSet = Set<UUID>()
+
+                for event in events {
+                    // ALL
+                    allMatchSet.insert(event.$match.id)
+                    switch event.type {
+                    case .goal:          allStats.goalsScored += 1
+                    case .redCard:       allStats.redCards += 1
+                    case .yellowCard:    allStats.yellowCards += 1
+                    case .yellowRedCard: allStats.yellowRedCrd += 1
+                    default: break
+                    }
+
+                    // CURRENT PRIMARY SEASON ONLY
+                    if event.match.season?.primary == true {
+                        seasonMatchSet.insert(event.$match.id)
+                        switch event.type {
+                        case .goal:          seasonStats.goalsScored += 1
+                        case .redCard:       seasonStats.redCards += 1
+                        case .yellowCard:    seasonStats.yellowCards += 1
+                        case .yellowRedCard: seasonStats.yellowRedCrd += 1
+                        default: break
+                        }
+                    }
+                }
+
+                allStats.matchesPlayed = allMatchSet.count
+                seasonStats.matchesPlayed = seasonMatchSet.count
+                return PlayerStatsPair(all: allStats, season: seasonStats)
+            }
+    }
+
+}

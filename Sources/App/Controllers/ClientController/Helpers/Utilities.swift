@@ -195,6 +195,162 @@ extension ClientController {
             )
         }
     }
-
 }
+
+// MARK: - ClientController stats helpers
+
+extension ClientController {
+
+    // Small aggregator used for both "all" and "season"
+    private func aggregateTeamStats(from matches: [Match], for teamID: UUID) -> TeamStats {
+        var stats = TeamStats(
+            wins: 0,
+            draws: 0,
+            losses: 0,
+            totalScored: 0,
+            totalAgainst: 0,
+            goalDifference: 0,
+            totalPoints: 0,
+            totalYellowCards: 0,
+            totalRedCards: 0
+        )
+
+        for match in matches {
+            let isHome = match.$homeTeam.id == teamID
+            let scored = isHome ? match.score.home : match.score.away
+            let against = isHome ? match.score.away : match.score.home
+            stats.totalScored += scored
+            stats.totalAgainst += against
+
+            if scored > against {
+                stats.wins += 1
+                stats.totalPoints += 3
+            } else if scored == against {
+                stats.draws += 1
+                stats.totalPoints += 1
+            } else {
+                stats.losses += 1
+            }
+
+            // Card counts: rely on `assign` when present. If it's nil, skip (no unsafe inference).
+            for event in match.events {
+                guard let assign = event.assign else { continue }
+                let eventBelongsToTeam = (isHome && assign == .home) || (!isHome && assign == .away)
+                if eventBelongsToTeam {
+                    switch event.type {
+                    case .yellowCard:
+                        stats.totalYellowCards += 1
+                    case .redCard:
+                        stats.totalRedCards += 1
+                    default:
+                        break
+                    }
+                }
+            }
+        }
+
+        stats.goalDifference = stats.totalScored - stats.totalAgainst
+        return stats
+    }
+
+    // NEW: returns both "all" and "primary season only"
+    func getTeamStatsPair(teamID: UUID, db: Database) -> EventLoopFuture<TeamStatsPair> {
+        let validStatuses: [GameStatus] = [.completed, .abbgebrochen, .submitted, .cancelled, .done]
+
+        return Match.query(on: db)
+            .group(.or) { group in
+                group.filter(\.$homeTeam.$id == teamID)
+                group.filter(\.$awayTeam.$id == teamID)
+            }
+            .filter(\.$status ~~ validStatuses)
+            .with(\.$season)                          // need Season.primary
+            .with(\.$events) { _ in }                 // events for cards (no extra inference)
+            .all()
+            .map { matches in
+                let allStats = self.aggregateTeamStats(from: matches, for: teamID)
+                let primarySeasonMatches = matches.filter { $0.season?.primary == true }
+                let seasonStats = self.aggregateTeamStats(from: primarySeasonMatches, for: teamID)
+                return TeamStatsPair(all: allStats, season: seasonStats)
+            }
+    }
+}
+
+// MARK: - HomapageController stats helpers
+
+extension HomepageController {
+
+    // Small aggregator used for both "all" and "season"
+    private func aggregateTeamStats(from matches: [Match], for teamID: UUID) -> TeamStats {
+        var stats = TeamStats(
+            wins: 0,
+            draws: 0,
+            losses: 0,
+            totalScored: 0,
+            totalAgainst: 0,
+            goalDifference: 0,
+            totalPoints: 0,
+            totalYellowCards: 0,
+            totalRedCards: 0
+        )
+
+        for match in matches {
+            let isHome = match.$homeTeam.id == teamID
+            let scored = isHome ? match.score.home : match.score.away
+            let against = isHome ? match.score.away : match.score.home
+            stats.totalScored += scored
+            stats.totalAgainst += against
+
+            if scored > against {
+                stats.wins += 1
+                stats.totalPoints += 3
+            } else if scored == against {
+                stats.draws += 1
+                stats.totalPoints += 1
+            } else {
+                stats.losses += 1
+            }
+
+            // Card counts: rely on `assign` when present. If it's nil, skip (no unsafe inference).
+            for event in match.events {
+                guard let assign = event.assign else { continue }
+                let eventBelongsToTeam = (isHome && assign == .home) || (!isHome && assign == .away)
+                if eventBelongsToTeam {
+                    switch event.type {
+                    case .yellowCard:
+                        stats.totalYellowCards += 1
+                    case .redCard:
+                        stats.totalRedCards += 1
+                    default:
+                        break
+                    }
+                }
+            }
+        }
+
+        stats.goalDifference = stats.totalScored - stats.totalAgainst
+        return stats
+    }
+
+    // NEW: returns both "all" and "primary season only"
+    func getTeamStatsPair(teamID: UUID, db: Database) -> EventLoopFuture<TeamStatsPair> {
+        let validStatuses: [GameStatus] = [.completed, .abbgebrochen, .submitted, .cancelled, .done]
+
+        return Match.query(on: db)
+            .group(.or) { group in
+                group.filter(\.$homeTeam.$id == teamID)
+                group.filter(\.$awayTeam.$id == teamID)
+            }
+            .filter(\.$status ~~ validStatuses)
+            .with(\.$season)                          // need Season.primary
+            .with(\.$events) { _ in }                 // events for cards (no extra inference)
+            .all()
+            .map { matches in
+                let allStats = self.aggregateTeamStats(from: matches, for: teamID)
+                let primarySeasonMatches = matches.filter { $0.season?.primary == true }
+                let seasonStats = self.aggregateTeamStats(from: primarySeasonMatches, for: teamID)
+                return TeamStatsPair(all: allStats, season: seasonStats)
+            }
+    }
+}
+
                                                                                        

@@ -26,7 +26,6 @@ final class HomepageController: RouteCollection {
         route.get("homepage", "season", ":seasonID", use: fetchNewsItem)
 
         route.get("homepage", ":id", "tabelle", use: getLeagueTable)
-        route.get("homepage", ":id", "tabelle", "primary", use: getLeagueTableForPrimarySeason)
         route.get(":id", "homepage", "matches", use: fetchLeagueMatches)
         route.get("match", ":id", "details", use: fetchMatchDetail)
 
@@ -192,53 +191,54 @@ final class HomepageController: RouteCollection {
         guard let teamID = req.parameters.get("id", as: UUID.self) else {
             throw Abort(.badRequest, reason: "Invalid or missing team ID")
         }
+
         return Team.find(teamID, on: req.db)
             .unwrap(or: Abort(.notFound, reason: "Team not found"))
             .flatMap { team in
-                team.$players.query(on: req.db).all().flatMap { players in
-                    // Fetch stats for each player and the team
-                    let playerStatsFutures = players.map { player in
-                        self.getPlayerStats(playerID: player.id!, db: req.db).map { stats in
+                // Players (no per-player stats needed for MiniPlayer)
+                let playersFuture: EventLoopFuture<[MiniPlayer]> = team.$players.query(on: req.db).all()
+                    .map { players in
+                        players.map { p in
                             MiniPlayer(
-                                id: player.id,
-                                sid: player.sid,
-                                image: player.image,
-                                team_oeid: player.team_oeid,
-                                name: player.name,
-                                number: player.number,
-                                birthday: player.birthday,
-                                nationality: player.nationality,
-                                position: player.position,
-                                eligibility: player.eligibility,
-                                registerDate: player.registerDate,
-                                status: player.status,
-                                isCaptain: player.isCaptain,
-                                bank: player.bank
+                                id: p.id,
+                                sid: p.sid,
+                                image: p.image,
+                                team_oeid: p.team_oeid,
+                                name: p.name,
+                                number: p.number,
+                                birthday: p.birthday,
+                                nationality: p.nationality,
+                                position: p.position,
+                                eligibility: p.eligibility,
+                                registerDate: p.registerDate,
+                                status: p.status,
+                                isCaptain: p.isCaptain,
+                                bank: p.bank
                             )
                         }
                     }
 
-                    let teamStatsFuture = self.getTeamStats(teamID: team.id!, db: req.db)
+                // Team stats pair (all + primary season)
+                let statsPairFuture = self.getTeamStatsPair(teamID: teamID, db: req.db)
 
-                    return req.eventLoop.flatten(playerStatsFutures).and(teamStatsFuture).map { (publicPlayers, teamStats) in
-                        PublicTeamFull(
-                            id: team.id,
-                            sid: team.sid,
-                            leagueCode: team.leagueCode,
-                            points: team.points,
-                            logo: team.logo,
-                            coverimg: team.coverimg,
-                            teamName: team.teamName,
-                            foundationYear: team.foundationYear,
-                            membershipSince: team.membershipSince,
-                            averageAge: team.averageAge,
-                            coach: team.coach,
-                            captain: team.captain,
-                            trikot: team.trikot,
-                            players: publicPlayers,
-                            stats: teamStats
-                        )
-                    }
+                return playersFuture.and(statsPairFuture).map { (publicPlayers, statsPair) in
+                    PublicTeamFull(
+                        id: team.id,
+                        sid: team.sid,
+                        leagueCode: team.leagueCode,
+                        points: team.points,
+                        logo: team.logo,
+                        coverimg: team.coverimg,
+                        teamName: team.teamName,
+                        foundationYear: team.foundationYear,
+                        membershipSince: team.membershipSince,
+                        averageAge: team.averageAge,
+                        coach: team.coach,
+                        captain: team.captain,
+                        trikot: team.trikot,
+                        players: publicPlayers,
+                        stats: statsPair // TeamStatsPair
+                    )
                 }
             }
     }
@@ -310,7 +310,7 @@ final class HomepageController: RouteCollection {
         return Player.find(playerID, on: req.db)
             .unwrap(or: Abort(.notFound, reason: "Player not found"))
             .flatMap { player in
-                self.getPlayerStats(playerID: playerID, db: req.db).map { stats in
+                self.getPlayerStatsBundle(playerID: playerID, db: req.db).map { pairstats in
                     PublicPlayer(
                         id: player.id,
                         sid: player.sid,
@@ -327,7 +327,8 @@ final class HomepageController: RouteCollection {
                         status: player.status,
                         isCaptain: player.isCaptain,
                         bank: player.bank,
-                        stats: stats
+                        allstats: pairstats.all,
+                        seasonstats: pairstats.season
                     )
                 }
             }
@@ -482,7 +483,47 @@ final class HomepageController: RouteCollection {
             }
     }
 
-    // MARK: - Stats & Utilities
+    func getPlayerStatsBundle(playerID: UUID, db: Database) -> EventLoopFuture<PlayerStatsPair> {
+        MatchEvent.query(on: db)
+            .filter(\.$player.$id == playerID)
+            .with(\.$match) { $0.with(\.$season) } // eager-load Season
+            .all()
+            .map { events in
+                var allStats = PlayerStats(matchesPlayed: 0, goalsScored: 0, redCards: 0, yellowCards: 0, yellowRedCrd: 0)
+                var seasonStats = PlayerStats(matchesPlayed: 0, goalsScored: 0, redCards: 0, yellowCards: 0, yellowRedCrd: 0)
+
+                var allMatchSet = Set<UUID>()
+                var seasonMatchSet = Set<UUID>()
+
+                for event in events {
+                    // ALL
+                    allMatchSet.insert(event.$match.id)
+                    switch event.type {
+                    case .goal:          allStats.goalsScored += 1
+                    case .redCard:       allStats.redCards += 1
+                    case .yellowCard:    allStats.yellowCards += 1
+                    case .yellowRedCard: allStats.yellowRedCrd += 1
+                    default: break
+                    }
+
+                    // CURRENT PRIMARY SEASON ONLY
+                    if event.match.season?.primary == true {
+                        seasonMatchSet.insert(event.$match.id)
+                        switch event.type {
+                        case .goal:          seasonStats.goalsScored += 1
+                        case .redCard:       seasonStats.redCards += 1
+                        case .yellowCard:    seasonStats.yellowCards += 1
+                        case .yellowRedCard: seasonStats.yellowRedCrd += 1
+                        default: break
+                        }
+                    }
+                }
+
+                allStats.matchesPlayed = allMatchSet.count
+                seasonStats.matchesPlayed = seasonMatchSet.count
+                return PlayerStatsPair(all: allStats, season: seasonStats)
+            }
+    }
 
     func getPlayerStats(playerID: UUID, db: Database) -> EventLoopFuture<PlayerStats> {
         return MatchEvent.query(on: db)
@@ -681,160 +722,6 @@ final class HomepageController: RouteCollection {
 
 }
 
-
-extension HomepageController {
-    // MARK: - Season Helper
-    private func primarySeasonID(for leagueID: UUID, db: Database) -> EventLoopFuture<UUID> {
-        Season.query(on: db)
-            .filter(\.$league.$id == leagueID)
-            .filter(\.$primary == true)
-            .first()
-            .unwrap(or: Abort(.notFound, reason: "Primary season not found for league"))
-            .flatMapThrowing { try $0.requireID() }
-    }
-
-    // MARK: - Player (Primary Season)
-    func getPlayerStatsInPrimarySeason(playerID: UUID, leagueID: UUID, db: Database) -> EventLoopFuture<PlayerStats> {
-        primarySeasonID(for: leagueID, db: db).flatMap { seasonID in
-            MatchEvent.query(on: db)
-                .filter(\.$player.$id == playerID)
-                .join(Match.self, on: \MatchEvent.$match.$id == \Match.$id)
-                .filter(Match.self, \.$season.$id == seasonID)
-                .all()
-                .map { events in
-                    var stats = PlayerStats(matchesPlayed: 0, goalsScored: 0, redCards: 0, yellowCards: 0, yellowRedCrd: 0)
-                    var matchSet = Set<UUID>()
-
-                    for event in events {
-                        matchSet.insert(event.$match.id)
-                        switch event.type {
-                        case .goal:           stats.goalsScored += 1
-                        case .redCard:        stats.redCards += 1
-                        case .yellowCard:     stats.yellowCards += 1
-                        case .yellowRedCard:  stats.yellowRedCrd += 1
-                        default: break
-                        }
-                    }
-                    stats.matchesPlayed = matchSet.count
-                    return stats
-                }
-        }
-    }
-
-    // MARK: - Team (Primary Season)
-    func getTeamStatsInPrimarySeason(teamID: UUID, leagueID: UUID, db: Database) -> EventLoopFuture<TeamStats> {
-        let validStatuses: [GameStatus] = [.completed, .abbgebrochen, .submitted, .cancelled, .done]
-
-        return primarySeasonID(for: leagueID, db: db).flatMap { seasonID in
-            Match.query(on: db)
-                .filter(\.$season.$id == seasonID)
-                .group(.or) { group in
-                    group.filter(\.$homeTeam.$id == teamID)
-                    group.filter(\.$awayTeam.$id == teamID)
-                }
-                .filter(\.$status ~~ validStatuses)
-                .with(\.$events)
-                .all()
-                .map { matches in
-                    var stats = TeamStats(
-                        wins: 0, draws: 0, losses: 0,
-                        totalScored: 0, totalAgainst: 0,
-                        goalDifference: 0, totalPoints: 0,
-                        totalYellowCards: 0, totalRedCards: 0
-                    )
-
-                    for match in matches {
-                        let isHome = match.$homeTeam.id == teamID
-                        let scored  = isHome ? match.score.home : match.score.away
-                        let against = isHome ? match.score.away : match.score.home
-
-                        stats.totalScored += scored
-                        stats.totalAgainst += against
-
-                        if scored > against {
-                            stats.wins += 1; stats.totalPoints += 3
-                        } else if scored == against {
-                            stats.draws += 1; stats.totalPoints += 1
-                        } else {
-                            stats.losses += 1
-                        }
-
-                        for event in match.events {
-                            guard let assign = event.assign else { continue }
-                            if (isHome && assign == .home) || (!isHome && assign == .away) {
-                                switch event.type {
-                                case .yellowCard: stats.totalYellowCards += 1
-                                case .redCard:    stats.totalRedCards += 1
-                                default: break
-                                }
-                            }
-                        }
-                    }
-
-                    stats.goalDifference = stats.totalScored - stats.totalAgainst
-                    return stats
-                }
-        }
-    }
-
-    // MARK: - League Table (Primary Season)
-    func getLeagueTableForPrimarySeason(req: Request) -> EventLoopFuture<[TableItem]> {
-        guard let leagueID = req.parameters.get("id", as: UUID.self) else {
-            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league ID"))
-        }
-
-        return primarySeasonID(for: leagueID, db: req.db).flatMap { _ in
-            League.find(leagueID, on: req.db)
-                .unwrap(or: Abort(.notFound, reason: "League not found"))
-                .flatMap { league in
-                    league.$teams.query(on: req.db).all().flatMap { teams in
-                        let teamStatsFutures = teams.map { team in
-                            self.getTeamStatsInPrimarySeason(teamID: team.id!, leagueID: leagueID, db: req.db)
-                                .map { stats in (team, stats) }
-                        }
-
-                        return req.eventLoop.flatten(teamStatsFutures).map { teamStatsPairs in
-                            var tableItems: [TableItem] = []
-
-                            for (team, stats) in teamStatsPairs {
-                                let tableItem = TableItem(
-                                    image: team.logo,
-                                    name: team.teamName,
-                                    points: stats.totalPoints, // season-scoped points
-                                    id: team.id!,
-                                    goals: stats.totalScored,
-                                    ranking: 0,
-                                    wins: stats.wins,
-                                    draws: stats.draws,
-                                    losses: stats.losses,
-                                    scored: stats.totalScored,
-                                    against: stats.totalAgainst,
-                                    difference: stats.goalDifference
-                                )
-                                tableItems.append(tableItem)
-                            }
-
-                            tableItems.sort {
-                                if $0.points == $1.points {
-                                    return $0.difference > $1.difference
-                                }
-                                return $0.points > $1.points
-                            }
-
-                            for i in 0..<tableItems.count {
-                                tableItems[i].ranking = i + 1
-                            }
-
-                            return tableItems
-                        }
-                    }
-                }
-        }
-    }
-
-}
-
-
 // MARK: - Supporting Models
 
 struct PublicLeagueOverview: Content, Codable {
@@ -879,6 +766,7 @@ struct PublicTeamShort: Content, Codable {
 }
 
 
+// MARK: - Update PublicTeamFull to use the pair
 struct PublicTeamFull: Content, Codable {
     var id: UUID?
     var sid: String?
@@ -894,7 +782,7 @@ struct PublicTeamFull: Content, Codable {
     var captain: String?
     var trikot: Trikot
     var players: [MiniPlayer]
-    var stats: TeamStats?
+    var stats: TeamStatsPair?   // <-- was TeamStats?
 }
 
 struct MiniPlayer: Content, Codable {
@@ -931,7 +819,8 @@ struct PublicPlayer: Content, Codable {
     var status: Bool?
     var isCaptain: Bool?
     var bank: Bool?
-    var stats: PlayerStats?
+    var allstats: PlayerStats?
+    var seasonstats: PlayerStats?
 }
 
 
@@ -978,4 +867,11 @@ struct PlayerStats: Content, Codable {
     var redCards: Int
     var yellowCards: Int
     var yellowRedCrd: Int
+}
+
+
+// MARK: - Stats & Utilities
+struct PlayerStatsPair: Content {
+    let all: PlayerStats
+    let season: PlayerStats
 }

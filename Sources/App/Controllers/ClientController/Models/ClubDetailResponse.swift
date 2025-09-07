@@ -13,6 +13,12 @@ struct ClubDetailResponse: Codable, Content {
     var news: [NewsItem]?
 }
 
+// MARK: - New pair type
+struct TeamStatsPair: Content, Codable {
+    let all: TeamStats
+    let season: TeamStats
+}
+
 struct PublicSeasonMatches: Codable, Content {
     var leagueName: String
     var leagueID: UUID
