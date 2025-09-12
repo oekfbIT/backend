@@ -212,21 +212,36 @@ final class TransferController: RouteCollection {
     }
 
     // GET /transfers/options/:teamID
-    func getTransfersOptions(req: Request) -> EventLoopFuture<[Player]> {
-        guard let teamID = req.parameters.get("teamID", as: UUID.self) else {
-            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid team ID."))
-        }
+    func getTransfersOptions(_ req: Request) -> EventLoopFuture<[Player]> {
+        // 1) Read the (singleton) transfer settings row
+        return TransferSettings.query(on: req.db)
+            .first()
+            .flatMap { settings in
+                // If no settings row or transfers closed → 403
+                guard let s = settings, s.isTransferOpen == true else {
+                    return req.eventLoop.makeFailedFuture(
+                        Abort(.forbidden, reason: "Transfers are currently closed.")
+                    )
+                }
 
-        return Player.query(on: req.db)
-            .filter(\.$team.$id != teamID) // Exclude players from the specified team
-            .group(.or) { group in
-                group.filter(\.$eligibility == .Gesperrt)
-                group.filter(\.$eligibility == .Spielberechtigt)
+                // 2) Proceed with the original logic
+                guard let teamID = req.parameters.get("teamID", as: UUID.self) else {
+                    return req.eventLoop.makeFailedFuture(
+                        Abort(.badRequest, reason: "Invalid team ID.")
+                    )
+                }
+
+                return Player.query(on: req.db)
+                    .filter(\.$team.$id != teamID)
+                    .group(.or) { group in
+                        group.filter(\.$eligibility == .Gesperrt)
+                        group.filter(\.$eligibility == .Spielberechtigt)
+                    }
+                    .filter(\.$email != nil)
+                    .filter(\.$transferred != true)
+                    .limit(200)
+                    .all()
             }
-            .filter(\.$email != nil)
-            .filter(\.$transferred != true)
-            .limit(200)
-            .all()
     }
 
     // GET /transfers/player/:playerID
