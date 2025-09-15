@@ -16,6 +16,7 @@ final class Referee: Model, Content, Codable {
     @OptionalParent(key: FieldKeys.userId) var user: User?
     @OptionalField(key: FieldKeys.balance) var balance: Double?
     @OptionalField(key: FieldKeys.name) var name: String?
+    @OptionalField(key: FieldKeys.phone) var phone: String?
     @Children(for: \.$referee) var assignments: [Match]
     @OptionalField(key: FieldKeys.identification) var identification: String?
     @OptionalField(key: FieldKeys.image) var image: String?
@@ -24,6 +25,7 @@ final class Referee: Model, Content, Codable {
         static var id: FieldKey { "id" }
         static var userId: FieldKey { "userId" }
         static var name: FieldKey { "name" }
+        static var phone: FieldKey { "phone" }
         static var image: FieldKey { "image" }
         static var assignments: FieldKey { "assignments" }
         static var balance: FieldKey { "balance" }
@@ -33,7 +35,7 @@ final class Referee: Model, Content, Codable {
 
     init() {}
 
-    init(id: UUID? = nil, userId: UUID? = nil, balance: Double? = 0, name: String?, identification: String?, image: String?, nationality: String?) {
+    init(id: UUID? = nil, userId: UUID? = nil, balance: Double? = 0, name: String?, identification: String?, image: String?, nationality: String?, phone: String? = nil) {
         self.id = id
         self.$user.id = userId
         self.balance = balance
@@ -41,6 +43,7 @@ final class Referee: Model, Content, Codable {
         self.identification = identification
         self.image = image
         self.nationality = nationality
+        self.phone = phone
     }
 }
 
@@ -51,6 +54,7 @@ extension Referee: Mergeable {
         merged.$user.id = other.$user.id
         merged.balance = other.balance
         merged.name = other.name
+        merged.phone = other.phone
         merged.identification = other.identification
         merged.image = other.image
         merged.nationality = other.nationality
@@ -66,6 +70,7 @@ extension Referee: Migration {
             .field(Referee.FieldKeys.userId, .uuid, .required, .references(User.schema, User.FieldKeys.id))
             .field(Referee.FieldKeys.balance, .double)
             .field(Referee.FieldKeys.name, .string)
+            .field(Referee.FieldKeys.phone, .string)
             .field(Referee.FieldKeys.identification, .string)
             .field(Referee.FieldKeys.image, .string)
             .field(Referee.FieldKeys.nationality, .string)
