@@ -45,6 +45,8 @@ final class NewsController: RouteCollection {
         
         let updatedItem = try req.content.decode(NewsItem.self)
         
+        print(updatedItem)
+        
         return NewsItem.find(id, on: req.db)
             .unwrap(or: Abort(.notFound))
             .flatMap { existing in
@@ -53,7 +55,8 @@ final class NewsController: RouteCollection {
                 if let newTitle = updatedItem.title { existing.title = newTitle }
                 if let newImage = updatedItem.image { existing.image = newImage }
                 if let newTag = updatedItem.tag { existing.tag = newTag }
-                
+                if let v = updatedItem.youtube { existing.youtube = v }
+
                 return existing.update(on: req.db).map { existing }
             }
     }
