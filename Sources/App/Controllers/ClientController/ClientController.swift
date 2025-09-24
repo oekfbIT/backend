@@ -21,6 +21,7 @@ final class ClientController: RouteCollection {
         route.get("clubs", "detail", ":id", use: fetchClub)
         route.get("club", "trainer", ":id", use: teamTrainer)
         route.get("table", "league", ":code", use: fetchtable)
+        route.get("team", "league", ":id", use: fetchLeague)
         route.get("news", "league", ":code", use: fetchNews)
         route.get("transfers", use: fetchTransfers)
         route.get("news", "detail", ":id", use: fetchNewsItem)
@@ -1014,6 +1015,28 @@ extension ClientController {
                                 self.mapEventsToLeaderBoard(events, playerTeamDict: playerTeamDict)
                             }
                     }
+            }
+    }
+}
+
+extension ClientController {
+    /// GET /team/league/:id -> PublicLeagueOverview
+    func fetchLeague(req: Request) throws -> EventLoopFuture<PublicLeagueOverview> {
+        guard let leagueID = req.parameters.get("id", as: UUID.self) else {
+            throw Abort(.badRequest, reason: "Invalid or missing league ID")
+        }
+
+        return League.find(leagueID, on: req.db)
+            .unwrap(or: Abort(.notFound, reason: "League not found"))
+            .map { league in
+                PublicLeagueOverview(
+                    id: league.id,
+                    state: league.state,
+                    code: league.code,
+                    teamcount: league.teamcount,
+                    name: league.name,
+                    visibility: league.visibility
+                )
             }
     }
 }
