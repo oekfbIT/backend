@@ -36,7 +36,8 @@ final class ClientController: RouteCollection {
         route.get("leaderboard",":id", "yellowRedCard", use: getYellowRedCardLeaderBoardSeason)
         route.get("blocked", "league", ":code", use: blockedPlayers)
         route.get("livescore",use: getLivescoreShort)
-        
+        route.get("team", ":id", "nextmatch", use: getTeamNextmatch)
+
         // Current season table at the root (not behind `path` group). If you want it under the same group, change to `route.get(...)`.
         route.get("leagues", ":code", "current", "table", use: getcurrentSeasonTable)
         // e.g. in routes.swift
@@ -1038,5 +1039,58 @@ extension ClientController {
                     visibility: league.visibility
                 )
             }
+    }
+}
+
+// ClientController+TeamNextMatch.swift
+extension ClientController {
+    /// GET /team/:id/nextmatch -> PublicMatchShort
+    func getTeamNextmatch(req: Request) throws -> EventLoopFuture<PublicMatchShort> {
+        guard let teamID = req.parameters.get("id", as: UUID.self) else {
+            throw Abort(.badRequest, reason: "Invalid or missing team ID")
+        }
+
+        // Team -> League -> Primary Season
+        let teamF = Team.find(teamID, on: req.db)
+            .unwrap(or: Abort(.notFound, reason: "Team not found"))
+
+        let leagueF = teamF
+            .flatMap { self.fetchLeagueForTeam($0, db: req.db) }
+            .unwrap(or: Abort(.notFound, reason: "League for team not found"))
+
+        let primarySeasonF = leagueF.flatMap { league in
+            Season.query(on: req.db)
+                .filter(\.$league.$id == league.id!)
+                .filter(\.$primary == true)
+                .first()
+                .unwrap(or: Abort(.notFound, reason: "Primary season not found"))
+        }
+
+        // Matches for the team in the primary season, status == .pending
+        return primarySeasonF.flatMap { season in
+            Match.query(on: req.db)
+                .filter(\.$season.$id == season.id!)
+                .group(.or) { or in
+                    or.filter(\.$homeTeam.$id == teamID)
+                      .filter(\.$awayTeam.$id == teamID)
+                }
+                .filter(\.$status == .pending)
+                .all()
+                .flatMapThrowing { matches in
+                    // Sort by gameday ascending and take the first pending match
+                    let next = matches.sorted { lhs, rhs in
+                        if lhs.details.gameday != rhs.details.gameday {
+                            return lhs.details.gameday < rhs.details.gameday
+                        }
+                        // deterministic tiebreaker
+                        return (lhs.id?.uuidString ?? "") < (rhs.id?.uuidString ?? "")
+                    }.first
+
+                    guard let match = next else {
+                        throw Abort(.notFound, reason: "No upcoming pending match found")
+                    }
+                    return self.toPublicShort(match)
+                }
+        }
     }
 }
