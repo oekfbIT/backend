@@ -19,6 +19,7 @@ final class ClientController: RouteCollection {
         route.get("selection", use: fetchLeagueSelection)
         route.get("clubs", "league", ":code", use: fetchLeagueClubs)
         route.get("clubs", "detail", ":id", use: fetchClub)
+        route.get("teamseaction", "detail", ":id", use: fetchClub)
         route.get("club", "trainer", ":id", use: teamTrainer)
         route.get("table", "league", ":code", use: fetchtable)
         route.get("team", "league", ":id", use: fetchLeague)
@@ -625,6 +626,66 @@ extension ClientController {
                     club: club,
                     upcoming: seasons,
                     news: news
+                )
+            }
+    }
+    
+    // MARK: - Club Detail (for Backend on Team Section – players only)
+    func teamSectionClub(req: Request) throws -> EventLoopFuture<PublicTeamFull> {
+        guard let teamID = req.parameters.get("id", as: UUID.self) else {
+            throw Abort(.badRequest, reason: "Invalid or missing team ID")
+        }
+
+        let teamFuture = fetchTeam(byID: teamID, db: req.db)
+
+        let playersFuture = teamFuture
+            .flatMap { self.fetchPlayers(for: $0, db: req.db) }
+            .map { players in
+                players.map { player in
+                    MiniPlayer(
+                        id: player.id,
+                        sid: player.sid,
+                        image: player.image,
+                        team_oeid: player.team_oeid,
+                        name: player.name,
+                        number: player.number,
+                        birthday: player.birthday,
+                        nationality: player.nationality,
+                        position: player.position,
+                        eligibility: player.eligibility,
+                        registerDate: player.registerDate,
+                        status: player.status,
+                        isCaptain: player.isCaptain,
+                        bank: player.bank
+                    )
+                }
+            }
+
+        // Only stats + players
+        let teamStatsFuture = teamFuture.flatMap { self.getTeamStatsPair(teamID: $0.id!, db: req.db) }
+
+        return teamFuture
+            .and(playersFuture)
+            .and(teamStatsFuture)
+            .map { result in
+                let ((team, players), teamStatsPair) = result
+
+                return PublicTeamFull(
+                    id: team.id,
+                    sid: team.sid,
+                    leagueCode: team.leagueCode,
+                    points: team.points,
+                    logo: team.logo,
+                    coverimg: team.coverimg,
+                    teamName: team.teamName,
+                    foundationYear: team.foundationYear,
+                    membershipSince: team.membershipSince,
+                    averageAge: team.averageAge,
+                    coach: team.coach,
+                    captain: team.captain,
+                    trikot: team.trikot,
+                    players: players,
+                    stats: teamStatsPair
                 )
             }
     }
