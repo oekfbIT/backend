@@ -19,7 +19,7 @@ final class ClientController: RouteCollection {
         route.get("selection", use: fetchLeagueSelection)
         route.get("clubs", "league", ":code", use: fetchLeagueClubs)
         route.get("clubs", "detail", ":id", use: fetchClub)
-        route.get("teamseaction", "detail", ":id", use: fetchClub)
+        route.get("teamseaction", "detail", ":id", use: teamSectionClub)
         route.get("club", "trainer", ":id", use: teamTrainer)
         route.get("table", "league", ":code", use: fetchtable)
         route.get("team", "league", ":id", use: fetchLeague)
