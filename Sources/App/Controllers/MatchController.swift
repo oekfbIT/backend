@@ -312,14 +312,21 @@ final class MatchController: RouteCollection {
         components.second = 0
 
         guard let blockDate = calendar.date(from: components) else {
-            throw Abort(.internalServerError, reason: "Failed to set block date to 12 PM")
+            throw Abort(.internalServerError, reason: "Failed to set block date to 7 AM")
         }
 
         let cardRequest = try req.content.decode(CardRequest.self)
 
         return addCardEvent(req: req, cardType: .yellowCard)
-            .flatMap {_ in 
+            .flatMap { _ in
                 MatchEvent.query(on: req.db)
+                    // JOIN matches
+                    .join(Match.self, on: \MatchEvent.$match.$id == \Match.$id)
+                    // JOIN seasons via match.season (optional parent is fine here)
+                    .join(Season.self, on: \Match.$season.$id == \Season.$id)
+                    // filter only primary seasons
+                    .filter(Season.self, \.$primary == true)
+                    // filter player + event type
                     .filter(\.$player.$id == cardRequest.playerId)
                     .filter(\.$type == .yellowCard)
                     .count()
@@ -339,6 +346,8 @@ final class MatchController: RouteCollection {
                     }
             }
     }
+
+
 
     func addYellowRedCard(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let calendar = Calendar.current

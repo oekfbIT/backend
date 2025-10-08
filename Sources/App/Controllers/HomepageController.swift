@@ -752,6 +752,7 @@ struct PublicTeam: Content, Codable {
     var membershipSince: String?
     var averageAge: String
     var coach: Trainer?
+    var altCoach: Trainer?
     var captain: String?
     var trikot: Trikot
     var stats: TeamStats?

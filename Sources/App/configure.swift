@@ -206,22 +206,22 @@ public func configure(_ app: Application) throws {
     app.queues.schedule(DressLockJob())
         .weekly()
         .on(.thursday)
-        .at(23, 0)
+        .at(12, 0)
     
     app.queues.schedule(DressUnlockJob())
         .weekly()
         .on(.monday)
         .at(6, 0)
 
-    app.queues.schedule(CancelLockJob())
-        .weekly()
-        .on(.thursday)
-        .at(18, 0)
-    
-    app.queues.schedule(CancelUnlockJob())
-        .weekly()
-        .on(.monday)
-        .at(6, 0)
+//    app.queues.schedule(CancelLockJob())
+//        .weekly()
+//        .on(.thursday)
+//        .at(18, 0)
+//    
+//    app.queues.schedule(CancelUnlockJob())
+//        .weekly()
+//        .on(.monday)
+//        .at(6, 0)
 
     app.queues.schedule(ResetTeamFlags())
         .weekly()
@@ -238,7 +238,7 @@ public func configure(_ app: Application) throws {
     // Start the scheduled jobs
     try app.queues.startScheduledJobs()
     
-    app.routes.defaultMaxBodySize = "100mb" // Adjust the value as needed
+    app.routes.defaultMaxBodySize = "100mb"
     // Register routes
     try routes(app)
 }

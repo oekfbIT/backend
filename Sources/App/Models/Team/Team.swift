@@ -31,6 +31,7 @@ final class Team: Model, Content {
     @OptionalField(key: FieldKeys.membershipSince) var membershipSince: String?
     @Field(key: FieldKeys.averageAge) var averageAge: String
     @OptionalField(key: FieldKeys.coach) var coach: Trainer?
+    @OptionalField(key: FieldKeys.altCoach) var altCoach: Trainer?
     @OptionalField(key: FieldKeys.captain) var captain: String?
     @Field(key: FieldKeys.trikot) var trikot: Trikot
     @OptionalField(key: FieldKeys.balance) var balance: Double?
@@ -39,7 +40,6 @@ final class Team: Model, Content {
     @OptionalField(key: FieldKeys.postponed) var postponed: Int?
     @OptionalField(key: FieldKeys.overdraft) var overdraft: Bool?
     @OptionalField(key: FieldKeys.overdraftDate) var overdraftDate: Date?
-
     // Hidden Values
     @OptionalField(key: FieldKeys.usrpass) var usrpass: String?
     @OptionalField(key: FieldKeys.usremail) var usremail: String?
@@ -66,6 +66,7 @@ final class Team: Model, Content {
         static var membershipSince: FieldKey { "membershipSince" }
         static var averageAge: FieldKey { "averageAge" }
         static var coach: FieldKey { "coach" }
+        static var altCoach: FieldKey { "altCoach" }
         static var captain: FieldKey { "captain" }
         static var totalMatches: FieldKey { "totalMatches" }
         static var totalGoals: FieldKey { "totalGoals" }
@@ -95,6 +96,7 @@ final class Team: Model, Content {
          membershipSince: String?,
          averageAge: String?,
          coach: Trainer?,
+         altCoach: Trainer? = nil,
          captain: String? = nil,
          trikot: Trikot,
          balance: Double? = nil,
@@ -120,6 +122,7 @@ final class Team: Model, Content {
         self.membershipSince = membershipSince
         self.averageAge = averageAge ?? "0"
         self.coach = coach
+        self.altCoach = altCoach
         self.captain = captain
         self.trikot = trikot
         self.balance = balance
@@ -188,6 +191,7 @@ extension Team: Mergeable {
         merged.membershipSince = other.membershipSince
         merged.averageAge = other.averageAge
         merged.coach = other.coach
+        merged.altCoach = other.altCoach
         merged.captain = other.captain
         merged.cancelled = other.cancelled
         merged.postponed = other.postponed
@@ -202,8 +206,6 @@ extension Team: Mergeable {
         return merged
     }
 }
-
-
 
 // Team Migration
 extension TeamMigration: Migration {
@@ -220,6 +222,7 @@ extension TeamMigration: Migration {
             .field(Team.FieldKeys.membershipSince, .datetime)
             .field(Team.FieldKeys.averageAge, .string)
             .field(Team.FieldKeys.coach, .json)
+            .field(Team.FieldKeys.altCoach, .json)
             .field(Team.FieldKeys.captain, .string)
             .field(Team.FieldKeys.totalMatches, .int)
             .field(Team.FieldKeys.cancelled, .int)
@@ -269,6 +272,7 @@ extension Team {
             membershipSince: self.membershipSince,
             averageAge: self.averageAge,
             coach: self.coach,
+            altCoach: self.altCoach,
             captain: self.captain,
             trikot: self.trikot,
             stats: nil
