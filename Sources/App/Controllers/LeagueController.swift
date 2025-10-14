@@ -24,6 +24,8 @@ final class LeagueController: RouteCollection {
         route.patch(":id", use: repository.updateID)
         route.patch("batch", use: repository.updateBatch)
         route.post(":id", "createSeason", ":number", ":switch", use: createSeason)
+        route.post(":id", ":seasonID", "add", ":number", ":switch", use: addMatchesToSeason)
+        
         route.get(":id", "seasons", use: getLeagueWithSeasons)
         route.get("code", ":code", use: getLeaguebyCode)
         route.get(":id", "teamCount", use: getNumberOfTeams)
@@ -193,6 +195,137 @@ final class LeagueController: RouteCollection {
                 league.createSeason(db: req.db, numberOfRounds: numberOfRounds, switchBool: switchBool).map {
                     return .ok
                 }
+            }
+    }
+    
+    func addMatchesToSeason(req: Request) -> EventLoopFuture<HTTPStatus> {
+        // Parse params
+        guard let leagueID = req.parameters.get("id", as: UUID.self),
+              let seasonID = req.parameters.get("seasonID", as: UUID.self),
+              let numberOfRounds = req.parameters.get("number", as: Int.self),
+              let switchBool = req.parameters.get("switch", as: Bool.self) else {
+            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing parameters"))
+        }
+        guard numberOfRounds >= 1 else {
+            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "numberOfRounds must be ≥ 1"))
+        }
+
+        return League.find(leagueID, on: req.db)
+            .unwrap(or: Abort(.notFound, reason: "League not found"))
+            .flatMap { (league: League) -> EventLoopFuture<HTTPStatus> in
+                return Season.find(seasonID, on: req.db)
+                    .unwrap(or: Abort(.notFound, reason: "Season not found"))
+                    .flatMap { (season: Season) -> EventLoopFuture<HTTPStatus> in
+                        // Validate relationship
+                        guard season.$league.id == leagueID else {
+                            return req.eventLoop.makeFailedFuture(
+                                Abort(.badRequest, reason: "Season does not belong to the provided league")
+                            ) as EventLoopFuture<HTTPStatus>
+                        }
+
+                        // Find the next gameday (use MAX, not count)
+                        return Match.query(on: req.db)
+                            .filter(\.$season.$id == seasonID)
+                            .all()
+                            .flatMap { (existing: [Match]) -> EventLoopFuture<HTTPStatus> in
+                                let maxGameDay = existing.map { $0.details.gameday }.max() ?? 0
+                                let startingGameday = maxGameDay + 1
+
+                                return league.$teams.query(on: req.db).all()
+                                    .flatMap { (teams: [Team]) -> EventLoopFuture<HTTPStatus> in
+                                        guard teams.count > 1 else {
+                                            return req.eventLoop.makeFailedFuture(
+                                                Abort(.badRequest, reason: "League must have more than one team")
+                                            ) as EventLoopFuture<HTTPStatus>
+                                        }
+
+                                        var teamsCopy = teams
+                                        if teamsCopy.count % 2 != 0 {
+                                            let bye = Team(
+                                                id: UUID(), sid: "", userId: nil, leagueId: nil, leagueCode: nil,
+                                                points: 0, coverimg: "", logo: "", teamName: "Bye",
+                                                foundationYear: "", membershipSince: "", averageAge: "",
+                                                coach: nil, captain: "",
+                                                trikot: Trikot(home: "", away: ""),
+                                                balance: 0.0, referCode: "",
+                                                usremail: "", usrpass: "", usrtel: ""
+                                            )
+                                            teamsCopy.append(bye)
+                                        }
+
+                                        var matches: [Match] = []
+                                        var gameday = startingGameday
+
+                                        for round in 0..<numberOfRounds {
+                                            // Baseline home/away per round; flips each full round
+                                            let baseSwitch = (round % 2 == 0) ? switchBool : !switchBool
+
+                                            // Each "roundIndex" is one gameday for all pairings
+                                            for roundIndex in 0..<(teamsCopy.count - 1) {
+                                                var homeAwaySwitch = baseSwitch
+
+                                                for matchIndex in 0..<(teamsCopy.count / 2) {
+                                                    let homeIdx = (roundIndex + matchIndex) % (teamsCopy.count - 1)
+                                                    var awayIdx = (teamsCopy.count - 1 - matchIndex + roundIndex) % (teamsCopy.count - 1)
+                                                    if matchIndex == 0 { awayIdx = teamsCopy.count - 1 }
+
+                                                    var homeTeam = teamsCopy[homeIdx]
+                                                    var awayTeam = teamsCopy[awayIdx]
+
+                                                    // Skip BYE pairings
+                                                    if homeTeam.teamName == "Bye" || awayTeam.teamName == "Bye" {
+                                                        continue
+                                                    }
+
+                                                    if homeAwaySwitch { swap(&homeTeam, &awayTeam) }
+                                                    guard let homeID = homeTeam.id, let awayID = awayTeam.id else {
+                                                        return req.eventLoop.makeFailedFuture(
+                                                            Abort(.badRequest, reason: "All teams must have an ID")
+                                                        ) as EventLoopFuture<HTTPStatus>
+                                                    }
+
+                                                    let match = Match(
+                                                        details: MatchDetails(
+                                                            gameday: gameday,
+                                                            date: nil,
+                                                            stadium: nil,
+                                                            location: "Nicht Zugeordnet"
+                                                        ),
+                                                        homeTeamId: homeID,
+                                                        awayTeamId: awayID,
+                                                        homeBlanket: Blankett(
+                                                            name: homeTeam.teamName,
+                                                            dress: homeTeam.trikot.home,
+                                                            logo: homeTeam.logo,
+                                                            players: [],
+                                                            coach: homeTeam.coach
+                                                        ),
+                                                        awayBlanket: Blankett(
+                                                            name: awayTeam.teamName,
+                                                            dress: awayTeam.trikot.away,
+                                                            logo: awayTeam.logo,
+                                                            players: [],
+                                                            coach: awayTeam.coach
+                                                        ),
+                                                        score: Score(home: 0, away: 0),
+                                                        status: .pending
+                                                    )
+                                                    match.$season.id = seasonID
+                                                    matches.append(match)
+
+                                                    // Optional: flip within a gameday if you want alternating H/A per pairing
+                                                    // homeAwaySwitch.toggle()
+                                                }
+
+                                                // All pairings above share this same `gameday`
+                                                gameday += 1
+                                            }
+                                        }
+
+                                        return matches.create(on: req.db).transform(to: .ok)
+                                    }
+                            }
+                    }
             }
     }
 

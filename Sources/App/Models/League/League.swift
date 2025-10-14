@@ -218,4 +218,135 @@ extension League {
     }
 }
 
+extension League {
+    func addMatchesToSeason(
+        db: Database,
+        season: Season,
+        numberOfRounds: Int,
+        switchBool: Bool
+    ) -> EventLoopFuture<Void> {
+        guard let leagueID = self.id else {
+            return db.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "League ID is required"))
+        }
+        guard let seasonID = season.id else {
+            return db.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Season ID is required"))
+        }
+        guard season.$league.id == leagueID else {
+            return db.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Season does not belong to the provided league"))
+        }
+
+        // Start gameday after existing matches in this season
+        let existingCountFuture = Match.query(on: db)
+            .filter(\.$season.$id == seasonID)
+            .count()
+
+        return existingCountFuture.flatMap { existingCount in
+            let startingGameday = existingCount + 1
+
+            return self.$teams.query(on: db).all().flatMap { teams in
+                guard teams.count > 1 else {
+                    return db.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "League must have more than one team"))
+                }
+
+                var matches: [Match] = []
+                let isOddTeamCount = teams.count % 2 != 0
+                var teamsCopy = teams
+
+                if isOddTeamCount {
+                    let byeTeam = Team(
+                        id: UUID(),
+                        sid: "",
+                        userId: nil,
+                        leagueId: nil,
+                        leagueCode: nil,
+                        points: 0,
+                        coverimg: "",
+                        logo: "",
+                        teamName: "Bye",
+                        foundationYear: "",
+                        membershipSince: "",
+                        averageAge: "",
+                        coach: nil,
+                        captain: "",
+                        trikot: Trikot(home: "", away: ""),
+                        balance: 0.0,
+                        referCode: "",
+                        usremail: "",
+                        usrpass: "",
+                        usrtel: ""
+                    )
+                    teamsCopy.append(byeTeam)
+                }
+
+                var gameDay = startingGameday
+
+                // Keep a single home/away switch baseline across all generated matches
+                var homeAwaySwitch = switchBool
+
+                for round in 0..<numberOfRounds {
+                    for roundIndex in 0..<(teamsCopy.count - 1) {
+                        for matchIndex in 0..<(teamsCopy.count / 2) {
+                            let homeTeamIndex = (roundIndex + matchIndex) % (teamsCopy.count - 1)
+                            var awayTeamIndex = (teamsCopy.count - 1 - matchIndex + roundIndex) % (teamsCopy.count - 1)
+
+                            if matchIndex == 0 {
+                                awayTeamIndex = teamsCopy.count - 1
+                            }
+
+                            var homeTeam = teamsCopy[homeTeamIndex]
+                            var awayTeam = teamsCopy[awayTeamIndex]
+
+                            if homeTeam.teamName == "Bye" || awayTeam.teamName == "Bye" {
+                                continue
+                            }
+
+                            if homeAwaySwitch {
+                                swap(&homeTeam, &awayTeam)
+                            }
+
+                            guard let homeID = homeTeam.id, let awayID = awayTeam.id else {
+                                return db.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "All teams must have an ID"))
+                            }
+
+                            let match = Match(
+                                details: MatchDetails(
+                                    gameday: gameDay,
+                                    date: nil,
+                                    stadium: nil,
+                                    location: "Nicht Zugeordnet"
+                                ),
+                                homeTeamId: homeID,
+                                awayTeamId: awayID,
+                                homeBlanket: Blankett(
+                                    name: homeTeam.teamName,
+                                    dress: homeTeam.trikot.home,
+                                    logo: homeTeam.logo,
+                                    players: [],
+                                    coach: homeTeam.coach
+                                ),
+                                awayBlanket: Blankett(
+                                    name: awayTeam.teamName,
+                                    dress: awayTeam.trikot.away,
+                                    logo: awayTeam.logo,
+                                    players: [],
+                                    coach: awayTeam.coach
+                                ),
+                                score: Score(home: 0, away: 0),
+                                status: .pending
+                            )
+
+                            match.$season.id = seasonID
+                            matches.append(match)
+                            gameDay += 1
+                        }
+                    }
+                    // Flip home/away after each full round
+                    homeAwaySwitch.toggle()
+                }
+
+                return matches.create(on: db).transform(to: ())
+            }
+        }
+    }
+}
 
