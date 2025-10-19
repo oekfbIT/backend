@@ -7,6 +7,17 @@ enum PlayerEligibility: String, Codable {
     case Warten = "Warten"
 }
 
+struct Profile: Codable, Content {
+    let name: String
+    let number: String
+    let birthday: String
+    let nationality: String
+    let position: String
+    let eligibility: PlayerEligibility
+    let registerDate: String
+    let captain: Bool
+}
+
 final class Player: Model, Content, Codable {
     static let schema = "players"
 
@@ -16,7 +27,8 @@ final class Player: Model, Content, Codable {
     @OptionalParent(key: FieldKeys.teamID) var team: Team?
     @OptionalField(key: FieldKeys.team_oeid) var team_oeid: String?
     @OptionalField(key: FieldKeys.email) var email: String?
-    
+    @OptionalField(key: FieldKeys.balance) var balance: Double?
+
     @Field(key: FieldKeys.name) var name: String
     @Field(key: FieldKeys.number) var number: String
     @Field(key: FieldKeys.birthday) var birthday: String
@@ -54,15 +66,17 @@ final class Player: Model, Content, Codable {
         static var bank: FieldKey { "bank" }
         static var transferred: FieldKey { "transferred" }
         static var blockdate: FieldKey { "blockdate" }
+        static var balance: FieldKey { "balance" }
     }
 
     init() {}
 
-    init(id: UUID? = nil, sid: String, image: String?, team_oeid: String?, email: String?, name: String, number: String, birthday: String, teamID: UUID?, nationality: String, position: String, eligibility: PlayerEligibility, registerDate: String, identification: String?, status: Bool?, isCaptain: Bool? = false, bank: Bool? = true, blockdate: Date? = nil ) {
+    init(id: UUID? = nil, sid: String, image: String?, team_oeid: String?, email: String?, balance: Double? = nil, name: String, number: String, birthday: String, teamID: UUID?, nationality: String, position: String, eligibility: PlayerEligibility, registerDate: String, identification: String?, status: Bool?, isCaptain: Bool? = false, bank: Bool? = true, blockdate: Date? = nil ) {
         self.id = id
         self.sid = sid
         self.image = image
         self.email = email
+        self.balance = balance
         self.team_oeid = team_oeid
         self.name = name
         self.number = number
@@ -89,6 +103,7 @@ extension PlayerMigration: Migration {
             .field(Player.FieldKeys.image, .string)
             .field(Player.FieldKeys.team_oeid, .string)
             .field(Player.FieldKeys.email, .string)
+            .field(Player.FieldKeys.balance, .double)
             .field(Player.FieldKeys.number, .string, .required)
             .field(Player.FieldKeys.birthday, .string, .required)
             .field(Player.FieldKeys.teamID, .uuid, .required, .references(Team.schema, Team.FieldKeys.id))
@@ -159,6 +174,7 @@ extension Player: Mergeable {
         merged.name = other.name
         merged.image = other.image
         merged.email = other.email
+        merged.balance = other.balance
         merged.number = other.number
         merged.birthday = other.birthday
         merged.$team.id = other.$team.id
@@ -172,5 +188,94 @@ extension Player: Mergeable {
         merged.bank = other.bank
         merged.blockdate = other.blockdate
         return merged
+    }
+}
+
+extension Player {
+    /// Asynchronously computes stats from the database.
+    func getStats(on db: Database) -> EventLoopFuture<PlayerStats> {
+        return self.$events.query(on: db).all().map { events in
+            Self.computeStats(from: events)
+        }
+    }
+
+    /// Computes stats directly from an already-loaded `events` array (no DB hit).
+    func getStatsFromLoadedEvents() -> PlayerStats {
+        return Self.computeStats(from: self.events)
+    }
+
+    /// Internal reusable logic for both cases
+    private static func computeStats(from events: [MatchEvent]) -> PlayerStats {
+        var stats = PlayerStats(
+            matchesPlayed: 0,
+            goalsScored: 0,
+            redCards: 0,
+            yellowCards: 0,
+            yellowRedCrd: 0
+        )
+
+        var matchSet = Set<UUID>()
+
+        for event in events {
+            matchSet.insert(event.$match.id)
+
+            switch event.type {
+            case .goal:
+                stats.goalsScored += 1
+            case .redCard:
+                stats.redCards += 1
+            case .yellowCard:
+                stats.yellowCards += 1
+            case .yellowRedCard:
+                stats.yellowRedCrd += 1
+            default:
+                break
+            }
+        }
+
+        stats.matchesPlayed = matchSet.count
+        return stats
+    }
+}
+
+extension Player {
+    func toAppPlayer(
+        team: AppModels.AppTeamOverview,
+        events: [AppModels.AppMatchEvent] = [],
+        stats: PlayerStats? = nil
+    ) throws -> AppModels.AppPlayer {
+        AppModels.AppPlayer(
+            id: try requireID(),
+            sid: sid,
+            name: name,
+            number: number,
+            nationality: nationality,
+            eligilibity: eligibility,
+            image: image ?? "",
+            status: status ?? false,
+            team: team,
+            email: email ?? "",
+            balance: balance ?? 0,
+            events: events,
+            stats: stats)
+    }
+}
+
+
+extension Player {
+    func toAppPlayerOverview(
+        team: AppModels.AppTeamOverview,
+        stats: PlayerStats? = nil
+    ) throws -> AppModels.AppPlayerOverview {
+        AppModels.AppPlayerOverview(
+            id: try requireID(),
+            sid: sid,
+            name: name,
+            number: number,
+            nationality: nationality,
+            eligilibity: eligibility,
+            image: image ?? "",
+            status: status ?? false,
+            team: team)
     }
 }

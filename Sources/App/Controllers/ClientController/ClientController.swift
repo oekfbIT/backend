@@ -1,5 +1,5 @@
 import Vapor
-import Fluent
+import Fluent 
 
 final class ClientController: RouteCollection {
     let path: String
@@ -44,7 +44,6 @@ final class ClientController: RouteCollection {
         // e.g. in routes.swift
         route.get("matches", "league", ":code", "primary", use: fetchPrimarySeasonMatches)
         route.get("matches", "league", ":code", "index", use: fetchAllSeasonMatches)
-        
         
 //        route.get("leaderboard", ":id", "goal", "primary", use: getGoalLeaderBoardPrimarySeason)
 //        route.get("leaderboard", ":id", "redCard", "primary", use: getRedCardLeaderBoardPrimarySeason)
@@ -111,7 +110,8 @@ final class ClientController: RouteCollection {
                             losses: st.losses,
                             scored: st.scored,
                             against: st.against,
-                            difference: st.scored - st.against
+                            difference: st.scored - st.against,
+                            form: []
                         )
                     }
 
@@ -229,7 +229,7 @@ final class ClientController: RouteCollection {
                             losses: stats.losses,
                             scored: stats.totalScored,
                             against: stats.totalAgainst,
-                            difference: stats.goalDifference
+                            difference: stats.goalDifference, form: []
                         )
                         tableItems.append(tableItem)
                     }

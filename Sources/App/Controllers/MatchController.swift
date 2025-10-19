@@ -243,20 +243,22 @@ final class MatchController: RouteCollection {
 
                 // Save the updated match with the new score
                 return match.save(on: req.db).flatMap {
-                    // Create a goal event
-                    let event = MatchEvent(match: match.id ?? UUID(),
-                                           type: .goal,
-                                           playerId: goalRequest.playerId,
-                                           minute: goalRequest.minute, 
-                                           name: goalRequest.name,
-                                           image: goalRequest.image,
-                                           number: goalRequest.number,
-                                           assign: goalRequest.assign,
-                                           ownGoal: goalRequest.ownGoal
+                    let event = MatchEvent(
+                        match: match.id ?? UUID(),
+                        type: .goal,
+                        playerId: goalRequest.playerId,
+                        minute: goalRequest.minute,
+                        name: goalRequest.name,
+                        image: goalRequest.image,
+                        number: goalRequest.number,
+                        assign: goalRequest.assign,
+                        ownGoal: goalRequest.ownGoal
                     )
                     event.$match.id = match.id!
-                    
-                    return event.save(on: req.db).map { .created }
+
+                    return event.save(on: req.db)
+                        .flatMap { _ in self.invalidateStats(for: match, on: req.db) }
+                        .transform(to: .created)
                 }
             }
     }
@@ -1126,3 +1128,4 @@ struct AddPlayersRequest: Content {
         self.playerIds = playerIds
     }
 }
+

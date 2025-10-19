@@ -634,7 +634,7 @@ final class HomepageController: RouteCollection {
                                 losses: stats.losses,
                                 scored: stats.totalScored,
                                 against: stats.totalAgainst,
-                                difference: stats.goalDifference
+                                difference: stats.goalDifference, form: []
                             )
                             tableItems.append(tableItem)
                         }
@@ -868,6 +868,7 @@ struct PlayerStats: Content, Codable {
     var redCards: Int
     var yellowCards: Int
     var yellowRedCrd: Int
+    var goalsAverage: Double?
 }
 
 

@@ -106,7 +106,7 @@ final class LeagueController: RouteCollection {
                                 losses: stats.losses,
                                 scored: stats.totalScored,
                                 against: stats.totalAgainst,
-                                difference: stats.goalDifference
+                                difference: stats.goalDifference, form: []
                             )
                             tableItems.append(tableItem)
                         }
@@ -570,6 +570,29 @@ struct TableItem: Codable, Content {
     var scored: Int
     var against: Int
     var difference: Int
+    var form: [FormItem]
+}
+
+enum FormResultItem: String, Codable, Content {
+    case W
+    case D
+    case L
+}
+
+struct FormItem: Codable, Content {
+    let result: FormResultItem
+    let matchID: UUID
+    let score: Score?
+    let home: String?
+    let away: String?
+    
+    init(result: FormResultItem, matchID: UUID, score: Score? = nil, home: String? = nil, away: String? = nil) {
+        self.result = result
+        self.matchID = matchID
+        self.score = score
+        self.home = home
+        self.away = away
+    }
 }
 
 struct LeaderBoard: Codable, Content {
@@ -593,6 +616,7 @@ struct TeamStats: Content, Codable {
     var totalPoints: Int
     var totalYellowCards: Int
     var totalRedCards: Int
+    var avgGoals: Double?
 }
 
 extension Int {

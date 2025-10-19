@@ -78,3 +78,47 @@ extension MatchEventMigration: Migration {
         database.schema(MatchEvent.schema).delete()
     }
 }
+
+extension MatchEvent {
+    func toAppMatchEvent(on req: Request) async throws -> AppModels.AppMatchEvent {
+        // 1️⃣ Load player
+        let player = try await self.$player.get(on: req.db)
+        let team = try await player.$team.get(on: req.db)
+
+        // 2️⃣ Build league + team overview (with safe fallbacks)
+        let leagueOverview = try team?.league?.toAppLeagueOverview()
+            ?? AppModels.AppLeagueOverview(id: UUID(), name: "Unknown", code: "")
+
+        let teamOverview: AppModels.AppTeamOverview
+        if let team = team {
+            teamOverview = try await team.toAppTeamOverview(league: leagueOverview, req: req).get()
+        } else {
+            teamOverview = AppModels.AppTeamOverview(
+                id: UUID(),
+                sid: "",
+                league: leagueOverview,
+                points: 0,
+                logo: "",
+                name: "Unknown Team",
+                stats: nil
+            )
+        }
+
+        // 3️⃣ Build AppPlayer with fallback team
+        let appPlayer = try player.toAppPlayer(team: teamOverview, stats: nil)
+
+        // 4️⃣ Return simplified AppMatchEvent
+        return AppModels.AppMatchEvent(
+            id: try self.requireID(),
+            type: self.type,
+            player: appPlayer,
+            minute: self.minute,
+            matchID: self.$match.id,
+            name: self.name,
+            image: self.image,
+            number: self.number,
+            assign: self.assign,
+            ownGoal: self.ownGoal
+        )
+    }
+}

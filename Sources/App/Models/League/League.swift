@@ -350,3 +350,28 @@ extension League {
     }
 }
 
+extension League {
+    func toAppLeague(
+        teams: [AppModels.AppTeamOverview] = [],
+        table: [TableItem] = []
+    ) throws -> AppModels.AppLeague {
+        AppModels.AppLeague(
+            id: try requireID(),
+            code: code ?? "",
+            hourly: String(hourly ?? 0),
+            visibility: visibility ?? false,
+            name: name,
+            count: teamcount ?? 0,
+            teams: teams,
+            table: table
+        )
+    }
+
+    func toAppLeagueOverview() throws -> AppModels.AppLeagueOverview {
+        AppModels.AppLeagueOverview(
+            id: try requireID(),
+            name: name,
+            code: code ?? ""
+        )
+    }
+}

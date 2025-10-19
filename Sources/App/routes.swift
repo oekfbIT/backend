@@ -31,6 +31,7 @@ func routes(_ app: Application) throws {
         HomepageController(path: "client"),
         ClientController(path: "webClient"),
         PostponeRequestController(path: "postpone"),
+        AppController(path: "app"),
 ]
     
     app.get("status") { req async -> String in

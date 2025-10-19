@@ -279,3 +279,122 @@ extension Team {
         )
     }
 }
+
+
+// MARK: - Team Extensions
+extension Team {
+    /// Converts Team to full AppTeam with cached stats
+    func toAppTeam(
+        league: AppModels.AppLeagueOverview,
+        players: [AppModels.AppPlayerOverview],
+        req: Request
+    ) throws -> EventLoopFuture<AppModels.AppTeam> {
+        let teamID = try requireID()
+
+        return StatsCacheManager.getTeamStats(for: teamID, on: req.db)
+            .map { stats in
+                AppModels.AppTeam(
+                    id: teamID,
+                    sid: self.sid ?? "",
+                    league: league,
+                    points: self.points,
+                    logo: self.logo,
+                    teamImage: self.coverimg ?? "",
+                    name: self.teamName,
+                    foundation: self.foundationYear ?? "",
+                    membership: self.membershipSince ?? "",
+                    coach: self.coach ?? Trainer(name: "Unbekannt"),
+                    altCoach: self.altCoach,
+                    captain: UUID(uuidString: self.captain ?? "") ?? UUID(),
+                    trikot: self.trikot,
+                    balance: self.balance,
+                    players: players,
+                    stats: stats
+                )
+            }
+    }
+
+    /// Converts Team to overview AppTeamOverview with cached stats
+    func toAppTeamOverview(
+        league: AppModels.AppLeagueOverview,
+        req: Request
+    ) throws -> EventLoopFuture<AppModels.AppTeamOverview> {
+        let teamID = try requireID()
+        
+        return StatsCacheManager.getTeamStats(for: teamID, on: req.db)
+            .map { stats in
+                AppModels.AppTeamOverview(
+                    id: teamID,
+                    sid: self.sid ?? "",
+                    league: league,
+                    points: self.points,
+                    logo: self.logo,
+                    name: self.teamName,
+                    stats: stats
+                )
+            }
+    }
+}
+
+
+extension Team {
+    static func getRecentForm(
+        for teamID: UUID,
+        on db: Database,
+        onlyPrimarySeason: Bool = false
+    ) async throws -> [FormItem] {
+        // Start base query
+        var query = Match.query(on: db)
+            .group(.or) { or in
+                or.filter(\.$homeTeam.$id == teamID)
+                or.filter(\.$awayTeam.$id == teamID)
+            }
+            .filter(\.$status == .done)
+
+        // 🔹 Restrict to primary season if requested
+        if onlyPrimarySeason {
+            query = query
+                .join(parent: \Match.$season)
+                .filter(Season.self, \.$primary == true)
+        }
+
+        let matches = try await query.all()
+
+        // Sort manually by date
+        let sortedMatches = matches.sorted {
+            let d1 = $0.details.date ?? .distantPast
+            let d2 = $1.details.date ?? .distantPast
+            return d1 > d2
+        }
+
+        let recentMatches = Array(sortedMatches.prefix(5))
+
+        return recentMatches.compactMap { match in
+            guard let matchID = match.id else { return defaultFromItemBlank }
+
+            let isHome = match.$homeTeam.id == teamID
+            let homeScore = match.score.home
+            let awayScore = match.score.away
+
+            let result: FormResultItem
+            if homeScore == awayScore {
+                result = .D
+            } else if (isHome && homeScore > awayScore) || (!isHome && awayScore > homeScore) {
+                result = .W
+            } else {
+                result = .L
+            }
+
+            return FormItem(result: result,
+                            matchID: matchID,
+                            score: match.score,
+                            home: match.homeBlanket?.name,
+                            away: match.awayBlanket?.name)
+        }
+    }
+}
+
+
+private var defaultFromItemBlank: FormItem {
+    return FormItem(result: .D, matchID: UUID())
+}

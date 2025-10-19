@@ -55,7 +55,6 @@ final class RefereeController: RouteCollection {
             }
     }
 
-    
     func create(req: Request) throws -> EventLoopFuture<Referee> {
         let item = try req.content.decode(RefereeSignUpRequest.self)
         let userSignup = UserSignup(id: "REFUSER", firstName: item.first, lastName: item.last, email: item.email, password: item.password, type: .referee)
@@ -114,7 +113,6 @@ final class RefereeController: RouteCollection {
 
     }
 
-    
     func getbyUserID(req: Request) throws -> EventLoopFuture<Referee> {
         guard let id = req.parameters.get("id", as: UUID.self) else {
             throw Abort(.badRequest)

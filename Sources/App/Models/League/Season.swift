@@ -23,6 +23,8 @@ final class Season: Model, Content, Codable {
     @Field(key: FieldKeys.details) var details: Int
     @OptionalField(key: FieldKeys.primary) var primary: Bool?
     @OptionalField(key: FieldKeys.table) var table: SeasonTable?
+    @OptionalField(key: FieldKeys.winner) var winner: UUID?
+    @OptionalField(key: FieldKeys.runnerup) var runnerup: UUID?
     @Children(for: \.$season) var matches: [Match]
 
     struct FieldKeys {
@@ -34,17 +36,22 @@ final class Season: Model, Content, Codable {
         static var details: FieldKey { "details" }
         static var primary: FieldKey { "primary" }
         static var table: FieldKey { "table" }
+        static var winner: FieldKey { "winner" }
+        static var runnerup: FieldKey { "runnerup" }
+        
     }
 
     init() {}
 
-    init(id: UUID? = nil, leagueId: UUID? = nil, name: String, details: Int, primary: Bool?, table: SeasonTable? = nil) {
+    init(id: UUID? = nil, leagueId: UUID? = nil, name: String, details: Int, primary: Bool?, table: SeasonTable? = nil, winner: UUID? = nil, runnerup: UUID? = nil) {
         self.id = id
         self.$league.id = leagueId
         self.name = name
         self.details = details
         self.primary = primary
         self.table = table
+        self.winner = winner
+        self.runnerup = runnerup
     }
 }
 
@@ -58,6 +65,8 @@ extension Season: Migration {
             .field(FieldKeys.table, .json)
             .field(FieldKeys.primary, .bool)
             .field(FieldKeys.details, .int, .required)
+            .field(FieldKeys.winner, .uuid)
+            .field(FieldKeys.runnerup, .uuid)
             .create()
     }
 
@@ -65,3 +74,15 @@ extension Season: Migration {
         database.schema(Season.schema).delete()
     }
 }
+
+extension Season {
+    func toAppSeason() throws -> AppModels.AppSeason {
+        AppModels.AppSeason(
+            id: try requireID().uuidString,
+            league: league?.name ?? "",
+            leagueId: try $league.id ?? UUID(),
+            name: name
+        )
+    }
+}
+

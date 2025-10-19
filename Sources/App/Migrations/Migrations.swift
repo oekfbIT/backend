@@ -21,7 +21,8 @@ let app_migrations: [Migration] = [
     MatchEventMigration(),
     StrafsenatMigration(),
     MatchAchivementMigration(),
-    PostponeRequestMigration()
+    PostponeRequestMigration(),
+    RuleMigration()
 ]
 
 struct UserMigration { }
@@ -42,3 +43,4 @@ struct MatchEventMigration { }
 struct StrafsenatMigration { }
 struct MatchAchivementMigration {}
 struct PostponeRequestMigration {}
+struct RuleMigration {}

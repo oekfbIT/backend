@@ -79,6 +79,7 @@ enum UserType: String, Codable {
     case referee
     case team
     case manager
+    case player
 
     var position: String {
         switch self {
@@ -86,7 +87,20 @@ enum UserType: String, Codable {
             case .referee: return "Schiedrichter"
             case .team: return "Mannschaft"
             case .manager: return "Manager"
+            case .player: return "Spieler"
         }
+    }
+}
+
+extension User {
+    func toAppUser() throws -> AppModels.AppUser {
+        AppModels.AppUser(
+            id: try requireID(),
+            type: type,
+            firstname: firstName,
+            lastname: lastName,
+            email: email
+        )
     }
 }
 
