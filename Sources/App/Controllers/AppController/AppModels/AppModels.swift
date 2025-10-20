@@ -80,6 +80,7 @@ struct AppModels {
         let id: UUID
         let code: String
         let hourly: String
+        let state: Bundesland
         let visibility: Bool
         let name: String
         let count: Int
@@ -91,6 +92,7 @@ struct AppModels {
         let id: UUID
         let name: String
         let code: String
+        let state: Bundesland
     }
     
     struct AppSeason: Content, Codable {

@@ -257,7 +257,8 @@ extension Player {
             email: email ?? "",
             balance: balance ?? 0,
             events: events,
-            stats: stats)
+            stats: stats
+        )
     }
 }
 

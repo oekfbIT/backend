@@ -26,26 +26,37 @@ final class AppController: RouteCollection {
     func setupRoutes(on app: RoutesBuilder) throws {
         let route = app.grouped(PathComponent(stringLiteral: path))
 
-        // MARK: TEAM ROUTES
+        // MARK: - TEAM ROUTES
         route.get("team", "sid", ":sid", use: getTeamBySID)
         route.get("team", ":teamID", use: getTeamByID)
         route.get("team", ":teamID", "fixtures", use: getFixturesByTeamID)
 
-        // MARK: LEAGUE ROUTES
+        // MARK: - LEAGUE ROUTES
         route.get("league", ":leagueID", use: getLeagueByID)
         route.get("league", "code", ":code", use: getLeagueByCode)
         route.get("league", ":leagueID", "teams", use: getTeamsByLeagueID)
         route.get("league", "code", ":code", "teams", use: getTeamsByLeagueCode)
         route.get("league", ":leagueID", "fixtures", use: getFixturesByLeagueID)
         route.get("league", "code", ":code", "fixtures", use: getFixturesByLeagueCode)
+        route.get("league", ":leagueID", "table", use: getLeagueTableByID)
+        route.get("league", "primary", use: getAllPrimaryLeagueOverviews)
 
-        // MARK: PLAYER ROUTES
+        // MARK: - PLAYER ROUTES
         route.get("player", ":playerID", use: getPlayerByID)
         route.get("player", "sid", ":sid", use: getPlayerBySID)
 
-        // MARK: MATCH ROUTES
+        // MARK: - MATCH ROUTES
         route.get("match", ":matchID", use: getMatchByID)
 
+        // MARK: - NEWS ROUTES
+        route.get("news", "all", use: getAllNews)
+        route.get("news", "strafsenat", use: getStrafsenatNews)
+        route.get("news", ":id", use: getNewsByID)
+
+        // MARK: - STADIUM ROUTES
+        route.get("stadium", "all", use: getAllStadiums)
+        route.get("stadium", ":id", use: getStadiumByID)
+        route.get("stadium", "bundesland", ":bundesland", use: getStadiumsByBundesland)
     }
 
     func boot(routes: RoutesBuilder) throws {
@@ -55,6 +66,36 @@ final class AppController: RouteCollection {
 
 // MARK: - LEAGUE ENDPOINTS
 extension AppController {
+    // GET /app/league/primary
+    func getAllPrimaryLeagueOverviews(req: Request) async throws -> [AppModels.AppLeagueOverview] {
+        // 1️⃣ Fetch all primary seasons and preload their leagues
+        let primarySeasons = try await Season.query(on: req.db)
+            .filter(\.$primary == true)
+            .with(\.$league)
+            .all()
+
+        // 2️⃣ Collect unique leagues and filter only visible ones
+        let visibleLeagues = Dictionary(
+            grouping: primarySeasons.compactMap { $0.league }
+                .filter { $0.visibility == true }
+        ) { league in
+            league.id
+        }.compactMap { $0.value.first }
+
+        // 3️⃣ Convert to AppLeagueOverview models
+        let overviews = try visibleLeagues.map { league in
+            try league.toAppLeagueOverview()
+        }
+
+        // 4️⃣ Sort alphabetically by state, then name
+        return overviews.sorted {
+            if $0.state == $1.state {
+                return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+            return $0.state.rawValue < $1.state.rawValue
+        }
+    }
+ 
     func getLeagueByID(req: Request) async throws -> AppModels.AppLeague {
         guard let leagueID = req.parameters.get("leagueID", as: UUID.self) else {
             throw Abort(.badRequest, reason: "Missing or invalid league ID.")
@@ -440,6 +481,51 @@ extension AppController {
 
         return groups
     }
+    
+    // MARK: - Get League Table by League ID (Primary Season Only)
+    func getLeagueTableByID(req: Request) async throws -> [TableItem] {
+        guard let leagueID = req.parameters.get("leagueID", as: UUID.self) else {
+            throw Abort(.badRequest, reason: "Missing or invalid league ID.")
+        }
+
+        // 1️⃣ Load the league and its teams
+        guard let league = try await League.query(on: req.db)
+            .filter(\.$id == leagueID)
+            .with(\.$teams)
+            .first()
+        else {
+            throw Abort(.notFound, reason: "League not found.")
+        }
+
+        // 2️⃣ Ensure there is at least one primary season for this league
+        let hasPrimarySeason = try await Season.query(on: req.db)
+            .filter(\.$league.$id == leagueID)
+            .filter(\.$primary == true)
+            .count() > 0
+
+        guard hasPrimarySeason else {
+            throw Abort(.notFound, reason: "No primary season found for this league.")
+        }
+
+        // 3️⃣ Build league table based on primary season only
+        var tableItems = try await buildLeagueTable(for: league, on: req, onlyPrimarySeason: true)
+
+        // 4️⃣ Sort by points, then goal difference
+        tableItems.sort {
+            if $0.points == $1.points {
+                return $0.difference > $1.difference
+            }
+            return $0.points > $1.points
+        }
+
+        // 5️⃣ Assign ranking positions
+        for i in 0..<tableItems.count {
+            tableItems[i].ranking = i + 1
+        }
+
+        return tableItems
+    }
+
 }
 
 // MARK: - PLAYER ENDPOINTS
@@ -465,7 +551,7 @@ extension AppController {
 
         // Build league + team overview
         let leagueOverview = try team.league?.toAppLeagueOverview()
-            ?? AppModels.AppLeagueOverview(id: UUID(), name: "Unknown", code: "")
+        ?? AppModels.AppLeagueOverview(id: UUID(), name: "Unknown", code: "", state: .wien)
 
         let teamOverview = try await team.toAppTeamOverview(league: leagueOverview, req: req).get()
 
@@ -498,7 +584,7 @@ extension AppController {
 
         // Build league + team overview
         let leagueOverview = try team.league?.toAppLeagueOverview()
-            ?? AppModels.AppLeagueOverview(id: UUID(), name: "Unknown", code: "")
+        ?? AppModels.AppLeagueOverview(id: UUID(), name: "Unknown", code: "", state: .wien)
 
         let teamOverview = try await team.toAppTeamOverview(league: leagueOverview, req: req).get()
 
@@ -529,7 +615,7 @@ extension AppController {
         }
 
         let leagueOverview = try team.league?.toAppLeagueOverview()
-            ?? AppModels.AppLeagueOverview(id: UUID(), name: "Unknown", code: "")
+        ?? AppModels.AppLeagueOverview(id: UUID(), name: "Unknown", code: "", state: .wien)
 
         let teamOverview = try await team.toAppTeamOverview(league: leagueOverview, req: req).get()
 
@@ -556,7 +642,7 @@ extension AppController {
         }
 
         let leagueOverview = try team.league?.toAppLeagueOverview()
-            ?? AppModels.AppLeagueOverview(id: UUID(), name: "Unknown", code: "")
+        ?? AppModels.AppLeagueOverview(id: UUID(), name: "Unknown", code: "", state: .wien)
 
         let teamOverview = try await team.toAppTeamOverview(league: leagueOverview, req: req).get()
 
@@ -681,7 +767,6 @@ extension AppController {
 
         return groups
     }
-
 }
     
 // MARK: - MATCH ENDPOINTS
@@ -780,6 +865,82 @@ extension AppController {
     }
 }
 
+// MARK: - News Endpoints
+extension AppController {
+
+    // 1️⃣ GET /app/news/all
+    func getAllNews(req: Request) async throws -> [NewsItem] {
+        try await NewsItem.query(on: req.db)
+            .filter(\.$tag == "Alle")
+            .sort(\.$created, .descending)
+            .all()
+    }
+
+    // 2️⃣ GET /app/news/strafsenat
+    func getStrafsenatNews(req: Request) async throws -> [NewsItem] {
+        try await NewsItem.query(on: req.db)
+            .filter(\.$tag == "strafsenat ")
+            .sort(\.$created, .descending)
+            .all()
+    }
+
+    // 3️⃣ GET /app/news/:id
+    func getNewsByID(req: Request) async throws -> NewsItem {
+        guard let id = req.parameters.get("id", as: UUID.self) else {
+            throw Abort(.badRequest, reason: "Missing or invalid news ID.")
+        }
+
+        guard let news = try await NewsItem.find(id, on: req.db) else {
+            throw Abort(.notFound, reason: "News item not found.")
+        }
+
+        return news
+    }
+}
+
+// MARK: - Stadium Endpoints
+extension AppController {
+
+    func getAllStadiums(req: Request) async throws -> [Stadium] {
+        try await Stadium.query(on: req.db)
+            .sort(\.$name, .ascending)
+            .all()
+    }
+
+    // GET /app/stadium/:stadiumID
+    func getStadiumByID(req: Request) async throws -> AppStadiumWithForecast {
+        // 1️⃣ Extract the stadium ID as a String (MongoDB uses string-based _id)
+        guard let stadiumID = req.parameters.get("id", as: UUID.self) else {
+            throw Abort(.badRequest, reason: "Missing or invalid stadium ID.")
+        }
+
+        // 2️⃣ Find stadium by ID
+        guard let stadium = try await Stadium.find(stadiumID, on: req.db) else {
+            throw Abort(.notFound, reason: "Stadium not found.")
+        }
+
+        // 3️⃣ Fetch live weather forecast
+        let forecast = try await stadium.getWeatherForecast(on: req)
+
+        // 4️⃣ Combine both in a single response
+        return AppStadiumWithForecast(stadium: stadium, forecast: forecast)
+    }
+
+    // 3️⃣ GET /app/stadiums/bundesland/:bundesland
+    func getStadiumsByBundesland(req: Request) async throws -> [Stadium] {
+        guard let bundeslandRaw = req.parameters.get("bundesland", as: String.self),
+              let bundesland = Bundesland(rawValue: bundeslandRaw) else {
+            throw Abort(.badRequest, reason: "Invalid or missing Bundesland.")
+        }
+
+        return try await Stadium.query(on: req.db)
+            .filter(\.$bundesland == bundesland)
+            .sort(\.$name, .ascending)
+            .all()
+    }
+}
+
+
 private func buildLeagueTable(
     for league: League,
     on req: Request,
@@ -820,4 +981,9 @@ private func buildLeagueTable(
 struct GameDayGroup: Content {
     let gameday: Int
     let matches: [AppModels.AppMatchOverview]
+}
+
+struct AppStadiumWithForecast: Content {
+    let stadium: Stadium
+    let forecast: Stadium.WeatherResponse
 }

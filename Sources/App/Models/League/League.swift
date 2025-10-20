@@ -359,6 +359,7 @@ extension League {
             id: try requireID(),
             code: code ?? "",
             hourly: String(hourly ?? 0),
+            state: state ?? .wien,
             visibility: visibility ?? false,
             name: name,
             count: teamcount ?? 0,
@@ -371,7 +372,8 @@ extension League {
         AppModels.AppLeagueOverview(
             id: try requireID(),
             name: name,
-            code: code ?? ""
+            code: code ?? "",
+            state: state ?? .wien,
         )
     }
 }

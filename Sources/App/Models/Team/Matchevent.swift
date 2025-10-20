@@ -87,7 +87,7 @@ extension MatchEvent {
 
         // 2️⃣ Build league + team overview (with safe fallbacks)
         let leagueOverview = try team?.league?.toAppLeagueOverview()
-            ?? AppModels.AppLeagueOverview(id: UUID(), name: "Unknown", code: "")
+        ?? AppModels.AppLeagueOverview(id: UUID(), name: "Unknown", code: "", state: .wien)
 
         let teamOverview: AppModels.AppTeamOverview
         if let team = team {
