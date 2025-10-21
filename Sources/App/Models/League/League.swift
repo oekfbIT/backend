@@ -373,7 +373,7 @@ extension League {
             id: try requireID(),
             name: name,
             code: code ?? "",
-            state: state ?? .wien,
+            state: state ?? .wien
         )
     }
 }
