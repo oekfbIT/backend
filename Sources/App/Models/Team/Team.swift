@@ -288,9 +288,14 @@ extension Team {
         league: AppModels.AppLeagueOverview,
         players: [AppModels.AppPlayerOverview],
         req: Request
-    ) throws -> EventLoopFuture<AppModels.AppTeam> {
+    ) async throws -> EventLoopFuture<AppModels.AppTeam> {
         let teamID = try requireID()
 
+        let form = try await Team.getRecentForm(
+            for: self.id!,
+            on: req.db,
+            onlyPrimarySeason: true
+        )
         return StatsCacheManager.getTeamStats(for: teamID, on: req.db)
             .map { stats in
                 AppModels.AppTeam(
@@ -309,7 +314,8 @@ extension Team {
                     trikot: self.trikot,
                     balance: self.balance,
                     players: players,
-                    stats: stats
+                    stats: stats,
+                    form: form
                 )
             }
     }

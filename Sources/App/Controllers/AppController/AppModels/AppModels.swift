@@ -45,7 +45,7 @@ struct AppModels {
         let balance: Double?
         let players: [AppPlayerOverview]
         let stats: TeamStats?
-        
+        let form: [FormItem]?  // NEW
     }
     
     struct AppTeamOverview: Content, Codable {
