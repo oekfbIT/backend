@@ -242,9 +242,16 @@ extension Player {
     func toAppPlayer(
         team: AppModels.AppTeamOverview,
         events: [AppModels.AppMatchEvent] = [],
-        stats: PlayerStats? = nil
-    ) throws -> AppModels.AppPlayer {
-        AppModels.AppPlayer(
+        req: Request
+    ) async throws -> AppModels.AppPlayer {
+        
+        // Use cached stats
+        let stats = try await StatsCacheManager
+            .getPlayerStats(for: try self.id ?? UUID(), on: req.db)
+            .get()
+
+        
+        return AppModels.AppPlayer(
             id: try requireID(),
             sid: sid,
             name: name,
