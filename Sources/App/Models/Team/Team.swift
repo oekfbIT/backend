@@ -395,7 +395,8 @@ extension Team {
                             matchID: matchID,
                             score: match.score,
                             home: match.homeBlanket?.name,
-                            away: match.awayBlanket?.name)
+                            away: match.awayBlanket?.name,
+                            date: match.details.date)
         }
     }
 }

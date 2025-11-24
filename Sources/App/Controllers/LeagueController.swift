@@ -585,13 +585,15 @@ struct FormItem: Codable, Content {
     let score: Score?
     let home: String?
     let away: String?
+    let date: Date?
     
-    init(result: FormResultItem, matchID: UUID, score: Score? = nil, home: String? = nil, away: String? = nil) {
+    init(result: FormResultItem, matchID: UUID, score: Score? = nil, home: String? = nil, away: String? = nil, date: Date? = nil) {
         self.result = result
         self.matchID = matchID
         self.score = score
         self.home = home
         self.away = away
+        self.date = date
     }
 }
 
