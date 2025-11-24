@@ -620,7 +620,7 @@ extension AppController {
         let teamOverview = try await team.toAppTeamOverview(league: leagueOverview, req: req).get()
 
         let playerOverviews = try await team.players.asyncMap {
-            try await $0.toAppPlayerOverview(team: teamOverview)
+            try await $0.toAppPlayer(team: teamOverview)
         }
 
         return try await team.toAppTeam(league: leagueOverview, players: playerOverviews, req: req).get()
@@ -647,7 +647,7 @@ extension AppController {
         let teamOverview = try await team.toAppTeamOverview(league: leagueOverview, req: req).get()
 
         let playerOverviews = try await team.players.asyncMap {
-            try await $0.toAppPlayerOverview(team: teamOverview)
+            try await $0.toAppPlayer(team: teamOverview)
         }
 
         return try await team.toAppTeam(league: leagueOverview, players: playerOverviews, req: req).get()

@@ -43,7 +43,7 @@ struct AppModels {
         let captain: UUID
         let trikot: Trikot
         let balance: Double?
-        let players: [AppPlayerOverview]
+        let players: [AppPlayer]
         let stats: TeamStats?
         let form: [FormItem]?  // NEW
     }

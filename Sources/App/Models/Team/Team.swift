@@ -286,7 +286,7 @@ extension Team {
     /// Converts Team to full AppTeam with cached stats
     func toAppTeam(
         league: AppModels.AppLeagueOverview,
-        players: [AppModels.AppPlayerOverview],
+        players: [AppModels.AppPlayer],
         req: Request
     ) async throws -> EventLoopFuture<AppModels.AppTeam> {
         let teamID = try requireID()
