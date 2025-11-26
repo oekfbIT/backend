@@ -133,6 +133,7 @@ struct AppModels {
     
     struct AppMatchEvent: Content, Codable  {
         let id: UUID?
+        let headline: Matchheadline
         let type: MatchEventType
         let player: AppPlayerOverview
         let minute: Int
@@ -142,6 +143,17 @@ struct AppModels {
         let number: String?
         let assign: MatchAssignment?
         let ownGoal: Bool?
+    }
+    
+    struct Matchheadline: Content, Codable {
+        let homeID: UUID
+        let homeName: String
+        let homeLogo: String
+        let gameday: Int
+        let date: Date
+        let awayID: UUID
+        let awayName: String
+        let awayLogo: String
     }
     
     struct AppMatch: Content, Codable {

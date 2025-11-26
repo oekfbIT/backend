@@ -81,17 +81,24 @@ extension MatchEventMigration: Migration {
 
 extension MatchEvent {
     func toAppMatchEvent(on req: Request) async throws -> AppModels.AppMatchEvent {
-        // 1️⃣ Load player
+        // 1️⃣ Load player & team (for AppPlayerOverview)
         let player = try await self.$player.get(on: req.db)
         let team = try await player.$team.get(on: req.db)
 
         // 2️⃣ Build league + team overview (with safe fallbacks)
         let leagueOverview = try team?.league?.toAppLeagueOverview()
-        ?? AppModels.AppLeagueOverview(id: UUID(), name: "Unknown", code: "", state: .wien)
+        ?? AppModels.AppLeagueOverview(
+            id: UUID(),
+            name: "Unknown",
+            code: "",
+            state: .wien
+        )
 
         let teamOverview: AppModels.AppTeamOverview
         if let team = team {
-            teamOverview = try await team.toAppTeamOverview(league: leagueOverview, req: req).get()
+            teamOverview = try await team
+                .toAppTeamOverview(league: leagueOverview, req: req)
+                .get()
         } else {
             teamOverview = AppModels.AppTeamOverview(
                 id: UUID(),
@@ -104,12 +111,32 @@ extension MatchEvent {
             )
         }
 
-        // 3️⃣ Build AppPlayer with fallback team
-        let appPlayer = try await player.toAppPlayerOverview(team: teamOverview)
+        // 3️⃣ Build AppPlayerOverview (you already switched to overview)
+        let appPlayer = try player.toAppPlayerOverview(team: teamOverview)
 
-        // 4️⃣ Return simplified AppMatchEvent
+        // 4️⃣ Load match + teams for headline
+        let match = try await self.$match.get(on: req.db)
+        let homeTeam = try await match.$homeTeam.get(on: req.db)
+        let awayTeam = try await match.$awayTeam.get(on: req.db)
+
+        // ⚠️ Assuming `name` & `logo` (or similar) exist on Team.
+        // Also: your Matchheadline currently has `homeName: UUID` etc.
+        // It probably should be `String` for names/logos.
+        let headline = AppModels.Matchheadline(
+            homeID: try homeTeam.requireID(),
+            homeName: homeTeam.teamName,          // <-- make sure type is String in the model
+            homeLogo: homeTeam.logo ?? "",    // <-- adjust to your actual property
+            gameday: match.details.gameday,
+            date: match.details.date ?? Date(), // fallback if nil
+            awayID: try awayTeam.requireID(),
+            awayName: awayTeam.teamName,
+            awayLogo: awayTeam.logo ?? ""
+        )
+
+        // 5️⃣ Return AppMatchEvent with headline
         return AppModels.AppMatchEvent(
             id: try self.requireID(),
+            headline: headline,
             type: self.type,
             player: appPlayer,
             minute: self.minute,
