@@ -134,7 +134,7 @@ struct AppModels {
     struct AppMatchEvent: Content, Codable  {
         let id: UUID?
         let type: MatchEventType
-        let player: AppPlayer
+        let player: AppPlayerOverview
         let minute: Int
         let matchID: UUID
         let name: String?

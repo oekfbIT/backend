@@ -105,7 +105,7 @@ extension MatchEvent {
         }
 
         // 3️⃣ Build AppPlayer with fallback team
-        let appPlayer = try await player.toAppPlayer(team: teamOverview, req: req)
+        let appPlayer = try await player.toAppPlayerOverview(team: teamOverview)
 
         // 4️⃣ Return simplified AppMatchEvent
         return AppModels.AppMatchEvent(

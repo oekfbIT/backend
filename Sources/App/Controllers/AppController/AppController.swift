@@ -536,10 +536,11 @@ extension AppController {
             throw Abort(.badRequest, reason: "Missing or invalid player ID.")
         }
 
-        // Only include team relation
+        // Include team + events relation
         guard let player = try await Player.query(on: req.db)
             .filter(\.$id == playerID)
             .with(\.$team)
+            .with(\.$events)
             .first()
         else {
             throw Abort(.notFound, reason: "Player not found.")
@@ -549,19 +550,31 @@ extension AppController {
             throw Abort(.notFound, reason: "Team not found for this player.")
         }
 
+        // Convert events -> AppMatchEvent (sequential, simple version)
+        var appEvents: [AppModels.AppMatchEvent] = []
+        for event in player.events {
+            let appEvent = try await event.toAppMatchEvent(on: req)
+            appEvents.append(appEvent)
+        }
+
         // Build league + team overview
         let leagueOverview = try team.league?.toAppLeagueOverview()
         ?? AppModels.AppLeagueOverview(id: UUID(), name: "Unknown", code: "", state: .wien)
 
         let teamOverview = try await team.toAppTeamOverview(league: leagueOverview, req: req).get()
 
-        // Use cached stats
+        // Use cached stats (you might drop this if toAppPlayer already does it)
         let stats = try await StatsCacheManager
             .getPlayerStats(for: try player.requireID(), on: req.db)
             .get()
 
-        return try await player.toAppPlayer(team: teamOverview, req: req)
+        return try await player.toAppPlayer(
+            team: teamOverview,
+            events: appEvents,
+            req: req
+        )
     }
+
 
     // MARK: Get Player by SID
     func getPlayerBySID(req: Request) async throws -> AppModels.AppPlayer {
@@ -569,10 +582,11 @@ extension AppController {
             throw Abort(.badRequest, reason: "Missing or invalid player SID.")
         }
 
-        // Only include team relation
+        // Include team + events relation
         guard let player = try await Player.query(on: req.db)
             .filter(\.$sid == sid)
             .with(\.$team)
+            .with(\.$events)
             .first()
         else {
             throw Abort(.notFound, reason: "Player not found.")
@@ -582,18 +596,25 @@ extension AppController {
             throw Abort(.notFound, reason: "Team not found for this player.")
         }
 
+        // Convert MatchEvent -> AppMatchEvent (async/throws-safe)
+        var appEvents: [AppModels.AppMatchEvent] = []
+        for event in player.events {
+            let appEvent = try await event.toAppMatchEvent(on: req)
+            appEvents.append(appEvent)
+        }
+
         // Build league + team overview
         let leagueOverview = try team.league?.toAppLeagueOverview()
         ?? AppModels.AppLeagueOverview(id: UUID(), name: "Unknown", code: "", state: .wien)
 
         let teamOverview = try await team.toAppTeamOverview(league: leagueOverview, req: req).get()
 
-        // Use cached stats
-        let stats = try await StatsCacheManager
-            .getPlayerStats(for: try player.requireID(), on: req.db)
-            .get()
-
-        return try await player.toAppPlayer(team: teamOverview, req: req)
+        // `toAppPlayer` already fetches stats via StatsCacheManager, so no need to do it here
+        return try await player.toAppPlayer(
+            team: teamOverview,
+            events: appEvents,
+            req: req
+        )
     }
 }
 

@@ -393,6 +393,7 @@ extension Team {
 
             return FormItem(result: result,
                             matchID: matchID,
+                            gameday: match.details.gameday,
                             score: match.score,
                             home: match.homeBlanket?.name,
                             away: match.awayBlanket?.name,
@@ -403,5 +404,5 @@ extension Team {
 
 
 private var defaultFromItemBlank: FormItem {
-    return FormItem(result: .D, matchID: UUID())
+    return FormItem(result: .D, matchID: UUID(), gameday: 1)
 }
