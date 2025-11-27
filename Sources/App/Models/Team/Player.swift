@@ -238,19 +238,21 @@ extension Player {
     }
 }
 
+// MARK: - Player → App models
+
 extension Player {
     func toAppPlayer(
         team: AppModels.AppTeamOverview,
         events: [AppModels.AppMatchEvent] = [],
+        nextMatches: [AppModels.NextMatch] = [],
         req: Request
     ) async throws -> AppModels.AppPlayer {
-        
+
         // Use cached stats
         let stats = try await StatsCacheManager
             .getPlayerStats(for: try self.id ?? UUID(), on: req.db)
             .get()
 
-        
         return AppModels.AppPlayer(
             id: try requireID(),
             sid: sid,
@@ -264,16 +266,15 @@ extension Player {
             email: email ?? "",
             balance: balance ?? 0,
             events: events,
-            stats: stats
+            stats: stats,
+            nextMatch: nextMatches
         )
     }
-}
 
-
-extension Player {
     func toAppPlayerOverview(
         team: AppModels.AppTeamOverview,
-        stats: PlayerStats? = nil
+        stats: PlayerStats? = nil,
+        nextMatches: [AppModels.NextMatch] = []
     ) throws -> AppModels.AppPlayerOverview {
         AppModels.AppPlayerOverview(
             id: try requireID(),
@@ -284,6 +285,9 @@ extension Player {
             eligilibity: eligibility,
             image: image ?? "",
             status: status ?? false,
-            team: team)
+            team: team,
+            nextMatch: nextMatches
+        )
     }
 }
+

@@ -528,6 +528,7 @@ extension AppController {
 
 }
 
+/*
 // MARK: - PLAYER ENDPOINTS
 extension AppController {
     // MARK: Get Player by ID
@@ -575,7 +576,7 @@ extension AppController {
         )
     }
 
-
+    
     // MARK: Get Player by SID
     func getPlayerBySID(req: Request) async throws -> AppModels.AppPlayer {
         guard let sid = req.parameters.get("sid", as: String.self) else {
@@ -617,6 +618,7 @@ extension AppController {
         )
     }
 }
+*/
 
 // MARK: - TEAM ENDPOINTS
 extension AppController {

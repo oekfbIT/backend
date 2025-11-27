@@ -116,6 +116,8 @@ struct AppModels {
         let balance: Double
         let events: [AppMatchEvent]
         let stats: PlayerStats?
+        let nextMatch: [NextMatch]
+
     }
 
     struct AppPlayerOverview: Content, Codable {
@@ -128,6 +130,7 @@ struct AppModels {
         let image: String
         let status: Bool
         let team: AppTeamOverview
+        let nextMatch: [NextMatch]
     }
 
     
