@@ -215,6 +215,8 @@ extension AppController {
             throw Abort(.notFound, reason: "Team not found for this player.")
         }
 
+        let limitedEvents = player.events.prefix(100)
+
         // events → AppMatchEvent
         var appEvents: [AppModels.AppMatchEvent] = []
         for event in player.events {
@@ -259,6 +261,8 @@ extension AppController {
         guard let teamModel = player.team else {
             throw Abort(.notFound, reason: "Team not found for this player.")
         }
+
+        let limitedEvents = player.events.prefix(100)
 
         var appEvents: [AppModels.AppMatchEvent] = []
         for event in player.events {
