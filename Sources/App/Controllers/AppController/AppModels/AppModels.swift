@@ -135,12 +135,22 @@ struct AppModels {
         let nextMatch: [NextMatch]
     }
 
+    struct AppPlayerMatchEventWrapper: Content, Codable {
+        let id: UUID
+        let sid: String
+        let name: String
+        let number: String
+        let nationality: String
+        let eligilibity: PlayerEligibility
+        let image: String
+    }
+
     
     struct AppMatchEvent: Content, Codable  {
         let id: UUID?
         let headline: Matchheadline
         let type: MatchEventType
-        let player: AppPlayerOverview
+        let player: AppPlayerMatchEventWrapper
         let minute: Int
         let matchID: UUID
         let name: String?

@@ -291,5 +291,21 @@ extension Player {
             nextMatch: nextMatches
         )
     }
+    
+    func toAppPlayerOverviewMatchEvent(
+        team: AppModels.AppTeamOverview,
+        stats: PlayerStats? = nil,
+        nextMatches: [AppModels.NextMatch] = []
+    ) throws -> AppModels.AppPlayerMatchEventWrapper {
+        AppModels.AppPlayerMatchEventWrapper(
+            id: try requireID(),
+            sid: sid,
+            name: name,
+            number: number,
+            nationality: nationality,
+            eligilibity: eligibility,
+            image: image ?? ""
+        )
+    }
 }
 

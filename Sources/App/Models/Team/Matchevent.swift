@@ -112,7 +112,7 @@ extension MatchEvent {
         }
 
         // 3️⃣ Build AppPlayerOverview (you already switched to overview)
-        let appPlayer = try player.toAppPlayerOverview(team: teamOverview)
+        let appPlayer = try player.toAppPlayerOverviewMatchEvent(team: teamOverview)
 
         // 4️⃣ Load match + teams for headline
         let match = try await self.$match.get(on: req.db)
