@@ -117,6 +117,8 @@ struct AppModels {
         let events: [AppMatchEvent]
         let stats: PlayerStats?
         let nextMatch: [NextMatch]
+        let position: String
+        let birthDate: String
 
     }
 

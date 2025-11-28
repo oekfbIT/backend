@@ -267,7 +267,9 @@ extension Player {
             balance: balance ?? 0,
             events: events,
             stats: stats,
-            nextMatch: nextMatches
+            nextMatch: nextMatches,
+            position: position,
+            birthDate: birthday
         )
     }
 
