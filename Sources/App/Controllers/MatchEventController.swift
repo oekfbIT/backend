@@ -154,9 +154,9 @@ final class MatchEventController: RouteCollection {
             var blanket: Blankett?
 
             // Check whether the player's team matches the home or away team
-            if player.$team.id == match.$homeTeam.id {
+            if player?.$team.id == match.$homeTeam.id {
                 blanket = match.homeBlanket
-            } else if player.$team.id == match.$awayTeam.id {
+            } else if player?.$team.id == match.$awayTeam.id {
                 blanket = match.awayBlanket
             } else {
                 return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Player team does not match home or away team"))
@@ -167,7 +167,7 @@ final class MatchEventController: RouteCollection {
             }
 
             // Update the player's card status by removing the relevant card count
-            if let index = mutableBlanket.players.firstIndex(where: { $0.id == player.id }) {
+            if let index = mutableBlanket.players.firstIndex(where: { $0.id == player?.id }) {
                 switch event.type {
                 case .redCard:
                     mutableBlanket.players[index].redCard = max(0, (mutableBlanket.players[index].redCard ?? 0) - 1)
@@ -181,7 +181,7 @@ final class MatchEventController: RouteCollection {
             }
 
             // Save the updated blanket back to the match
-            if player.$team.id == match.$homeTeam.id {
+            if player?.$team.id == match.$homeTeam.id {
                 match.homeBlanket = mutableBlanket
             } else {
                 match.awayBlanket = mutableBlanket

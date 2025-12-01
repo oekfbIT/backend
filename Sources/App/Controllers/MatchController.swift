@@ -244,7 +244,7 @@ final class MatchController: RouteCollection {
                 // Save the updated match with the new score
                 return match.save(on: req.db).flatMap {
                     let event = MatchEvent(
-                        match: match.id ?? UUID(),
+                        matchId: match.id ?? UUID(),
                         type: .goal,
                         playerId: goalRequest.playerId,
                         minute: goalRequest.minute,
@@ -422,7 +422,7 @@ final class MatchController: RouteCollection {
                     // Save the updated match
                     return match.save(on: req.db).flatMap {
                         // Create a card event
-                        let event = MatchEvent(match: match.id ?? UUID(),
+                        let event = MatchEvent(matchId: match.id ?? UUID(),
                                                type: cardType,
                                                playerId: cardRequest.playerId,
                                                minute: cardRequest.minute,

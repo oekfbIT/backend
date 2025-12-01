@@ -191,7 +191,7 @@ extension Player: Mergeable {
     }
 }
 
-extension Player {
+extension Player { 
     /// Asynchronously computes stats from the database.
     func getStats(on db: Database) -> EventLoopFuture<PlayerStats> {
         return self.$events.query(on: db).all().map { events in

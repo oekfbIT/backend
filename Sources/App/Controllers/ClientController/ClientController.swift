@@ -972,13 +972,17 @@ extension ClientController {
         _ events: [MatchEvent],
         playerTeamDict: [UUID: (String?, String?, String?)]
     ) -> [LeaderBoard] {
-        
         var playerEventCounts: [UUID: (name: String?, image: String?, number: String?, count: Int)] = [:]
-        
+
         for event in events {
-            let pid = event.$player.id
+            // OptionalParent -> id is UUID?
+            guard let pid = event.$player.id else {
+                // No player (or already deleted and set to null) → skip for leaderboard
+                continue
+            }
+
             let info = (event.name, event.image, event.number)
-            
+
             if let existing = playerEventCounts[pid] {
                 playerEventCounts[pid] = (
                     existing.name,
@@ -991,22 +995,24 @@ extension ClientController {
             }
         }
 
-        return playerEventCounts.compactMap { (playerId, data) in
-            let (teamImg, teamName, teamId) = playerTeamDict[playerId] ?? (nil, nil, nil)
-            
-            return LeaderBoard(
-                name: data.name,
-                image: data.image,
-                number: data.number,
-                count: Double(data.count),
-                playerid: playerId,
-                teamimg: teamImg,
-                teamName: teamName,
-                teamId: teamId
-            )
-        }
-        .sorted { ($0.count ?? 0) > ($1.count ?? 0) }
+        return playerEventCounts
+            .map { (playerId, data) in
+                let (teamImg, teamName, teamId) = playerTeamDict[playerId] ?? (nil, nil, nil)
+
+                return LeaderBoard(
+                    name: data.name,
+                    image: data.image,
+                    number: data.number,
+                    count: Double(data.count),
+                    playerid: playerId,
+                    teamimg: teamImg,
+                    teamName: teamName,
+                    teamId: teamId
+                )
+            }
+            .sorted { ($0.count ?? 0) > ($1.count ?? 0) }
     }
+
 
 }
 

@@ -690,32 +690,40 @@ final class HomepageController: RouteCollection {
     }
 
     private func mapEventsToLeaderBoard(_ events: [MatchEvent]) -> [LeaderBoard] {
-        var playerEventCounts: [UUID: (name: String?, image: String?, number: String?, id: UUID, count: Int)] = [:]
+        // no need to keep id in the value, it’s the key
+        var playerEventCounts: [UUID: (name: String?, image: String?, number: String?, count: Int)] = [:]
 
         for event in events {
-            let playerId = event.$player.id
+            // Optional parent -> id is UUID?
+            guard let playerId = event.$player.id else {
+                // Decide: skip events without a player
+                continue
+            }
+
             let playerInfo = (event.name, event.image, event.number)
 
             if var existing = playerEventCounts[playerId] {
                 existing.count += 1
                 playerEventCounts[playerId] = existing
             } else {
-                playerEventCounts[playerId] = (playerInfo.0, playerInfo.1, playerInfo.2, playerId, 1)
+                playerEventCounts[playerId] = (playerInfo.0, playerInfo.1, playerInfo.2, 1)
             }
         }
 
-        let leaderboard = playerEventCounts.map { (_, playerData) in
+        let leaderboard = playerEventCounts.map { (playerId, playerData) in
             LeaderBoard(
                 name: playerData.name,
                 image: playerData.image,
                 number: playerData.number,
                 count: playerData.count.asDouble(),
-                playerid: playerData.id,
+                playerid: playerId,
                 teamimg: nil,
                 teamName: nil,
                 teamId: nil
             )
         }
+        // If you still want sorting:
+        // .sorted { ($0.count ?? 0) > ($1.count ?? 0) }
 
         return leaderboard
     }

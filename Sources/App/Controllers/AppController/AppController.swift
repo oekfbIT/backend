@@ -792,7 +792,6 @@ extension AppController {
     }
 }
     
-// MARK: - MATCH ENDPOINTS
 extension AppController {
     // GET /app/match/:matchID
     func getMatchByID(req: Request) async throws -> AppModels.AppMatch {
@@ -800,20 +799,20 @@ extension AppController {
             throw Abort(.badRequest, reason: "Missing or invalid match ID.")
         }
 
-        // 1️⃣ Load match with all needed relations (including nested league)
-        guard let match = try await (
-            Match.query(on: req.db)
-                .filter(\.$id == matchID)
-                .with(\.$homeTeam)
-                .with(\.$awayTeam)
-                .with(\.$season) { $0.with(\.$league) }
-                .with(\.$events)
-                .first()
-        ) else {
+        // Build query separately so it's obvious what's what
+        let query = Match.query(on: req.db)
+            .filter(\.$id == matchID)
+            .with(\.$homeTeam)
+            .with(\.$awayTeam)
+            .with(\.$season) { $0.with(\.$league) }
+            .with(\.$events) // just events, NOT player
+
+        // Execute query
+        guard let match = try await query.first() else {
             throw Abort(.notFound, reason: "Match not found.")
         }
 
-        // 2️⃣ Prepare league + season context
+        // Season + league
         guard let season = match.season else {
             throw Abort(.notFound, reason: "Season not found for this match.")
         }
@@ -825,7 +824,7 @@ extension AppController {
         let leagueOverview = try league.toAppLeagueOverview()
         let appSeason = try season.toAppSeason()
 
-        // 3️⃣ Build AppTeamOverview for home and away
+        // Teams
         let home = match.homeTeam
         let away = match.awayTeam
 
@@ -853,12 +852,12 @@ extension AppController {
                 .get()
         )
 
-        // 4️⃣ Map events
+        // Events → AppMatchEvent
         let appEvents: [AppModels.AppMatchEvent] = try await match.events.asyncMap {
-            try await $0.toAppMatchEvent(on: req)
+            try await $0.toAppMatchEvent(on: req)   // uses the safe version w/out $player.get
         }
 
-        // 5️⃣ Return full AppMatch
+        // Response
         return AppModels.AppMatch(
             id: try match.requireID(),
             details: match.details,
@@ -887,6 +886,7 @@ extension AppController {
         )
     }
 }
+
 
 // MARK: - News Endpoints
 extension AppController {

@@ -178,7 +178,7 @@ extension Team {
                 or.filter(\.$awayTeam.$id == teamID)
             }
             .filter(\.$status == .done)
-            .with(\.$events) { $0.with(\.$player) }
+            .with(\.$events)   // 🔹 no nested .with(\.$player)
 
         // 🔹 Only include matches from the current primary season if requested
         if onlyPrimarySeason {
@@ -202,6 +202,7 @@ extension Team {
                 let homeScore = match.score.home
                 let awayScore = match.score.away
 
+                // 🔹 goals / result
                 if teamID == homeID {
                     totalScored += homeScore
                     totalAgainst += awayScore
@@ -216,14 +217,33 @@ extension Team {
                     else { losses += 1 }
                 }
 
+                // 🔹 cards: derive team via assign + match.home/away
+                let isHomeTeam = (homeID == teamID)
+                let isAwayTeam = (awayID == teamID)
+
                 for event in match.events {
-                    guard let playerTeamID = event.player.$team.id else { continue }
-                    guard playerTeamID == teamID else { continue }
+                    guard let assign = event.assign else {
+                        // no assignment, can't reliably attribute → skip
+                        continue
+                    }
+
+                    let belongsToTeam: Bool
+                    switch assign {
+                    case .home:
+                        belongsToTeam = isHomeTeam
+                    case .away:
+                        belongsToTeam = isAwayTeam
+                    }
+
+                    guard belongsToTeam else { continue }
 
                     switch event.type {
-                    case .yellowCard: totalYellow += 1
-                    case .redCard, .yellowRedCard: totalRed += 1
-                    default: break
+                    case .yellowCard:
+                        totalYellow += 1
+                    case .redCard, .yellowRedCard:
+                        totalRed += 1
+                    default:
+                        break
                     }
                 }
             }
@@ -242,6 +262,7 @@ extension Team {
         }
     }
 }
+
 
 
 // MARK: - Stats Cache Invalidation Helper

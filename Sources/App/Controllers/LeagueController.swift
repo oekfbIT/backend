@@ -431,42 +431,53 @@ final class LeagueController: RouteCollection {
             }
     }
 
-    private func mapEventsToLeaderBoard(_ events: [MatchEvent], playerTeamDict: [UUID: (String?, String?, String?)]) -> [LeaderBoard] {
+    /// Aggregates events per player and joins with team info.
+    /// Assumes `playerTeamDict` contains mapping playerId → (teamImg, teamName, teamId)
+    func mapEventsToLeaderBoard(
+        _ events: [MatchEvent],
+        playerTeamDict: [UUID: (String?, String?, String?)]
+    ) -> [LeaderBoard] {
         var playerEventCounts: [UUID: (name: String?, image: String?, number: String?, count: Int)] = [:]
 
         for event in events {
-            let playerId = event.$player.id
-            let playerInfo = (event.name, event.image, event.number)
-            
-            if let existing = playerEventCounts[playerId] {
-                playerEventCounts[playerId] = (
+            // OptionalParent → id is UUID?
+            guard let pid = event.$player.id else {
+                // event is not tied to a (current) player → skip for leaderboard
+                continue
+            }
+
+            let info = (event.name, event.image, event.number)
+
+            if let existing = playerEventCounts[pid] {
+                playerEventCounts[pid] = (
                     existing.name,
                     existing.image,
                     existing.number,
                     existing.count + 1
                 )
             } else {
-                playerEventCounts[playerId] = (playerInfo.0, playerInfo.1, playerInfo.2, 1)
+                playerEventCounts[pid] = (info.0, info.1, info.2, 1)
             }
         }
 
-        return playerEventCounts.map { (playerId, data) in
-            let (teamImg, teamName, teamId) = playerTeamDict[playerId] ?? (nil, nil, nil)
-            
-            return LeaderBoard(
-                name: data.name,
-                image: data.image,
-                number: data.number,
-                count: Double(data.count),
-                playerid: playerId,
-                teamimg: teamImg,
-                teamName: teamName,
-                teamId: teamId
-            )
-        }
-        .sorted { ($0.count ?? 0) > ($1.count ?? 0) }
-    }
+        return playerEventCounts
+            .map { (playerId, data) in
+                let (teamImg, teamName, teamId) = playerTeamDict[playerId] ?? (nil, nil, nil)
 
+                return LeaderBoard(
+                    name: data.name,
+                    image: data.image,
+                    number: data.number,
+                    count: Double(data.count),
+                    playerid: playerId,
+                    teamimg: teamImg,
+                    teamName: teamName,
+                    teamId: teamId
+                )
+            }
+            .sorted { ($0.count ?? 0) > ($1.count ?? 0) }
+    }
+    
     // MARK: - New Functions for SliderData Management
     
     /// Adds a new slide to the league's homepage slider data.
