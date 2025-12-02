@@ -28,7 +28,7 @@ final class TransferController: RouteCollection {
 
         // Generic CRUD from your repository
         route.post("batch", use: repository.createBatch)
-        route.get(use: repository.index)
+        route.get(use: indexTransfers)
         route.get(":id", use: repository.getbyID)
         route.delete(":id", use: repository.deleteID)
         route.patch(":id", use: repository.updateID)
@@ -45,6 +45,16 @@ final class TransferController: RouteCollection {
 
         route.get("team", ":teamID", use: getTransfersByTeam)
         route.get("player", ":playerID", use: getTransfersByPlayer)
+    }
+
+    
+    // ADD THIS in TransferController
+    func indexTransfers(req: Request) throws -> EventLoopFuture<Page<Transfer>> {
+        let pageRequest = try req.query.decode(PageRequest.self)
+
+        return Transfer.query(on: req.db)
+            .sort(\.$created, .descending) // newest first
+            .paginate(pageRequest)
     }
 
     // POST /transfers/create
