@@ -186,6 +186,8 @@ struct AppModels {
         let secondHalfStartDate: Date?
         let firstHalfEndDate: Date?
         let secondHalfEndDate: Date?
+        let homeForm: [FormItem]?
+        let awayForm: [FormItem]?
     }
     
     struct AppMatchOverview: Content, Codable {

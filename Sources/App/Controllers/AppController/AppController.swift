@@ -791,7 +791,7 @@ extension AppController {
         return groups
     }
 }
-    
+// MARK: - MATCH ENDPOINTS
 extension AppController {
     // GET /app/match/:matchID
     func getMatchByID(req: Request) async throws -> AppModels.AppMatch {
@@ -828,30 +828,45 @@ extension AppController {
         let home = match.homeTeam
         let away = match.awayTeam
 
+        // 🔹 Home / away recent form (primary season only)
+        let homeID = try home.requireID()
+        let awayID = try away.requireID()
+
+        let homeForm = try await Team.getRecentForm(
+            for: homeID,
+            on: req.db,
+            onlyPrimarySeason: true
+        )
+        let awayForm = try await Team.getRecentForm(
+            for: awayID,
+            on: req.db,
+            onlyPrimarySeason: true
+        )
+
         let homeOverview = AppModels.AppTeamOverview(
-            id: try home.requireID(),
+            id: homeID,
             sid: home.sid ?? "",
             league: leagueOverview,
             points: home.points,
             logo: home.logo,
             name: home.teamName,
             stats: try? await StatsCacheManager
-                .getTeamStats(for: try home.requireID(), on: req.db)
+                .getTeamStats(for: homeID, on: req.db)
                 .get()
         )
 
         let awayOverview = AppModels.AppTeamOverview(
-            id: try away.requireID(),
+            id: awayID,
             sid: away.sid ?? "",
             league: leagueOverview,
             points: away.points,
             logo: away.logo,
             name: away.teamName,
             stats: try? await StatsCacheManager
-                .getTeamStats(for: try away.requireID(), on: req.db)
+                .getTeamStats(for: awayID, on: req.db)
                 .get()
         )
-
+        
         // Events → AppMatchEvent
         let appEvents: [AppModels.AppMatchEvent] = try await match.events.asyncMap {
             try await $0.toAppMatchEvent(on: req)   // uses the safe version w/out $player.get
@@ -882,11 +897,12 @@ extension AppController {
             firstHalfStartDate: match.firstHalfStartDate,
             secondHalfStartDate: match.secondHalfStartDate,
             firstHalfEndDate: match.firstHalfEndDate,
-            secondHalfEndDate: match.secondHalfEndDate
+            secondHalfEndDate: match.secondHalfEndDate,
+            homeForm: homeForm,
+            awayForm: awayForm
         )
     }
 }
-
 
 // MARK: - News Endpoints
 extension AppController {
