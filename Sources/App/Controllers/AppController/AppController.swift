@@ -57,6 +57,11 @@ final class AppController: RouteCollection {
         route.get("stadium", "all", use: getAllStadiums)
         route.get("stadium", ":id", use: getStadiumByID)
         route.get("stadium", "bundesland", ":bundesland", use: getStadiumsByBundesland)
+        
+        // MARK: - PUSH / DEVICE ROUTES
+        route.post("device", "register", use: registerDevice)
+        route.post("notifications", "send", use: sendNotification)
+
     }
 
     func boot(routes: RoutesBuilder) throws {
