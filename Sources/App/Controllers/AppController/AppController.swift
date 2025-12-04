@@ -25,7 +25,18 @@ final class AppController: RouteCollection {
 
     func setupRoutes(on app: RoutesBuilder) throws {
         let route = app.grouped(PathComponent(stringLiteral: path))
+        // MARK: - AUTH ROUTES
+        // POST /app/auth/login
+        
+        let auth = route.grouped("auth")
+        let loginRoute = auth.grouped(User.authenticator())
+        loginRoute.post("login", use: appLogin)
 
+        // POST /app/auth/reset-password
+        // TODO: implement password reset (lookup by email, generate new password or token, send via EmailController)
+        auth.post("reset-password", use: resetPassword)
+
+        
         // MARK: - TEAM ROUTES
         route.get("team", "sid", ":sid", use: getTeamBySID)
         route.get("team", ":teamID", use: getTeamByID)

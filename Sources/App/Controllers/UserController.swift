@@ -4,7 +4,6 @@
 //  Alon Yakobichvili
 //  All rights reserved.
 //
-  
 import Vapor
 import Fluent
 
