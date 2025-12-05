@@ -134,7 +134,7 @@ extension AppController {
                 team.with(\.$league)
             }
             .mongoRegex("name", pattern)
-            .limit(10)
+            .limit(20)
             .all()
 
         // Wait for all six async operations
