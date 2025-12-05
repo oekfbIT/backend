@@ -74,8 +74,8 @@ final class League: Model, Content, Codable {
     @Children(for: \.$league) var teams: [Team]
     @Children(for: \.$league) var seasons: [Season]
 
-    @Field(key: "nameLower")
-    var nameLower: String
+    @OptionalField(key: "nameLower")
+    var nameLower: String?
 
     struct FieldKeys {
         static var id: FieldKey { "id" }

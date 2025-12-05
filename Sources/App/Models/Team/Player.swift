@@ -46,9 +46,9 @@ final class Player: Model, Content, Codable {
 
     @Children(for: \.$player) var events: [MatchEvent]
 
-    @Field(key: "nameLower")
-    var nameLower: String
-
+    @OptionalField(key: "nameLower")
+    var nameLower: String?
+    
     struct FieldKeys {
         static var id: FieldKey { "id" }
         static var sid: FieldKey { "sid" }

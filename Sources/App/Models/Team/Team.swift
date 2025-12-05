@@ -49,9 +49,8 @@ final class Team: Model, Content {
     @Children(for: \.$team) var rechnungen: [Rechnung]
     @Children(for: \.$team) var players: [Player]
     
-    @Field(key: "teamNameLower")
-    var teamNameLower: String
-
+    @OptionalField(key: "nameLower")
+    var nameLower: String?
 
     struct FieldKeys {
         static var id: FieldKey { "id" }
