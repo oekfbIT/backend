@@ -46,6 +46,9 @@ final class Player: Model, Content, Codable {
 
     @Children(for: \.$player) var events: [MatchEvent]
 
+    @Field(key: "nameLower")
+    var nameLower: String
+
     struct FieldKeys {
         static var id: FieldKey { "id" }
         static var sid: FieldKey { "sid" }
@@ -91,6 +94,7 @@ final class Player: Model, Content, Codable {
         self.isCaptain = isCaptain
         self.bank = bank
         self.blockdate = blockdate
+        self.nameLower = name.lowercased()
     }
 }
 

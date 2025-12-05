@@ -73,7 +73,10 @@ final class League: Model, Content, Codable {
     @Field(key: FieldKeys.name) var name: String
     @Children(for: \.$league) var teams: [Team]
     @Children(for: \.$league) var seasons: [Season]
-    
+
+    @Field(key: "nameLower")
+    var nameLower: String
+
     struct FieldKeys {
         static var id: FieldKey { "id" }
         static var state: FieldKey { "state" }
@@ -97,6 +100,8 @@ final class League: Model, Content, Codable {
         self.homepagedata = homepagedata
         self.youtube = youtube
         self.visibility = visibility
+        self.nameLower = name.lowercased()
+
     }
 }
 

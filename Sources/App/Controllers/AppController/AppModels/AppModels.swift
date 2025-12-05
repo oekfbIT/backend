@@ -27,7 +27,7 @@ struct AppModels {
         let itemID: UUID
         let createdAt: Date
     }
-    
+        
     struct AppTeam: Content, Codable {
         let id: UUID
         let sid: String

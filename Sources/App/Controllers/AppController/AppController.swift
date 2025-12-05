@@ -36,7 +36,9 @@ final class AppController: RouteCollection {
         // TODO: implement password reset (lookup by email, generate new password or token, send via EmailController)
         auth.post("reset-password", use: resetPassword)
 
-        
+        // MARK: - SEARCH ROUTES
+        try setupSearchRoutes(on: route)
+
         // MARK: - TEAM ROUTES
         route.get("team", "sid", ":sid", use: getTeamBySID)
         route.get("team", ":teamID", use: getTeamByID)

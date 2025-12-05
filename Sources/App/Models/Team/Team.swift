@@ -48,6 +48,9 @@ final class Team: Model, Content {
 
     @Children(for: \.$team) var rechnungen: [Rechnung]
     @Children(for: \.$team) var players: [Player]
+    
+    @Field(key: "teamNameLower")
+    var teamNameLower: String
 
 
     struct FieldKeys {
@@ -135,6 +138,7 @@ final class Team: Model, Content {
         self.usremail = usremail
         self.usrtel = usrtel
         self.kaution = kaution
+        self.teamNameLower = teamName.lowercased()
 
     }
     
