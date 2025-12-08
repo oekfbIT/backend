@@ -27,12 +27,27 @@ extension AppController {
     }
 
     /// Mirrors `UserController.login` but under `/app/auth/login`.
-    func appLogin(req: Request) throws -> EventLoopFuture<NewSession> {
+    func appLogin(req: Request) throws -> EventLoopFuture<AppSession> {
         let user = try req.auth.require(User.self)
         let token = try user.createToken(source: .login)
+        let userID = try user.requireID()
 
-        return token.save(on: req.db).flatMapThrowing {
-            NewSession(token: token.value, user: try user.asPublic())
+        // 1) Save token
+        return token.save(on: req.db).flatMap {
+            // 2) Fetch all teams that belong to this user
+            Team.query(on: req.db)
+                .filter(\.$user.$id == userID)
+                 .with(\.$players)    // uncomment if you want players preloaded too
+                 .with(\.$league)     // uncomment if you want league preloaded too
+                .all()
+        }
+        .flatMapThrowing { teams in
+            // 3) Build AppSession including full Team models
+            try AppSession(
+                token: token.value,
+                user: user.asPublic(),
+                teams: teams
+            )
         }
     }
 

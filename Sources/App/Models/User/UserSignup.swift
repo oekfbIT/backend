@@ -30,3 +30,9 @@ struct NewSession: Content {
     let token: String
     let user: User.Public
 }
+
+struct AppSession: Content {
+    let token: String
+    let user: User.Public
+    let teams: [Team]
+}
