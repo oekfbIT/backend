@@ -58,7 +58,9 @@ final class AppController: RouteCollection {
         route.get("player", ":playerID", use: getPlayerByID)
         route.get("player", "sid", ":sid", use: getPlayerBySID)
         route.put(":playerID", "email", use: updatePlayerEmailAddress)
-        
+        // NEW: team registration via app
+        route.post("register", "team", use: registerTeamPlayer)
+
         // MARK: - MATCH ROUTES
         route.get("match", ":matchID", use: getMatchByID)
 
