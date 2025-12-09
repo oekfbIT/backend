@@ -9,6 +9,8 @@ import Foundation
 import Fluent
 import Vapor
 
+// MARK: - Registration DTOs
+
 /// For team-initiated registrations (team ID required).
 struct RegisterTeamPlayerRequest: Content {
     let teamID: UUID
@@ -41,9 +43,11 @@ struct RegisterPoolPlayerRequest: Content {
     let identificationImage: File
 }
 
+// MARK: - AppController extension
+
 extension AppController {
 
-    /// POST /api/players/register/team
+    /// POST /app/register/team
     /// Body: multipart/form-data with RegisterTeamPlayerRequest.
     /// Returns: Player.Public
     func registerTeamPlayer(req: Request) throws -> EventLoopFuture<Player.Public> {
@@ -99,10 +103,14 @@ extension AppController {
         // --- Authenticate and upload both files ---
 
         return firebaseManager.authenticate().flatMap {
-            let imgFuture = firebaseManager.uploadFile(file: payload.playerImage,
-                                                       to: playerImagePath)
-            let idFuture  = firebaseManager.uploadFile(file: payload.identificationImage,
-                                                       to: identificationImagePath)
+            let imgFuture = firebaseManager.uploadFile(
+                file: payload.playerImage,
+                to: playerImagePath
+            )
+            let idFuture = firebaseManager.uploadFile(
+                file: payload.identificationImage,
+                to: identificationImagePath
+            )
             return imgFuture.and(idFuture)
         }
         .flatMap { playerImageURL, identificationURL in
@@ -149,25 +157,43 @@ extension AppController {
     // MARK: - Shared invoice logic (factored from create)
 
     /// Same logic as your existing `create` function (5€ Rechnung per player).
-    private func createRegistrationInvoice(for player: Player, req: Request) -> EventLoopFuture<Player> {
+    private func createRegistrationInvoice(
+        for player: Player,
+        req: Request
+    ) -> EventLoopFuture<Player> {
         // Fetch again to ensure relations are loaded (matches your existing pattern)
         return Player.find(player.id, on: req.db).flatMap { savedPlayer in
             guard let savedPlayer = savedPlayer else {
-                return req.eventLoop.future(error: Abort(.notFound, reason: "Player not found after creation."))
+                return req.eventLoop.future(
+                    error: Abort(
+                        .notFound,
+                        reason: "Player not found after creation."
+                    )
+                )
             }
 
             guard let teamID = savedPlayer.$team.id else {
-                return req.eventLoop.future(error: Abort(.badRequest, reason: "Player must belong to a team."))
+                return req.eventLoop.future(
+                    error: Abort(
+                        .badRequest,
+                        reason: "Player must belong to a team."
+                    )
+                )
             }
 
             return Team.find(teamID, on: req.db).flatMap { team in
                 guard let team = team else {
-                    return req.eventLoop.future(error: Abort(.notFound, reason: "Team not found."))
+                    return req.eventLoop.future(
+                        error: Abort(.notFound, reason: "Team not found.")
+                    )
                 }
 
                 // Generate invoice number: current year + random 5-digit number
                 let year = Calendar.current.component(.year, from: Date.viennaNow)
-                let randomFiveDigitNumber = String(format: "%05d", Int.random(in: 0..<100000))
+                let randomFiveDigitNumber = String(
+                    format: "%05d",
+                    Int.random(in: 0..<100_000)
+                )
                 let invoiceNumber = "\(year)\(randomFiveDigitNumber)"
 
                 let rechnungAmount: Double = -5.0
@@ -189,7 +215,9 @@ extension AppController {
                     }
 
                     return team.save(on: req.db).map {
-                        req.logger.info("Rechnung created and team balance updated for player \(savedPlayer.id?.uuidString ?? "unknown")")
+                        req.logger.info(
+                            "Rechnung created and team balance updated for player \(savedPlayer.id?.uuidString ?? "unknown")"
+                        )
                         return savedPlayer
                     }
                 }
