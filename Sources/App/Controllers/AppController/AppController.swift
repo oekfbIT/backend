@@ -57,7 +57,8 @@ final class AppController: RouteCollection {
         // MARK: - PLAYER ROUTES
         route.get("player", ":playerID", use: getPlayerByID)
         route.get("player", "sid", ":sid", use: getPlayerBySID)
-
+        route.put(":playerID", "email", use: updatePlayerEmailAddress)
+        
         // MARK: - MATCH ROUTES
         route.get("match", ":matchID", use: getMatchByID)
 
