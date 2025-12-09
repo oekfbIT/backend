@@ -220,4 +220,20 @@ extension AppController {
         try await team.save(on: req.db)
         return .ok
     }
+    
+    // GET /app/team/:teamID/trainer
+    func getTrainer(req: Request) async throws -> Trainer {
+        let teamID = try req.parameters.require("teamID", as: UUID.self)
+
+        guard let team = try await Team.find(teamID, on: req.db) else {
+            throw Abort(.notFound, reason: "Team not found.")
+        }
+
+        guard let coach = team.coach else {
+            throw Abort(.notFound, reason: "Trainer not set for this team.")
+        }
+
+        return coach
+    }
+
 }

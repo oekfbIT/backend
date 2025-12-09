@@ -45,6 +45,7 @@ final class AppController: RouteCollection {
         route.get("team", ":teamID", "fixtures", use: getFixturesByTeamID)
         // Team update trainer
         route.put("trainer", ":teamID", use: updateTeamTrainer)
+        route.get("trainer", ":teamID", use: getTrainer)
 
         // MARK: - LEAGUE ROUTES
         route.get("league", ":leagueID", use: getLeagueByID)
