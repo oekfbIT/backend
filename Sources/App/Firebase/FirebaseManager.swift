@@ -1,5 +1,7 @@
+import Foundation
 import Vapor
-// MARK: - FirebaseManager + models
+
+// MARK: - Firebase Auth + Storage
 
 final class FirebaseManager {
     private let client: Client
@@ -24,6 +26,7 @@ final class FirebaseManager {
         self.projectId = projectId
     }
 
+    // Sign in with email / password to get idToken
     func authenticate() -> EventLoopFuture<Void> {
         let url =
             "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=\(apiKey)"
@@ -51,13 +54,20 @@ final class FirebaseManager {
         }
     }
 
+    // Uploads a File to Firebase Storage and returns a public download URL
     func uploadFile(file: File, to path: String) -> EventLoopFuture<String> {
         guard let idToken = idToken else {
             return client.eventLoop.future(error: Abort(.unauthorized))
         }
 
+        // Encode object name for use in Firebase REST API
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "/") // we want "/" as "%2F"
+        let encodedName =
+            path.addingPercentEncoding(withAllowedCharacters: allowed) ?? path
+
         let url =
-            "https://firebasestorage.googleapis.com/v0/b/\(projectId).appspot.com/o?name=\(path)"
+            "https://firebasestorage.googleapis.com/v0/b/\(projectId).appspot.com/o?name=\(encodedName)"
 
         return client.post(
             URI(string: url),
@@ -82,10 +92,16 @@ final class FirebaseManager {
                 )
             }
 
-            return "https://firebasestorage.googleapis.com/v0/b/\(self.projectId).appspot.com/o/\(path)?alt=media&token=\(token)"
+            // Final download URL (this is what you store in Player.image / identification)
+            let downloadURL =
+                "https://firebasestorage.googleapis.com/v0/b/\(self.projectId).appspot.com/o/\(encodedName)?alt=media&token=\(token)"
+
+            return downloadURL
         }
     }
 }
+
+// MARK: - DTOs
 
 struct AuthResponse: Content {
     let idToken: String
@@ -103,13 +119,13 @@ struct UploadResponse: Content {
     let size: String
     let md5Hash: String
 
-    // These are not always present → optional
+    // Not guaranteed to be present on every response → optional
     let contentEncoding: String?
     let contentDisposition: String?
     let contentLanguage: String?
     let cacheControl: String?
 
-    // May also be absent in some error cases → optional + checked
+    // Defensive: can be missing in some edge cases
     let downloadTokens: String?
 }
 
@@ -132,8 +148,3 @@ extension Application {
         }
     }
 }
-
-
-
-
-
