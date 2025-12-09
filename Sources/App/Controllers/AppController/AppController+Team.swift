@@ -13,7 +13,7 @@ import Fluent
 struct UpdateTrainerRequest: Content {
     let name: String?
     let email: String?
-    let image: String?
+    let image: File?   // ⬅️ MUST be File for upload
 }
 
 // MARK: - TEAM ENDPOINTS
