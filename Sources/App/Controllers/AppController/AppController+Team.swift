@@ -206,13 +206,36 @@ extension AppController {
         // If there is no existing coach and no name was provided,
         // we don't have a non-empty name for Trainer.name (non-optional).
         if existingCoach == nil && payload.name == nil {
-            throw Abort(.badRequest, reason: "Trainer name is required when setting a trainer for the first time.")
+            throw Abort(
+                .badRequest,
+                reason: "Trainer name is required when setting a trainer for the first time."
+            )
+        }
+
+        // --- Firebase upload for trainer image (if a file was sent) ---
+
+        var finalImageURL: String? = existingCoach?.image
+
+        if let imageFile = payload.image, imageFile.data.readableBytes > 0 {
+            let firebaseManager = req.application.firebaseManager
+
+            // e.g. trainers/<teamUUID>/trainer_image
+            let basePath = "trainers/\(teamID.uuidString)"
+            let trainerImagePath = "\(basePath)/trainer_image"
+
+            // authenticate & upload, get public download URL back
+            try await firebaseManager.authenticate().get()
+            let uploadedURL = try await firebaseManager
+                .uploadFile(file: imageFile, to: trainerImagePath)
+                .get()
+
+            finalImageURL = uploadedURL
         }
 
         let updatedCoach = Trainer(
             name: payload.name ?? existingCoach?.name ?? "Unbekannt",
             email: payload.email ?? existingCoach?.email,
-            image: payload.image ?? existingCoach?.image
+            image: finalImageURL
         )
 
         team.coach = updatedCoach
@@ -220,7 +243,7 @@ extension AppController {
         try await team.save(on: req.db)
         return .ok
     }
-    
+
     // GET /app/team/:teamID/trainer
     func getTrainer(req: Request) async throws -> Trainer {
         let teamID = try req.parameters.require("teamID", as: UUID.self)
