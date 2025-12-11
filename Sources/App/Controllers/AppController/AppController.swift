@@ -80,6 +80,11 @@ final class AppController: RouteCollection {
         // MARK: - PUSH / DEVICE ROUTES
         route.post("device", "register", use: registerDevice)
         route.post("notifications", "send", use: sendNotification)
+        
+        // MARK: 💸 Team invoices (Rechnungen)
+        route.get( "rechnungen", "team", ":teamID", use: getRechnungenByTeamID)
+        route.get( "rechnungen", ":rechnungID", use: getRechnungDetailByID)
+
 
     }
 
