@@ -38,7 +38,7 @@ final class AppController: RouteCollection {
 
         // MARK: - SEARCH ROUTES
         try setupSearchRoutes(on: route)
-
+        try setupChatRoutes(on: route)
         // MARK: - TEAM ROUTES
         route.get("team", "sid", ":sid", use: getTeamBySID)
         route.get("team", ":teamID", use: getTeamByID)
