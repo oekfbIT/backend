@@ -91,16 +91,16 @@ final class NotificationManager {
                 try req.content.encode(payload)
             }
 
-//            if res.status != .ok {
-//                let raw = res.body?.string ?? ""
-//                logger.warning("[push] Expo push non-200: \(res.status.code) \(raw)")
-//                continue
-//            }
-//
-//            // Optional: decode tickets for debugging
-//            if let bodyData = res.body?.string, !bodyData.isEmpty {
-//                logger.debug("[push] Expo push response: \(bodyData)")
-//            }
+            if res.status != .ok {
+                let raw = res.body
+                logger.warning("[push] Expo push non-200: \(res.status.code) \(raw)")
+                continue
+            }
+
+            // Optional: decode tickets for debugging
+            if let bodyData = res.body {
+                logger.debug("[push] Expo push response: \(bodyData)")
+            }
         }
     }
 }

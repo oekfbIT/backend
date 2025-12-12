@@ -77,10 +77,12 @@ final class AppController: RouteCollection {
         route.get("stadium", ":id", use: getStadiumByID)
         route.get("stadium", "bundesland", ":bundesland", use: getStadiumsByBundesland)
         
-        // MARK: - PUSH / DEVICE ROUTES
-        route.post("device", "register", use: registerDevice)
-        route.post("notifications", "send", use: sendNotification)
-        
+        app.post("device", "register", use: registerDevice)
+
+        app.post("notifications", "send", use: sendNotification)
+        app.post("notifications", "broadcast", use: broadcastNotification)
+        app.post("notifications", "sendToTokens", use: sendToTokens)
+
         // MARK: 💸 Team invoices (Rechnungen)
         route.get( "rechnungen", "team", ":teamID", use: getRechnungenByTeamID)
         route.get( "rechnungen", ":rechnungID", use: getRechnungDetailByID)
