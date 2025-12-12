@@ -12,7 +12,8 @@ import Fluent
 // Reuses existing TeamInfo + ConversationWrapper from ConversationController:
 //  struct TeamInfo: Codable { ... }
 //  struct ConversationWrapper: Codable, Content { ... }
-/// Incoming attachment payload for future use with Firebase uploads
+
+/// Incoming attachment payload for multipart/form-data
 /// (similar pattern to RegisterTeamPlayerRequest).
 struct NewAttachment: Content {
     var name: String?
@@ -24,25 +25,29 @@ extension AppController {
 
     // MARK: - Team-scoped queries (APP)
     func setupChatRoutes(on route: RoutesBuilder) throws {
-        // MARK: - CONVERSATION ROUTES (APP)
-
         // base: /app/conversation
         let conversation = route.grouped("conversation")
 
+        // CRUD + index
         conversation.post(use: createConversationApp)
         conversation.get(use: indexConversationsApp)
         conversation.get(":id", use: getConversationByIDApp)
         conversation.delete(":id", use: deleteConversationApp)
         conversation.patch(":id", use: updateConversationApp)
 
-        // team-specific (what you asked for)
+        // team-specific
         conversation.get("team", ":teamId", use: getConversationsForTeamApp)
 
         // all with team info (if needed)
         conversation.get("teams", use: getAllConversationsWithTeamApp)
 
         // messaging helpers
+        // text-only message (JSON body)
         conversation.post(":id", "message", use: sendMessageApp)
+
+        // message with attachment (multipart/form-data)
+        conversation.post(":id", "message", "attachment", use: sendMessageWithAttachmentApp)
+
         conversation.post("message", ":messageId", "read", use: markMessageAsReadApp)
         conversation.get("status", ":conversationID", use: toggleStatusApp)
     }
@@ -107,7 +112,7 @@ extension AppController {
     // MARK: - Messages
 
     /// POST /app/conversation/:id/message
-    /// Append a message to an existing conversation.
+    /// Append a text-only message (JSON body) to an existing conversation.
     func sendMessageApp(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         guard let conversationID = req.parameters.get("id", as: UUID.self) else {
             throw Abort(.badRequest)
@@ -125,6 +130,67 @@ extension AppController {
                 updatedConversation.messages.append(message)
                 return updatedConversation.save(on: req.db).transform(to: .ok)
             }
+    }
+
+    /// POST /app/conversation/:id/message/attachment
+    /// Multipart: json fields for Message + file attachment.
+    /// Expected form-data:
+    /// - text, senderTeam/sender_team, senderName/sender_name (handled by Message decoding)
+    /// - name, type, file (handled by NewAttachment)
+    func sendMessageWithAttachmentApp(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        guard let conversationID = req.parameters.get("id", as: UUID.self) else {
+            throw Abort(.badRequest)
+        }
+
+        // Decode textual message fields into your existing Message model.
+        var message = try req.content.decode(Message.self)
+
+        // Decode the attachment (name/type/file) from multipart.
+        let attachmentPayload = try req.content.decode(NewAttachment.self)
+
+        // Basic file sanity check.
+        guard attachmentPayload.file.data.readableBytes > 0 else {
+            throw Abort(.badRequest, reason: "Attachment file is empty.")
+        }
+
+        // Standard message defaults
+        message.id = UUID()
+        message.read = false
+        message.created = Date.viennaNow
+
+        let firebaseManager = req.application.firebaseManager
+
+        // Path in Firebase Storage: conversation_attachments/<conversationID>/<random>
+        let attachmentID = UUID().uuidString.lowercased()
+        let basePath = "conversation_attachments/\(conversationID.uuidString)"
+        let filePath = "\(basePath)/\(attachmentID)"
+
+        return firebaseManager.authenticate().flatMap {
+            firebaseManager.uploadFile(file: attachmentPayload.file, to: filePath)
+        }
+        .flatMap { downloadURL in
+            return Conversation.find(conversationID, on: req.db)
+                .unwrap(or: Abort(.notFound))
+                .flatMap { conversation in
+                    var updatedConversation = conversation
+
+                    // Use your existing Attachment model type here
+                    let attachment = Attachment(
+                        name: attachmentPayload.name,
+                        url: downloadURL,
+                        type: attachmentPayload.type
+                    )
+
+                    if message.attachments == nil {
+                        message.attachments = [attachment]
+                    } else {
+                        message.attachments?.append(attachment)
+                    }
+
+                    updatedConversation.messages.append(message)
+                    return updatedConversation.save(on: req.db).transform(to: .ok)
+                }
+        }
     }
 
     /// POST /app/conversation/message/:messageId/read
