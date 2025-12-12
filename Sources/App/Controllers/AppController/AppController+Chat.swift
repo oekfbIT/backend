@@ -13,12 +13,25 @@ import Fluent
 //  struct TeamInfo: Codable { ... }
 //  struct ConversationWrapper: Codable, Content { ... }
 
-/// Incoming attachment payload for multipart/form-data
-/// (similar pattern to RegisterTeamPlayerRequest).
-struct NewAttachment: Content {
+/// Universal payload that supports:
+/// - JSON (text-only): file is nil
+/// - multipart/form-data (text + optional file)
+///
+/// Expected keys from frontend FormData:
+/// - senderTeam: "true"/"false"
+/// - senderName: optional
+/// - text: optional (can be empty if sending only file)
+/// - file: optional (RNFile)
+/// - name: optional (original filename)
+/// - type: optional (mime)
+struct SendMessagePayload: Content {
+    var senderTeam: Bool
+    var senderName: String?
+    var text: String?
+
+    var file: File?
     var name: String?
     var type: String?
-    var file: File
 }
 
 extension AppController {
@@ -41,17 +54,13 @@ extension AppController {
         // all with team info (if needed)
         conversation.get("teams", use: getAllConversationsWithTeamApp)
 
-        // messaging helpers
-        // text-only message (JSON body)
-        conversation.post(":id", "message", use: sendMessageApp)
-
-        // message with attachment (multipart/form-data)
-        conversation.post(":id", "message", "attachment", use: sendMessageWithAttachmentApp)
+        // ✅ ONE universal message route (JSON OR multipart)
+        conversation.post(":id", "message", use: sendMessageUniversalApp)
 
         conversation.post("message", ":messageId", "read", use: markMessageAsReadApp)
         conversation.get("status", ":conversationID", use: toggleStatusApp)
     }
-    
+
     /// GET /app/conversation/team/:teamId
     /// All conversations for a given team.
     func getConversationsForTeamApp(req: Request) throws -> EventLoopFuture<[ConversationWrapper]> {
@@ -112,85 +121,72 @@ extension AppController {
     // MARK: - Messages
 
     /// POST /app/conversation/:id/message
-    /// Append a text-only message (JSON body) to an existing conversation.
-    func sendMessageApp(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+    /// Universal send: accepts JSON OR multipart/form-data.
+    /// Always stores attachments as [] when no file.
+    func sendMessageUniversalApp(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         guard let conversationID = req.parameters.get("id", as: UUID.self) else {
             throw Abort(.badRequest)
         }
 
-        var message = try req.content.decode(Message.self)
-        message.id = UUID()
-        message.read = false
-        message.created = Date.viennaNow
+        let payload = try req.content.decode(SendMessagePayload.self)
 
-        return Conversation.find(conversationID, on: req.db)
-            .unwrap(or: Abort(.notFound))
-            .flatMap { conversation in
-                var updatedConversation = conversation
-                updatedConversation.messages.append(message)
-                return updatedConversation.save(on: req.db).transform(to: .ok)
-            }
-    }
+        let trimmedText = (payload.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasFile = payload.file?.data.readableBytes ?? 0 > 0
 
-    /// POST /app/conversation/:id/message/attachment
-    /// Multipart: json fields for Message + file attachment.
-    /// Expected form-data:
-    /// - text, senderTeam/sender_team, senderName/sender_name (handled by Message decoding)
-    /// - name, type, file (handled by NewAttachment)
-    func sendMessageWithAttachmentApp(req: Request) throws -> EventLoopFuture<HTTPStatus> {
-        guard let conversationID = req.parameters.get("id", as: UUID.self) else {
-            throw Abort(.badRequest)
+        // must send either text or a file
+        guard !trimmedText.isEmpty || hasFile else {
+            throw Abort(.badRequest, reason: "Message must include text or an attachment.")
         }
 
-        // Decode textual message fields into your existing Message model.
-        var message = try req.content.decode(Message.self)
+        // ✅ always non-nil attachments array
+        var message = Message(
+            id: UUID(),
+            senderTeam: payload.senderTeam,
+            senderName: payload.senderName,
+            text: trimmedText,           // can be empty if file-only
+            read: false,
+            attachments: [],             // ✅ always []
+            created: Date.viennaNow
+        )
 
-        // Decode the attachment (name/type/file) from multipart.
-        let attachmentPayload = try req.content.decode(NewAttachment.self)
-
-        // Basic file sanity check.
-        guard attachmentPayload.file.data.readableBytes > 0 else {
-            throw Abort(.badRequest, reason: "Attachment file is empty.")
+        // If no file: append and save
+        if !hasFile {
+            return Conversation.find(conversationID, on: req.db)
+                .unwrap(or: Abort(.notFound))
+                .flatMap { conversation in
+                    conversation.messages.append(message)
+                    return conversation.save(on: req.db).transform(to: .ok)
+                }
         }
 
-        // Standard message defaults
-        message.id = UUID()
-        message.read = false
-        message.created = Date.viennaNow
-
+        // File exists: upload then append attachment
+        let file = payload.file!
         let firebaseManager = req.application.firebaseManager
 
-        // Path in Firebase Storage: conversation_attachments/<conversationID>/<random>
         let attachmentID = UUID().uuidString.lowercased()
         let basePath = "conversation_attachments/\(conversationID.uuidString)"
         let filePath = "\(basePath)/\(attachmentID)"
 
-        return firebaseManager.authenticate().flatMap {
-            firebaseManager.uploadFile(file: attachmentPayload.file, to: filePath)
-        }
-        .flatMap { downloadURL in
-            return Conversation.find(conversationID, on: req.db)
-                .unwrap(or: Abort(.notFound))
-                .flatMap { conversation in
-                    var updatedConversation = conversation
+        return firebaseManager.authenticate()
+            .flatMap {
+                firebaseManager.uploadFile(file: file, to: filePath)
+            }
+            .flatMap { downloadURL in
+                let attachment = Attachment(
+                    name: payload.name ?? file.filename,
+                    url: downloadURL,
+                    type: payload.type ?? file.contentType?.description
+                )
 
-                    // Use your existing `Attachment` model type here
-                    let attachment = Attachment(
-                        name: attachmentPayload.name,
-                        url: downloadURL,
-                        type: attachmentPayload.type
-                    )
+                message.attachments = [attachment]
 
-                    if message.attachments == nil {
-                        message.attachments = [attachment]
-                    } else {
-                        message.attachments?.append(attachment)
+                return Conversation.find(conversationID, on: req.db)
+                    .unwrap(or: Abort(.notFound))
+                    .flatMap { conversation in
+                        conversation.messages.append(message)
+                        return conversation.save(on: req.db).transform(to: .ok)
                     }
-
-                    updatedConversation.messages.append(message)
-                    return updatedConversation.save(on: req.db).transform(to: .ok)
-                }
-        }
+            }
     }
 
     /// POST /app/conversation/message/:messageId/read
@@ -273,7 +269,6 @@ extension AppController {
     }
 
     /// GET /app/conversation/:id
-    /// Single conversation including full message history.
     func getConversationByIDApp(req: Request) throws -> EventLoopFuture<ConversationWrapper> {
         guard let id = req.parameters.get("id", as: UUID.self) else {
             throw Abort(.badRequest)
@@ -303,7 +298,6 @@ extension AppController {
     }
 
     /// GET /app/conversation/status/:conversationID
-    /// Toggle `open` flag and return updated wrapper.
     func toggleStatusApp(req: Request) throws -> EventLoopFuture<ConversationWrapper> {
         guard let id = req.parameters.get("conversationID", as: UUID.self) else {
             throw Abort(.badRequest)
