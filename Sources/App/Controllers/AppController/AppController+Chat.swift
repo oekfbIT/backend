@@ -174,7 +174,7 @@ extension AppController {
                 .flatMap { conversation in
                     var updatedConversation = conversation
 
-                    // Use your existing Attachment model type here
+                    // Use your existing `Attachment` model type here
                     let attachment = Attachment(
                         name: attachmentPayload.name,
                         url: downloadURL,
