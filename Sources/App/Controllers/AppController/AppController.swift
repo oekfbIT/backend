@@ -79,9 +79,9 @@ final class AppController: RouteCollection {
         
         app.post("device", "register", use: registerDevice)
 
-        app.post("notifications", "send", use: sendNotification)
-        app.post("notifications", "broadcast", use: broadcastNotification)
-        app.post("notifications", "sendToTokens", use: sendToTokens)
+        route.post("notifications", "send", use: sendNotification)
+        route.post("notifications", "broadcast", use: broadcastNotification)
+        route.post("notifications", "sendToTokens", use: sendToTokens)
 
         // MARK: 💸 Team invoices (Rechnungen)
         route.get( "rechnungen", "team", ":teamID", use: getRechnungenByTeamID)
