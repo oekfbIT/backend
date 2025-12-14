@@ -23,12 +23,12 @@ extension AppController {
 
   // MARK: - DTOs
 
-  /// Accept multiple token key names from app builds:
+  /// Accept multiple token key names from older app builds:
   /// - expoPushToken
   /// - pushToken
-  /// - fcmToken (legacy column name in DB)
+  /// - fcmToken (legacy naming in your DB/model)
   ///
-  /// NOTE: We still STORE the token in DeviceToken.fcmToken for now.
+  /// NOTE: We still STORE the Expo token in DeviceToken.fcmToken for now.
   struct RegisterDeviceRequest: Content {
     let guestId: String
     let playerId: UUID?
@@ -78,18 +78,29 @@ extension AppController {
       try c.encode(guestId, forKey: .guestId)
       try c.encodeIfPresent(playerId, forKey: .playerId)
       try c.encodeIfPresent(teamId, forKey: .teamId)
+
+      // Canonical key
       try c.encode(pushToken, forKey: .pushToken)
+
       try c.encode(platform, forKey: .platform)
       try c.encodeIfPresent(appVersion, forKey: .appVersion)
       try c.encodeIfPresent(locale, forKey: .locale)
     }
   }
 
+  /// Logout / switch-user helper: clear teamId/playerId for a token, keep token active.
+  struct UnbindDeviceRequest: Content {
+    let pushToken: String
+    let guestId: String?
+    let clearTeamId: Bool?
+    let clearPlayerId: Bool?
+  }
+
   struct SendNotificationRequest: Content {
     enum TargetType: String, Content {
-      case guest   // targetId = guestId (String)
-      case player  // targetId = player UUID string
-      case team    // targetId = team UUID string
+      case guest
+      case player
+      case team
     }
 
     let target: TargetType
@@ -124,32 +135,24 @@ extension AppController {
     let platform: DevicePlatform?
   }
 
-  /// Optional convenience: send a conversation push by conversationId (no need to know tokens)
-  struct ConversationPushRequest: Content {
-    let title: String
-    let body: String
-    let conversationId: String
-    let teamId: String?
-    let limit: Int?
-  }
-
-  // MARK: - Route registration (call from AppController.setupRoutes)
+  // MARK: - Route registration
+  // Call this from AppController.setupRoutes(on:)
+  // e.g. `setupPushRoutes(on: route)`
 
   func setupPushRoutes(on route: RoutesBuilder) {
-    // IMPORTANT: these are /app/... because route is grouped by AppController.path ("app")
+    // base is already /app because caller passes the grouped route
     route.post("device", "register", use: registerDevice)
+    route.post("device", "unbind", use: unbindDevice)
 
     route.post("notifications", "send", use: sendNotification)
     route.post("notifications", "sendToTokens", use: sendToTokens)
     route.post("notifications", "broadcast", use: broadcastNotification)
-
-    // optional helper
-    route.post("notifications", "conversation", use: sendConversationPush)
   }
 
   // MARK: - Handlers
 
   /// POST /app/device/register
+  /// Upserts by token (stored in DeviceToken.fcmToken).
   func registerDevice(req: Request) async throws -> HTTPStatus {
     let dto = try req.content.decode(RegisterDeviceRequest.self)
 
@@ -188,7 +191,36 @@ extension AppController {
     return .ok
   }
 
+  /// POST /app/device/unbind
+  /// Clears teamId/playerId for the given token (logout / switch user).
+  func unbindDevice(req: Request) async throws -> HTTPStatus {
+    let dto = try req.content.decode(UnbindDeviceRequest.self)
+
+    let token = dto.pushToken.trimmingCharacters(in: .whitespacesAndNewlines)
+    if token.isEmpty { throw Abort(.badRequest, reason: "pushToken is empty.") }
+
+    guard let device = try await DeviceToken.query(on: req.db)
+      .filter(\.$fcmToken == token)
+      .first()
+    else {
+      // idempotent logout: ok even if row doesn't exist
+      return .ok
+    }
+
+    // Optional safety: ensure the same guest is unbinding this device
+    if let gid = dto.guestId, !gid.isEmpty, device.guestId != gid {
+      throw Abort(.forbidden, reason: "guestId does not match this device token.")
+    }
+
+    if dto.clearTeamId == true { device.teamId = nil }
+    if dto.clearPlayerId == true { device.playerId = nil }
+
+    try await device.save(on: req.db)
+    return .ok
+  }
+
   /// POST /app/notifications/send
+  /// Send to guest/player/team devices (based on stored guestId/playerId/teamId).
   func sendNotification(req: Request) async throws -> HTTPStatus {
     let body = try req.content.decode(SendNotificationRequest.self)
 
@@ -235,6 +267,7 @@ extension AppController {
   }
 
   /// POST /app/notifications/sendToTokens
+  /// Debug helper: send directly to explicit token list.
   func sendToTokens(req: Request) async throws -> HTTPStatus {
     let body = try req.content.decode(SendToTokensRequest.self)
 
@@ -250,6 +283,7 @@ extension AppController {
   }
 
   /// POST /app/notifications/broadcast
+  /// Send to ANY active tokens in DB (optionally limit + platform filter).
   func broadcastNotification(req: Request) async throws -> HTTPStatus {
     let body = try req.content.decode(BroadcastNotificationRequest.self)
 
@@ -263,6 +297,7 @@ extension AppController {
     let devices = try await query.all()
     var tokens = devices.map(\.fcmToken)
 
+    // trim + de-dupe + remove empties
     tokens = Array(Set(tokens.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }))
       .filter { !$0.isEmpty }
 
@@ -280,54 +315,12 @@ extension AppController {
       return body.path
     }()
 
-    // Decide type
     let type: PushType = (body.newsId != nil) ? .newsOpen : .broadcast
 
     var data = body.data ?? [:]
     data["type"] = type.rawValue
     if let resolvedPath, !resolvedPath.isEmpty { data["path"] = resolvedPath }
     if let newsId = body.newsId, !newsId.isEmpty { data["newsId"] = newsId }
-
-    try await ExpoPushService.send(
-      to: tokens,
-      title: body.title,
-      body: body.body,
-      data: data,
-      req: req
-    )
-
-    return .ok
-  }
-
-  /// POST /app/notifications/conversation
-  /// Convenience: send "conversation.message" data to ANY active token for now (limit optional).
-  /// Later you’ll swap tokens lookup to “devices for guest/team/player participants”.
-  func sendConversationPush(req: Request) async throws -> HTTPStatus {
-    let body = try req.content.decode(ConversationPushRequest.self)
-
-    let devices = try await DeviceToken.query(on: req.db)
-      .filter(\.$isActive == true)
-      .all()
-
-    var tokens = Array(Set(devices.map(\.fcmToken)))
-      .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-      .filter { !$0.isEmpty }
-
-    if let limit = body.limit, limit > 0, tokens.count > limit {
-      tokens = Array(tokens.prefix(limit))
-    }
-
-    if tokens.isEmpty {
-      throw Abort(.notFound, reason: "No active device tokens found.")
-    }
-
-    var data: [String: String] = [
-      "type": PushType.conversationMessage.rawValue,
-      "conversationId": body.conversationId
-    ]
-    if let teamId = body.teamId, !teamId.isEmpty {
-      data["teamId"] = teamId
-    }
 
     try await ExpoPushService.send(
       to: tokens,
@@ -415,3 +408,4 @@ private extension Array {
     return res
   }
 }
+

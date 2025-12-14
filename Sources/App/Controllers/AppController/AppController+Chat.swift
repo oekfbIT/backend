@@ -123,6 +123,7 @@ extension AppController {
     /// POST /app/conversation/:id/message
     /// Universal send: accepts JSON OR multipart/form-data.
     /// Always stores attachments as [] when no file.
+    /// ✅ If senderTeam == false (admin -> team): sends push to all active devices for that team.
     func sendMessageUniversalApp(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         guard let conversationID = req.parameters.get("id", as: UUID.self) else {
             throw Abort(.badRequest)
@@ -149,40 +150,39 @@ extension AppController {
             created: Date.viennaNow
         )
 
-        // Helper: after we saved a conversation, trigger push (admin -> team only)
-        func pushIfNeeded(conversation: Conversation, bodyText: String) -> EventLoopFuture<Void> {
+        // ✅ Push helper: admin -> team devices only
+        func pushIfNeeded(teamId: UUID?, bodyText: String) -> EventLoopFuture<Void> {
             guard payload.senderTeam == false else {
                 return req.eventLoop.makeSucceededFuture(())
             }
-
-            guard let teamId = conversation.$team.id else {
+            guard let teamId else {
                 return req.eventLoop.makeSucceededFuture(())
             }
 
-            // Do async/await work inside EventLoopFuture
             return req.eventLoop.makeFutureWithTask {
                 let tokens = try await DeviceToken.query(on: req.db)
                     .filter(\.$teamId == teamId)
                     .filter(\.$isActive == true)
                     .all()
-                    .map(\.fcmToken) // NOTE: this is your Expo push token currently
+                    .map(\.fcmToken)
 
-                let finalBody: String
-                if bodyText.isEmpty {
-                    finalBody = "📎 Anhang erhalten"
-                } else {
-                    finalBody = bodyText
-                }
+                if tokens.isEmpty { return }
 
-                try await req.application.notificationManager.sendExpoPush(
+                let finalBody = bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? "Sie haben eine neue Nachricht."
+                    : bodyText
+
+                // Uses ExpoPushService from AppController+Push.swift
+                try await ExpoPushService.send(
                     to: tokens,
                     title: "Neue Nachricht",
                     body: finalBody,
                     data: [
-                        "type": "conversation.message",
+                        "type": PushType.conversationMessage.rawValue,
                         "conversationId": conversationID.uuidString,
-                        "teamId": teamId.uuidString
-                    ]
+                        "teamId": teamId.uuidString,
+                    ],
+                    req: req
                 )
             }
         }
@@ -190,15 +190,16 @@ extension AppController {
         // 1) If no file: save and push
         if !hasFile {
             return Conversation.query(on: req.db)
-                .with(\.$team)
                 .filter(\.$id == conversationID)
                 .first()
                 .unwrap(or: Abort(.notFound))
                 .flatMap { conversation in
+                    let teamId = conversation.$team.id
+
                     conversation.messages.append(message)
                     return conversation.save(on: req.db)
                         .flatMap {
-                            pushIfNeeded(conversation: conversation, bodyText: trimmedText)
+                            pushIfNeeded(teamId: teamId, bodyText: trimmedText)
                                 .transform(to: .ok)
                         }
                 }
@@ -226,17 +227,20 @@ extension AppController {
                 message.attachments = [attachment]
 
                 return Conversation.query(on: req.db)
-                    .with(\.$team)
                     .filter(\.$id == conversationID)
                     .first()
                     .unwrap(or: Abort(.notFound))
                     .flatMap { conversation in
+                        let teamId = conversation.$team.id
+
                         conversation.messages.append(message)
                         return conversation.save(on: req.db)
                             .flatMap {
-                                // show a nicer body for attachment pushes
-                                let pushBody = trimmedText.isEmpty ? "📎 Anhang erhalten" : "📎 \(trimmedText)"
-                                return pushIfNeeded(conversation: conversation, bodyText: pushBody)
+                                let pushBody = trimmedText.isEmpty
+                                    ? "📎 Anhang erhalten"
+                                    : "📎 \(trimmedText)"
+
+                                return pushIfNeeded(teamId: teamId, bodyText: pushBody)
                                     .transform(to: .ok)
                             }
                     }
