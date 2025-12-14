@@ -193,6 +193,7 @@ public func configure(_ app: Application) throws {
         projectId: FIREBASE_PROJECTID
     )
     
+    app.notificationManager = NotificationManager(client: app.client, logger: app.logger)
     app.firebaseManager = firebaseManager
 
     
@@ -207,8 +208,18 @@ public func configure(_ app: Application) throws {
         .weekly()
         .on(.thursday)
         .at(12, 0)
-    
+
+    app.queues.schedule(CancelLockJob())
+        .weekly()
+        .on(.saturday)
+        .at(18, 0)
+
     app.queues.schedule(DressUnlockJob())
+        .weekly()
+        .on(.monday)
+        .at(6, 0)
+    
+    app.queues.schedule(CancelUnlockJob())
         .weekly()
         .on(.monday)
         .at(6, 0)

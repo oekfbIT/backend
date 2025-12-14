@@ -7,8 +7,19 @@
 
 import Vapor
 import Fluent
+import Foundation
 
 extension AppController {
+
+  // MARK: - Push Types (string contract with frontend)
+
+  enum PushType: String, Content {
+    case broadcast = "broadcast"
+    case newsOpen = "news.open"
+    case conversationMessage = "conversation.message"
+    case followTeamUpdated = "follow.team.updated"
+    case followPlayerUpdated = "follow.player.updated"
+  }
 
   // MARK: - DTOs
 
@@ -61,17 +72,13 @@ extension AppController {
       locale = try c.decodeIfPresent(String.self, forKey: .locale)
     }
 
-    // ✅ Fix: because we implemented init(from:), Swift doesn't auto-synthesize Encodable.
-    // Vapor's Content = Codable, so we must implement encode(to:) too.
+    // Because we implemented init(from:), we must implement Encodable too.
     func encode(to encoder: Encoder) throws {
       var c = encoder.container(keyedBy: CodingKeys.self)
       try c.encode(guestId, forKey: .guestId)
       try c.encodeIfPresent(playerId, forKey: .playerId)
       try c.encodeIfPresent(teamId, forKey: .teamId)
-
-      // Write the canonical key (pushToken). (We could also write expoPushToken if you want.)
       try c.encode(pushToken, forKey: .pushToken)
-
       try c.encode(platform, forKey: .platform)
       try c.encodeIfPresent(appVersion, forKey: .appVersion)
       try c.encodeIfPresent(locale, forKey: .locale)
@@ -99,23 +106,50 @@ extension AppController {
     let data: [String: String]?
   }
 
+  /// Broadcast can send:
+  /// - home=true     -> "/(tabs)"
+  /// - newsId="123"  -> "/news/123" + type "news.open"
+  /// - path="/rules" -> type "broadcast"
   struct BroadcastNotificationRequest: Content {
     let title: String
     let body: String
+
+    let path: String?
+    let newsId: String?
+    let home: Bool?
+
     let data: [String: String]?
 
-    /// Safety valve during testing
     let limit: Int?
-
-    /// Optional: only broadcast to one platform while debugging
     let platform: DevicePlatform?
   }
 
-  // MARK: - Routes
+  /// Optional convenience: send a conversation push by conversationId (no need to know tokens)
+  struct ConversationPushRequest: Content {
+    let title: String
+    let body: String
+    let conversationId: String
+    let teamId: String?
+    let limit: Int?
+  }
+
+  // MARK: - Route registration (call from AppController.setupRoutes)
+
+  func setupPushRoutes(on route: RoutesBuilder) {
+    // IMPORTANT: these are /app/... because route is grouped by AppController.path ("app")
+    route.post("device", "register", use: registerDevice)
+
+    route.post("notifications", "send", use: sendNotification)
+    route.post("notifications", "sendToTokens", use: sendToTokens)
+    route.post("notifications", "broadcast", use: broadcastNotification)
+
+    // optional helper
+    route.post("notifications", "conversation", use: sendConversationPush)
+  }
+
+  // MARK: - Handlers
 
   /// POST /app/device/register
-  ///
-  /// Upserts a DeviceToken by token (stored in fcmToken column).
   func registerDevice(req: Request) async throws -> HTTPStatus {
     let dto = try req.content.decode(RegisterDeviceRequest.self)
 
@@ -155,8 +189,6 @@ extension AppController {
   }
 
   /// POST /app/notifications/send
-  ///
-  /// Send push to devices selected by guest/player/team.
   func sendNotification(req: Request) async throws -> HTTPStatus {
     let body = try req.content.decode(SendNotificationRequest.self)
 
@@ -203,8 +235,6 @@ extension AppController {
   }
 
   /// POST /app/notifications/sendToTokens
-  ///
-  /// Directly send to a list of Expo push tokens (for debugging).
   func sendToTokens(req: Request) async throws -> HTTPStatus {
     let body = try req.content.decode(SendToTokensRequest.self)
 
@@ -220,8 +250,6 @@ extension AppController {
   }
 
   /// POST /app/notifications/broadcast
-  ///
-  /// TEST endpoint: send to ANY active tokens in DB (optionally limit + platform filter).
   func broadcastNotification(req: Request) async throws -> HTTPStatus {
     let body = try req.content.decode(BroadcastNotificationRequest.self)
 
@@ -235,7 +263,6 @@ extension AppController {
     let devices = try await query.all()
     var tokens = devices.map(\.fcmToken)
 
-    // safety: trim + de-dupe + remove empties
     tokens = Array(Set(tokens.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }))
       .filter { !$0.isEmpty }
 
@@ -247,14 +274,144 @@ extension AppController {
       throw Abort(.notFound, reason: "No active device tokens found to broadcast to.")
     }
 
+    let resolvedPath: String? = {
+      if body.home == true { return "/(tabs)" }
+      if let newsId = body.newsId, !newsId.isEmpty { return "/news/\(newsId)" }
+      return body.path
+    }()
+
+    // Decide type
+    let type: PushType = (body.newsId != nil) ? .newsOpen : .broadcast
+
+    var data = body.data ?? [:]
+    data["type"] = type.rawValue
+    if let resolvedPath, !resolvedPath.isEmpty { data["path"] = resolvedPath }
+    if let newsId = body.newsId, !newsId.isEmpty { data["newsId"] = newsId }
+
     try await ExpoPushService.send(
       to: tokens,
       title: body.title,
       body: body.body,
-      data: body.data ?? [:],
+      data: data,
       req: req
     )
 
     return .ok
+  }
+
+  /// POST /app/notifications/conversation
+  /// Convenience: send "conversation.message" data to ANY active token for now (limit optional).
+  /// Later you’ll swap tokens lookup to “devices for guest/team/player participants”.
+  func sendConversationPush(req: Request) async throws -> HTTPStatus {
+    let body = try req.content.decode(ConversationPushRequest.self)
+
+    let devices = try await DeviceToken.query(on: req.db)
+      .filter(\.$isActive == true)
+      .all()
+
+    var tokens = Array(Set(devices.map(\.fcmToken)))
+      .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+      .filter { !$0.isEmpty }
+
+    if let limit = body.limit, limit > 0, tokens.count > limit {
+      tokens = Array(tokens.prefix(limit))
+    }
+
+    if tokens.isEmpty {
+      throw Abort(.notFound, reason: "No active device tokens found.")
+    }
+
+    var data: [String: String] = [
+      "type": PushType.conversationMessage.rawValue,
+      "conversationId": body.conversationId
+    ]
+    if let teamId = body.teamId, !teamId.isEmpty {
+      data["teamId"] = teamId
+    }
+
+    try await ExpoPushService.send(
+      to: tokens,
+      title: body.title,
+      body: body.body,
+      data: data,
+      req: req
+    )
+
+    return .ok
+  }
+}
+
+// MARK: - Expo Push Service
+
+enum ExpoPushService {
+  private static let chunkSize = 100
+  private static let endpoint = URI(string: "https://exp.host/--/api/v2/push/send")
+
+  struct ExpoMessage: Content {
+    let to: String
+    let title: String
+    let body: String
+    let data: [String: String]
+  }
+
+  static func send(
+    to tokens: [String],
+    title: String,
+    body: String,
+    data: [String: String],
+    req: Request
+  ) async throws {
+    let logger = req.logger
+
+    let cleaned = Array(Set(tokens.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }))
+      .filter { !$0.isEmpty }
+
+    if cleaned.isEmpty {
+      logger.warning("[push] No tokens provided.")
+      return
+    }
+
+    for chunk in cleaned.chunked(into: chunkSize) {
+      let payload = chunk.map { ExpoMessage(to: $0, title: title, body: body, data: data) }
+
+      let res = try await req.client.post(endpoint) { creq in
+        creq.headers.replaceOrAdd(name: .contentType, value: "application/json")
+        try creq.content.encode(payload, as: .json)
+      }
+
+      let raw = bodyString(res.body)
+
+      if res.status != .ok {
+        logger.warning("[push] Expo push non-200: \(res.status.code) \(raw)")
+        continue
+      }
+
+      if !raw.isEmpty {
+        logger.debug("[push] Expo push response: \(raw)")
+      }
+    }
+  }
+
+  private static func bodyString(_ body: ByteBuffer?) -> String {
+    guard var b = body else { return "" }
+    return b.readString(length: b.readableBytes) ?? ""
+  }
+}
+
+// MARK: - Helpers
+
+private extension Array {
+  func chunked(into size: Int) -> [[Element]] {
+    guard size > 0 else { return [self] }
+    var res: [[Element]] = []
+    res.reserveCapacity((count / size) + 1)
+
+    var i = 0
+    while i < count {
+      let end = Swift.min(i + size, count)
+      res.append(Array(self[i..<end]))
+      i = end
+    }
+    return res
   }
 }
