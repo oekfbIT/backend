@@ -18,6 +18,20 @@ struct UpdateTrainerRequest: Content {
 
 // MARK: - TEAM ENDPOINTS
 extension AppController {
+    
+    func setupTeamRoutes(on root: RoutesBuilder) {
+        let team = root.grouped("team")
+
+        team.get("sid", ":sid", use: getTeamBySID)
+        team.get(":teamID", use: getTeamByID)
+        team.get(":teamID", "fixtures", use: getFixturesByTeamID)
+
+        // Trainer (kept as-is but grouped neatly)
+        let trainer = root.grouped("trainer")
+        trainer.put(":teamID", use: updateTeamTrainer)
+        trainer.get(":teamID", use: getTrainer)
+    }
+
     // GET /app/team/:teamID
     func getTeamByID(req: Request) async throws -> AppModels.AppTeam {
         guard let teamID = req.parameters.get("teamID", as: UUID.self) else {
@@ -138,6 +152,7 @@ extension AppController {
                     points: home.points,
                     logo: home.logo,
                     name: home.teamName,
+                    shortName: home.shortName,
                     stats: nil
                 )
 
@@ -148,6 +163,7 @@ extension AppController {
                     points: away.points,
                     logo: away.logo,
                     name: away.teamName,
+                    shortName: away.shortName,
                     stats: nil
                 )
 

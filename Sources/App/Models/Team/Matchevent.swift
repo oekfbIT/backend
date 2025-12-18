@@ -143,7 +143,7 @@ extension MatchEvent {
                 league: leagueOverview,
                 points: 0,
                 logo: "",
-                name: "Unknown Team",
+                name: "Unknown Team", shortName: "",
                 stats: nil
             )
         }
@@ -208,6 +208,7 @@ let error_app_player = AppModels.AppPlayer(
         points: 0,
         logo: "",
         name: "",
+        shortName: "",
         stats: nil
     ),
     email: "ERROR",

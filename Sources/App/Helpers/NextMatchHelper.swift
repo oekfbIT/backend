@@ -144,6 +144,7 @@ extension Team {
             points: home.points,
             logo: home.logo,
             name: home.teamName,
+            shortName: home.shortName,
             stats: nil
         )
 
@@ -154,6 +155,7 @@ extension Team {
             points: away.points,
             logo: away.logo,
             name: away.teamName,
+            shortName: away.shortName,
             stats: nil
         )
 

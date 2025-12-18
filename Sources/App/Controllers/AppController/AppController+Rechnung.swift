@@ -17,6 +17,12 @@ import Fluent
 //
 
 extension AppController {
+    func setupInvoiceRoutes(on root: RoutesBuilder) {
+        let rechnungen = root.grouped("rechnungen")
+
+        rechnungen.get("team", ":teamID", use: getRechnungenByTeamID)
+        rechnungen.get(":rechnungID", use: getRechnungDetailByID)
+    }
 
     // GET /app/rechnungen/team/:teamID
     /// Returns all invoices for the team, newest first.

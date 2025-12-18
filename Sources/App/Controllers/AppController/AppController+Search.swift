@@ -179,7 +179,7 @@ extension AppController {
                 league: leagueOverview,
                 points: t.points,
                 logo: t.logo,
-                name: t.teamName,
+                name: t.teamName, shortName: t.shortName,
                 stats: nil // fast search → skip heavy stats here
             )
         }
@@ -203,6 +203,7 @@ extension AppController {
                 points: team.points,
                 logo: team.logo,
                 name: team.teamName,
+                shortName: team.shortName,
                 stats: nil
             )
 

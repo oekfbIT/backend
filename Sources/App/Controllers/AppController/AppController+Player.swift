@@ -17,6 +17,20 @@ struct UpdatePlayerRequest: Content {
 }
 
 extension AppController {
+    func setupPlayerRoutes(on root: RoutesBuilder) {
+        let player = root.grouped("player")
+
+        player.get(":playerID", use: getPlayerByID)
+        player.get("sid", ":sid", use: getPlayerBySID)
+
+        // Keep your existing path shape: PUT /app/:playerID/email
+        // If you prefer, you can move this to player.put(":playerID","email",use:)
+        root.put(":playerID", "email", use: updatePlayerEmailAddress)
+
+        // Team registration via app
+        root.post("register", "team", use: registerTeamPlayer)
+    }
+
     // GET /app/player/:playerID
     func getPlayerByID(req: Request) async throws -> AppModels.AppPlayer {
         guard let playerID = req.parameters.get("playerID", as: UUID.self) else {

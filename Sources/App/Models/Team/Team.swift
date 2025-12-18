@@ -27,6 +27,7 @@ final class Team: Model, Content {
     @Field(key: FieldKeys.logo) var logo: String
     @OptionalField(key: FieldKeys.coverimg) var coverimg: String?
     @Field(key: FieldKeys.teamName) var teamName: String
+    @OptionalField(key: FieldKeys.shortName) var shortName: String?
     @OptionalField(key: FieldKeys.foundationYear) var foundationYear: String?
     @OptionalField(key: FieldKeys.membershipSince) var membershipSince: String?
     @Field(key: FieldKeys.averageAge) var averageAge: String
@@ -64,6 +65,7 @@ final class Team: Model, Content {
         static var leagueId: FieldKey { "league" }
         static var leagueCode: FieldKey { "leagueCode" }
         static var teamName: FieldKey { "teamName" }
+        static var shortName: FieldKey { "shortName" }
         static var foundationYear: FieldKey { "foundationYear" }
         static var membershipSince: FieldKey { "membershipSince" }
         static var averageAge: FieldKey { "averageAge" }
@@ -94,6 +96,7 @@ final class Team: Model, Content {
          coverimg: String,
          logo: String,
          teamName: String,
+         shortName: String? = nil,
          foundationYear: String?,
          membershipSince: String?,
          averageAge: String?,
@@ -120,6 +123,7 @@ final class Team: Model, Content {
         self.logo = logo
         self.coverimg = coverimg
         self.teamName = teamName
+        self.shortName = shortName
         self.foundationYear = foundationYear
         self.membershipSince = membershipSince
         self.averageAge = averageAge ?? "0"
@@ -147,6 +151,7 @@ final class Team: Model, Content {
         var logo: String?
         var league: UUID?
         var teamName: String
+        var shortName: String?
         var foundationYear: String?
         var membershipSince: String?
         var averageAge: String?
@@ -162,6 +167,7 @@ final class Team: Model, Content {
             logo: self.logo,
             league: self.$league.id,
             teamName: self.teamName,
+            shortName: self.shortName ?? "",
             foundationYear: self.foundationYear,
             membershipSince: self.membershipSince,
             averageAge: self.averageAge,
@@ -176,7 +182,8 @@ final class Team: Model, Content {
                         sid: self.sid,
                         logo: self.logo,
                         points: self.points,
-                        teamName: self.teamName)
+                        teamName: self.teamName,
+                        shortName: self.shortName)
     }
 }
 
@@ -190,6 +197,7 @@ extension Team: Mergeable {
         merged.$league.id = other.$league.id
         merged.$user.id = other.$user.id
         merged.teamName = other.teamName
+        merged.shortName = other.shortName
         merged.foundationYear = other.foundationYear
         merged.membershipSince = other.membershipSince
         merged.averageAge = other.averageAge
@@ -221,6 +229,7 @@ extension TeamMigration: Migration {
             .field(Team.FieldKeys.logo, .string)
             .field(Team.FieldKeys.coverimg, .string)
             .field(Team.FieldKeys.teamName, .string)
+            .field(Team.FieldKeys.shortName, .string)
             .field(Team.FieldKeys.foundationYear, .string)
             .field(Team.FieldKeys.membershipSince, .datetime)
             .field(Team.FieldKeys.averageAge, .string)
@@ -271,6 +280,7 @@ extension Team {
             logo: self.logo,
             coverimg: self.coverimg,
             teamName: self.teamName,
+            shortName: self.shortName,
             foundationYear: self.foundationYear,
             membershipSince: self.membershipSince,
             averageAge: self.averageAge,
@@ -309,6 +319,7 @@ extension Team {
                     logo: self.logo,
                     teamImage: self.coverimg ?? "",
                     name: self.teamName,
+                    shortName: self.shortName,
                     foundation: self.foundationYear ?? "",
                     membership: self.membershipSince ?? "",
                     coach: self.coach ?? Trainer(name: "Unbekannt"),
@@ -339,6 +350,7 @@ extension Team {
                     points: self.points,
                     logo: self.logo,
                     name: self.teamName,
+                    shortName: self.shortName,
                     stats: stats
                 )
             }

@@ -36,6 +36,7 @@ struct AppModels {
         let logo: String
         let teamImage: String
         let name: String
+        let shortName: String?
         let foundation: String
         let membership: String
         let coach: Trainer
@@ -55,6 +56,7 @@ struct AppModels {
         let points: Int
         let logo: String
         let name: String
+        let shortName: String?
         let stats: TeamStats?
         
     }

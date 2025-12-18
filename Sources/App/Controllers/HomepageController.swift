@@ -756,6 +756,7 @@ struct PublicTeam: Content, Codable {
     var logo: String
     var coverimg: String?
     var teamName: String
+    var shortName: String?
     var foundationYear: String?
     var membershipSince: String?
     var averageAge: String
@@ -772,6 +773,7 @@ struct PublicTeamShort: Content, Codable {
     var logo: String
     var points: Int?
     var teamName: String
+    var shortName: String?
 }
 
 
@@ -784,6 +786,7 @@ struct PublicTeamFull: Content, Codable {
     var logo: String
     var coverimg: String?
     var teamName: String
+    var shortName: String?
     var foundationYear: String?
     var membershipSince: String?
     var averageAge: String
