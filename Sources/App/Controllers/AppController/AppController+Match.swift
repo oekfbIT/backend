@@ -1,8 +1,8 @@
 //
-//  File.swift
+//  AppController+Match.swift
 //  oekfbbackend
 //
-//  Created by Alon Yakoby on 18.12.25.
+//  Created by Alon Yakobichvili
 //
 
 import Foundation
@@ -17,20 +17,17 @@ extension AppController {
             throw Abort(.badRequest, reason: "Missing or invalid match ID.")
         }
 
-        // Build query separately so it's obvious what's what
         let query = Match.query(on: req.db)
             .filter(\.$id == matchID)
             .with(\.$homeTeam)
             .with(\.$awayTeam)
             .with(\.$season) { $0.with(\.$league) }
-            .with(\.$events) // just events, NOT player
+            .with(\.$events)
 
-        // Execute query
         guard let match = try await query.first() else {
             throw Abort(.notFound, reason: "Match not found.")
         }
 
-        // Season + league
         guard let season = match.season else {
             throw Abort(.notFound, reason: "Season not found for this match.")
         }
@@ -42,24 +39,14 @@ extension AppController {
         let leagueOverview = try league.toAppLeagueOverview()
         let appSeason = try season.toAppSeason()
 
-        // Teams
         let home = match.homeTeam
         let away = match.awayTeam
 
-        // 🔹 Home / away recent form (primary season only)
         let homeID = try home.requireID()
         let awayID = try away.requireID()
 
-        let homeForm = try await Team.getRecentForm(
-            for: homeID,
-            on: req.db,
-            onlyPrimarySeason: true
-        )
-        let awayForm = try await Team.getRecentForm(
-            for: awayID,
-            on: req.db,
-            onlyPrimarySeason: true
-        )
+        let homeForm = try await Team.getRecentForm(for: homeID, on: req.db, onlyPrimarySeason: true)
+        let awayForm = try await Team.getRecentForm(for: awayID, on: req.db, onlyPrimarySeason: true)
 
         let homeOverview = AppModels.AppTeamOverview(
             id: homeID,
@@ -69,9 +56,7 @@ extension AppController {
             logo: home.logo,
             name: home.teamName,
             shortName: home.shortName,
-            stats: try? await StatsCacheManager
-                .getTeamStats(for: homeID, on: req.db)
-                .get()
+            stats: try? await StatsCacheManager.getTeamStats(for: homeID, on: req.db).get()
         )
 
         let awayOverview = AppModels.AppTeamOverview(
@@ -82,17 +67,13 @@ extension AppController {
             logo: away.logo,
             name: away.teamName,
             shortName: away.shortName,
-            stats: try? await StatsCacheManager
-                .getTeamStats(for: awayID, on: req.db)
-                .get()
+            stats: try? await StatsCacheManager.getTeamStats(for: awayID, on: req.db).get()
         )
-        
-        // Events → AppMatchEvent
+
         let appEvents: [AppModels.AppMatchEvent] = try await match.events.asyncMap {
-            try await $0.toAppMatchEvent(on: req)   // uses the safe version w/out $player.get
+            try await $0.toAppMatchEvent(on: req)
         }
 
-        // Response
         return AppModels.AppMatch(
             id: try match.requireID(),
             details: match.details,
@@ -124,80 +105,20 @@ extension AppController {
     }
 }
 
-//
-//  AppController+Match.swift
-//  Created by Alon Yakobichvili
-//
-//  Assumptions:
-//  - MatchEvent, MatchEventType, MatchAssignment, Rechnung, Strafsenat, EmailController, StatsCacheManager/Stats invalidation
-//    already exist in your project (as they do in MatchController).
-//  - These endpoints are meant for the /app namespace (mobile app).
-//  - Uses async/await Fluent APIs (Vapor 4 + Fluent concurrency).
-//
-
-import Foundation
-import Vapor
-import Fluent
-
-// MARK: - Payloads / Helpers (moved from MatchController)
-
-//struct LeagueMatches: Codable, Content {
-//    var matches: [Match]
-//    var league: String
-//}
-//
-//struct LeagueMatchesShort: Codable, Content {
-//    var matches: [PublicMatchShort]
-//    var league: String
-//}
-//
-//struct CardRequest: Content {
-//    let playerId: UUID
-//    let teamId: UUID
-//    let minute: Int
-//    let name: String?
-//    let image: String?
-//    let number: String?
-//}
-
-//private func updatePlayerCardStatus(in blanket: inout Blankett?, playerId: UUID, cardType: MatchEventType) {
-//    guard blanket != nil else { return }
-//    if let index = blanket!.players.firstIndex(where: { $0.id == playerId }) {
-//        switch cardType {
-//        case .redCard:
-//            blanket!.players[index].redCard = (blanket!.players[index].redCard ?? 0) + 1
-//        case .yellowCard:
-//            blanket!.players[index].yellowCard = (blanket!.players[index].yellowCard ?? 0) + 1
-//        case .yellowRedCard:
-//            blanket!.players[index].redYellowCard = (blanket!.players[index].redYellowCard ?? 0) + 1
-//        default:
-//            break
-//        }
-//    }
-//}
-
 // MARK: - Match Endpoints
 extension AppController {
-    
-    // MatchRoutes.swift (or wherever this lives)
 
     func setupMatchRoutes(on route: RoutesBuilder) {
-        // Static routes first (no params)
         route.get("match", "livescore", use: getLiveScore)
 
-        // Group all routes that use a match id under ONE param name
+        // ✅ single param name for everything under here: :matchID
         route.group("match", ":matchID") { match in
-            // GET
-            match.get(use: getMatchByID) // GET /match/:matchID
-            match.get("league", use: getLeagueFromMatch) // GET /match/:matchID/league
-            // (if you really want the old path /match/league/:matchID, keep it too:)
-            // route.get("match", "league", ":matchID", use: getLeagueFromMatch)
+            match.get(use: getMatchByID)
+            match.get("league", use: getLeagueFromMatch)
 
-            // RESET (GET in your existing API)
             match.get("resetGame", use: resetGame)
             match.get("resetHalftime", use: resetHalftime)
 
-            // POSTS (events / toggles / blankets)
             match.post("toggle", use: toggleDress)
             match.post("goal", use: addGoal)
             match.post("redCard", use: addRedCard)
@@ -207,11 +128,9 @@ extension AppController {
             match.post("homeBlankett", "addPlayer", use: addPlayerToHomeBlankett)
             match.post("awayBlankett", "addPlayer", use: addPlayerToAwayBlankett)
 
-            // DELETE (blanket remove player)
             match.delete(":playerId", "homeBlankett", "removePlayer", use: removePlayerFromHomeBlankett)
             match.delete(":playerId", "awayBlankett", "removePlayer", use: removePlayerFromAwayBlankett)
 
-            // PATCH (state machine)
             match.patch("startGame", use: startGame)
             match.patch("endFirstHalf", use: endFirstHalf)
             match.patch("startSecondHalf", use: startSecondHalf)
@@ -223,8 +142,7 @@ extension AppController {
             match.patch("done", use: done)
         }
 
-        // If you MUST keep legacy route shape: /match/league/:matchID
-        // keep it, but ensure param name is the SAME:
+        // legacy keep (same param name)
         route.get("match", "league", ":matchID", use: getLeagueFromMatch)
     }
 
@@ -232,15 +150,11 @@ extension AppController {
     func getLiveScore(req: Request) async throws -> [LeagueMatches] {
         let matches = try await Match.query(on: req.db)
             .filter(\.$status ~~ [.first, .second, .halftime])
-            .with(\.$season) { seasonQuery in
-                seasonQuery.with(\.$league)
-            }
+            .with(\.$season) { $0.with(\.$league) }
             .all()
 
         var dict: [String: LeagueMatches] = [:]
-
         for match in matches {
-            // season + league should be eagerly loaded above, but keep safe fallbacks
             let leagueName = match.season?.league?.name ?? "Nicht Gennant"
             if dict[leagueName] == nil {
                 dict[leagueName] = LeagueMatches(matches: [], league: leagueName)
@@ -251,13 +165,11 @@ extension AppController {
         return Array(dict.values)
     }
 
-    // POST /app/match/:id/toggle
+    // POST /app/match/:matchID/toggle
     func toggleDress(req: Request) async throws -> HTTPStatus {
-        let matchId = try req.parameters.require("id", as: UUID.self)
+        let matchId = try req.parameters.require("matchID", as: UUID.self)
 
-        struct ToggleRequest: Content {
-            let team: String // "home" or "away"
-        }
+        struct ToggleRequest: Content { let team: String }
         let toggleRequest = try req.content.decode(ToggleRequest.self)
 
         guard let match = try await Match.query(on: req.db)
@@ -265,30 +177,26 @@ extension AppController {
             .with(\.$homeTeam)
             .with(\.$awayTeam)
             .first()
-        else {
-            throw Abort(.notFound, reason: "Match not found")
-        }
+        else { throw Abort(.notFound, reason: "Match not found") }
 
         switch toggleRequest.team.lowercased() {
         case "home":
             guard let homeBlanket = match.homeBlanket else {
                 throw Abort(.badRequest, reason: "Home blanket not found")
             }
-            if homeBlanket.dress == match.homeTeam.trikot.home {
-                match.homeBlanket?.dress = match.homeTeam.trikot.away
-            } else {
-                match.homeBlanket?.dress = match.homeTeam.trikot.home
-            }
+            match.homeBlanket?.dress =
+                (homeBlanket.dress == match.homeTeam.trikot.home)
+                ? match.homeTeam.trikot.away
+                : match.homeTeam.trikot.home
 
         case "away":
             guard let awayBlanket = match.awayBlanket else {
                 throw Abort(.badRequest, reason: "Away blanket not found")
             }
-            if awayBlanket.dress == match.awayTeam.trikot.home {
-                match.awayBlanket?.dress = match.awayTeam.trikot.away
-            } else {
-                match.awayBlanket?.dress = match.awayTeam.trikot.home
-            }
+            match.awayBlanket?.dress =
+                (awayBlanket.dress == match.awayTeam.trikot.home)
+                ? match.awayTeam.trikot.away
+                : match.awayTeam.trikot.home
 
         default:
             throw Abort(.badRequest, reason: "Invalid team specified. Must be 'home' or 'away'.")
@@ -298,9 +206,9 @@ extension AppController {
         return .ok
     }
 
-    // POST /app/match/:id/goal
+    // POST /app/match/:matchID/goal
     func addGoal(req: Request) async throws -> HTTPStatus {
-        let matchId = try req.parameters.require("id", as: UUID.self)
+        let matchId = try req.parameters.require("matchID", as: UUID.self)
 
         struct GoalRequest: Content {
             let playerId: UUID
@@ -320,12 +228,9 @@ extension AppController {
         }
 
         switch goalRequest.scoreTeam.lowercased() {
-        case "home":
-            match.score.home += 1
-        case "away":
-            match.score.away += 1
-        default:
-            throw Abort(.badRequest, reason: "Invalid team specified")
+        case "home": match.score.home += 1
+        case "away": match.score.away += 1
+        default: throw Abort(.badRequest, reason: "Invalid team specified")
         }
 
         try await match.save(on: req.db)
@@ -346,37 +251,28 @@ extension AppController {
             throw Abort(.internalServerError, reason: "Match ID is missing after save.")
         }
         event.$match.id = mid
-
         try await event.save(on: req.db)
-
-        // If you have a stats cache invalidation helper already in AppController, keep using it.
-        // Otherwise, this is a safe no-op placeholder (commented out).
-        // try await invalidateStats(for: match, on: req.db)
 
         return .created
     }
 
-    // POST /app/match/:id/redCard
+    // POST /app/match/:matchID/redCard
     func addRedCard(req: Request) async throws -> HTTPStatus {
+        let cardRequest = try req.content.decode(CardRequest.self)
+
+        _ = try await addCardEvent(req: req, cardType: .redCard)
+
         let calendar = Calendar.current
         let currentDate = Date.viennaNow
-
         guard let futureDate = calendar.date(byAdding: .day, value: 8, to: currentDate) else {
             throw Abort(.internalServerError, reason: "Failed to calculate block date")
         }
 
         var components = calendar.dateComponents([.year, .month, .day], from: futureDate)
-        components.hour = 7
-        components.minute = 0
-        components.second = 0
-
+        components.hour = 7; components.minute = 0; components.second = 0
         guard let blockDate = calendar.date(from: components) else {
             throw Abort(.internalServerError, reason: "Failed to set block date to 7 AM")
         }
-
-        let cardRequest = try req.content.decode(CardRequest.self)
-
-        _ = try await addCardEvent(req: req, cardType: .redCard)
 
         guard let player = try await Player.find(cardRequest.playerId, on: req.db) else {
             throw Abort(.notFound, reason: "Player not found")
@@ -389,29 +285,24 @@ extension AppController {
         return .ok
     }
 
-    // POST /app/match/:id/yellowCard
+    // POST /app/match/:matchID/yellowCard
     func addYellowCard(req: Request) async throws -> HTTPStatus {
+        let cardRequest = try req.content.decode(CardRequest.self)
+
+        _ = try await addCardEvent(req: req, cardType: .yellowCard)
+
         let calendar = Calendar.current
         let currentDate = Date.viennaNow
-
         guard let futureDate = calendar.date(byAdding: .day, value: 8, to: currentDate) else {
             throw Abort(.internalServerError, reason: "Failed to calculate block date")
         }
 
         var components = calendar.dateComponents([.year, .month, .day], from: futureDate)
-        components.hour = 7
-        components.minute = 0
-        components.second = 0
-
+        components.hour = 7; components.minute = 0; components.second = 0
         guard let blockDate = calendar.date(from: components) else {
             throw Abort(.internalServerError, reason: "Failed to set block date to 7 AM")
         }
 
-        let cardRequest = try req.content.decode(CardRequest.self)
-
-        _ = try await addCardEvent(req: req, cardType: .yellowCard)
-
-        // Count only yellow cards in PRIMARY seasons
         let yellowCardCount = try await MatchEvent.query(on: req.db)
             .join(Match.self, on: \MatchEvent.$match.$id == \Match.$id)
             .join(Season.self, on: \Match.$season.$id == \Season.$id)
@@ -434,27 +325,23 @@ extension AppController {
         return .ok
     }
 
-    // POST /app/match/:id/yellowRedCard
+    // POST /app/match/:matchID/yellowRedCard
     func addYellowRedCard(req: Request) async throws -> HTTPStatus {
+        let cardRequest = try req.content.decode(CardRequest.self)
+
+        _ = try await addCardEvent(req: req, cardType: .yellowRedCard)
+
         let calendar = Calendar.current
         let currentDate = Date.viennaNow
-
         guard let futureDate = calendar.date(byAdding: .day, value: 8, to: currentDate) else {
             throw Abort(.internalServerError, reason: "Failed to calculate block date")
         }
 
         var components = calendar.dateComponents([.year, .month, .day], from: futureDate)
-        components.hour = 7
-        components.minute = 0
-        components.second = 0
-
+        components.hour = 7; components.minute = 0; components.second = 0
         guard let blockDate = calendar.date(from: components) else {
             throw Abort(.internalServerError, reason: "Failed to set block date to 7 AM")
         }
-
-        let cardRequest = try req.content.decode(CardRequest.self)
-
-        _ = try await addCardEvent(req: req, cardType: .yellowRedCard)
 
         guard let player = try await Player.find(cardRequest.playerId, on: req.db) else {
             throw Abort(.notFound, reason: "Player not found")
@@ -464,7 +351,6 @@ extension AppController {
         player.eligibility = .Gesperrt
         try await player.save(on: req.db)
 
-        // Remove the last yellow card event (like your MatchController logic)
         if let lastYellow = try await MatchEvent.query(on: req.db)
             .filter(\.$player.$id == (player.id ?? UUID()))
             .filter(\.$type == .yellowCard)
@@ -479,16 +365,15 @@ extension AppController {
 
     // MARK: - Blankett players (home/away)
 
-    // POST /app/match/:id/homeBlankett/addPlayer
+    // POST /app/match/:matchID/homeBlankett/addPlayer
     func addPlayerToHomeBlankett(req: Request) async throws -> HTTPStatus {
-        let matchId = try req.parameters.require("id", as: UUID.self)
+        let matchId = try req.parameters.require("matchID", as: UUID.self)
 
         struct PlayerRequest: Content {
             let playerId: UUID
             let number: Int
             let coach: Trainer?
         }
-
         let playerRequest = try req.content.decode(PlayerRequest.self)
 
         guard let match = try await Match.find(matchId, on: req.db) else {
@@ -496,7 +381,6 @@ extension AppController {
         }
 
         if match.homeBlanket == nil {
-            // We need home team for defaults
             let homeTeam = try await match.$homeTeam.get(on: req.db)
             match.homeBlanket = Blankett(
                 name: homeTeam.teamName,
@@ -539,16 +423,15 @@ extension AppController {
         return .ok
     }
 
-    // POST /app/match/:id/awayBlankett/addPlayer
+    // POST /app/match/:matchID/awayBlankett/addPlayer
     func addPlayerToAwayBlankett(req: Request) async throws -> HTTPStatus {
-        let matchId = try req.parameters.require("id", as: UUID.self)
+        let matchId = try req.parameters.require("matchID", as: UUID.self)
 
         struct PlayerRequest: Content {
             let playerId: UUID
             let number: Int
             let coach: Trainer?
         }
-
         let playerRequest = try req.content.decode(PlayerRequest.self)
 
         guard let match = try await Match.find(matchId, on: req.db) else {
@@ -599,9 +482,9 @@ extension AppController {
         return .ok
     }
 
-    // DELETE /app/match/:id/:playerId/homeBlankett/removePlayer
+    // DELETE /app/match/:matchID/:playerId/homeBlankett/removePlayer
     func removePlayerFromHomeBlankett(req: Request) async throws -> HTTPStatus {
-        let matchId = try req.parameters.require("id", as: UUID.self)
+        let matchId = try req.parameters.require("matchID", as: UUID.self)
         let playerId = try req.parameters.require("playerId", as: UUID.self)
 
         guard let match = try await Match.find(matchId, on: req.db) else {
@@ -621,9 +504,9 @@ extension AppController {
         return .ok
     }
 
-    // DELETE /app/match/:id/:playerId/awayBlankett/removePlayer
+    // DELETE /app/match/:matchID/:playerId/awayBlankett/removePlayer
     func removePlayerFromAwayBlankett(req: Request) async throws -> HTTPStatus {
-        let matchId = try req.parameters.require("id", as: UUID.self)
+        let matchId = try req.parameters.require("matchID", as: UUID.self)
         let playerId = try req.parameters.require("playerId", as: UUID.self)
 
         guard let match = try await Match.find(matchId, on: req.db) else {
@@ -645,9 +528,9 @@ extension AppController {
 
     // MARK: - Game state
 
-    // PATCH /app/match/:id/startGame
+    // PATCH /app/match/:matchID/startGame
     func startGame(req: Request) async throws -> HTTPStatus {
-        let matchId = try req.parameters.require("id", as: UUID.self)
+        let matchId = try req.parameters.require("matchID", as: UUID.self)
         guard let match = try await Match.find(matchId, on: req.db) else { throw Abort(.notFound) }
         match.status = .first
         match.firstHalfStartDate = Date.viennaNow
@@ -655,9 +538,9 @@ extension AppController {
         return .ok
     }
 
-    // PATCH /app/match/:id/endFirstHalf
+    // PATCH /app/match/:matchID/endFirstHalf
     func endFirstHalf(req: Request) async throws -> HTTPStatus {
-        let matchId = try req.parameters.require("id", as: UUID.self)
+        let matchId = try req.parameters.require("matchID", as: UUID.self)
         guard let match = try await Match.find(matchId, on: req.db) else { throw Abort(.notFound) }
         match.status = .halftime
         match.firstHalfEndDate = Date.viennaNow
@@ -665,9 +548,9 @@ extension AppController {
         return .ok
     }
 
-    // PATCH /app/match/:id/startSecondHalf
+    // PATCH /app/match/:matchID/startSecondHalf
     func startSecondHalf(req: Request) async throws -> HTTPStatus {
-        let matchId = try req.parameters.require("id", as: UUID.self)
+        let matchId = try req.parameters.require("matchID", as: UUID.self)
         guard let match = try await Match.find(matchId, on: req.db) else { throw Abort(.notFound) }
         match.status = .second
         match.secondHalfStartDate = Date.viennaNow
@@ -675,9 +558,9 @@ extension AppController {
         return .ok
     }
 
-    // PATCH /app/match/:id/endGame
+    // PATCH /app/match/:matchID/endGame
     func endGame(req: Request) async throws -> HTTPStatus {
-        let matchId = try req.parameters.require("id", as: UUID.self)
+        let matchId = try req.parameters.require("matchID", as: UUID.self)
         guard let match = try await Match.find(matchId, on: req.db) else { throw Abort(.notFound) }
         match.status = .completed
         match.secondHalfEndDate = Date.viennaNow
@@ -685,9 +568,9 @@ extension AppController {
         return .ok
     }
 
-    // PATCH /app/match/:id/submit
+    // PATCH /app/match/:matchID/submit
     func completeGame(req: Request) async throws -> HTTPStatus {
-        let matchId = try req.parameters.require("id", as: UUID.self)
+        let matchId = try req.parameters.require("matchID", as: UUID.self)
 
         struct Spielbericht: Content { let text: String? }
         let berichtRequest = try req.content.decode(Spielbericht.self)
@@ -705,7 +588,6 @@ extension AppController {
             throw Abort(.notFound, reason: "Referee not found")
         }
 
-        // Strafsenat exists?
         let existingStrafsenat = try await Strafsenat.query(on: req.db)
             .filter(\.$match.$id == matchID)
             .first()
@@ -718,13 +600,11 @@ extension AppController {
         return try await handleMatchCompletion(req: req, match: match, matchID: matchID)
     }
 
-    // PATCH /app/match/:id/noShowGame
+    // PATCH /app/match/:matchID/noShowGame
     func noShowGame(req: Request) async throws -> HTTPStatus {
-        let matchId = try req.parameters.require("id", as: UUID.self)
+        let matchId = try req.parameters.require("matchID", as: UUID.self)
 
-        struct NoShowRequest: Content {
-            let winningTeam: String // "home" or "away"
-        }
+        struct NoShowRequest: Content { let winningTeam: String }
         let noShowRequest = try req.content.decode(NoShowRequest.self)
 
         guard let match = try await Match.find(matchId, on: req.db) else {
@@ -755,13 +635,11 @@ extension AppController {
         return .ok
     }
 
-    // PATCH /app/match/:id/teamcancel
+    // PATCH /app/match/:matchID/teamcancel
     func teamCancelGame(req: Request) async throws -> HTTPStatus {
-        let matchId = try req.parameters.require("id", as: UUID.self)
+        let matchId = try req.parameters.require("matchID", as: UUID.self)
 
-        struct NoShowRequest: Content {
-            let winningTeam: String // "home" or "away"
-        }
+        struct NoShowRequest: Content { let winningTeam: String }
         let noShowRequest = try req.content.decode(NoShowRequest.self)
 
         let matchDB = try await Match.query(on: req.db)
@@ -770,10 +648,8 @@ extension AppController {
             .with(\.$referee) { $0.with(\.$user) }
             .filter(\.$id == matchId)
             .first()
-        
-        guard let match = matchDB else {
-            throw Abort(.notFound)
-        }
+
+        guard let match = matchDB else { throw Abort(.notFound) }
 
         let winningTeamId: UUID
         let losingTeamId: UUID
@@ -835,7 +711,6 @@ extension AppController {
         )
 
         try await rechnung.save(on: req.db)
-
         losingTeam.balance = balance - Double(rechnungAmount)
 
         do {
@@ -843,8 +718,7 @@ extension AppController {
                 let emailController = EmailController()
                 try emailController.sendCancellationNotification(req: req, recipient: mail, match: match)
 
-                if let ref = match.referee,
-                   let refUser = ref.user {
+                if let ref = match.referee, let refUser = ref.user {
                     try emailController.informRefereeCancellation(
                         req: req,
                         email: refUser.email,
@@ -863,18 +737,18 @@ extension AppController {
         return .ok
     }
 
-    // PATCH /app/match/:id/spielabbruch
+    // PATCH /app/match/:matchID/spielabbruch
     func spielabbruch(req: Request) async throws -> HTTPStatus {
-        let matchId = try req.parameters.require("id", as: UUID.self)
+        let matchId = try req.parameters.require("matchID", as: UUID.self)
         guard let match = try await Match.find(matchId, on: req.db) else { throw Abort(.notFound) }
         match.status = .abbgebrochen
         try await match.save(on: req.db)
         return .ok
     }
 
-    // PATCH /app/match/:id/done
+    // PATCH /app/match/:matchID/done
     func done(req: Request) async throws -> HTTPStatus {
-        let matchId = try req.parameters.require("id", as: UUID.self)
+        let matchId = try req.parameters.require("matchID", as: UUID.self)
         guard let match = try await Match.find(matchId, on: req.db) else { throw Abort(.notFound) }
 
         let homeScore = match.score.home
@@ -901,9 +775,9 @@ extension AppController {
         return .ok
     }
 
-    // GET /app/match/:id/resetGame
+    // GET /app/match/:matchID/resetGame
     func resetGame(req: Request) async throws -> HTTPStatus {
-        let matchId = try req.parameters.require("id", as: UUID.self)
+        let matchId = try req.parameters.require("matchID", as: UUID.self)
         guard let match = try await Match.find(matchId, on: req.db) else { throw Abort(.notFound) }
 
         match.status = .pending
@@ -939,9 +813,9 @@ extension AppController {
         return .ok
     }
 
-    // GET /app/match/:id/resetHalftime
+    // GET /app/match/:matchID/resetHalftime
     func resetHalftime(req: Request) async throws -> HTTPStatus {
-        let matchId = try req.parameters.require("id", as: UUID.self)
+        let matchId = try req.parameters.require("matchID", as: UUID.self)
         guard let match = try await Match.find(matchId, on: req.db) else { throw Abort(.notFound) }
 
         match.status = .halftime
@@ -952,7 +826,7 @@ extension AppController {
         return .ok
     }
 
-    // GET /app/match/league/:matchID
+    // GET /app/match/league/:matchID  OR  /app/match/:matchID/league
     func getLeagueFromMatch(req: Request) async throws -> League {
         let matchId = try req.parameters.require("matchID", as: UUID.self)
 
@@ -984,7 +858,7 @@ extension AppController {
 extension AppController {
 
     private func addCardEvent(req: Request, cardType: MatchEventType) async throws -> HTTPStatus {
-        let matchId = try req.parameters.require("id", as: UUID.self)
+        let matchId = try req.parameters.require("matchID", as: UUID.self)
         let cardRequest = try req.content.decode(CardRequest.self)
 
         guard let match = try await Match.find(matchId, on: req.db) else {

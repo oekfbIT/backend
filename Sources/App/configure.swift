@@ -178,7 +178,7 @@ public func configure(_ app: Application) throws {
     )
         
     app.middleware.use(ErrorMiddleware.default(environment: app.environment))
-    app.middleware.use(corsMiddleware) // Move this after ErrorMiddleware
+    app.middleware.use(corsMiddleware)
 
     let FIREBASE_APIKEY = Environment.get("FIREBASE_APIKEY") ?? ""
     let FIREBASE_EMAIL = Environment.get("FIREBASE_EMAIL") ?? ""

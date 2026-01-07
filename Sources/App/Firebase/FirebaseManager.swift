@@ -37,6 +37,14 @@ final class FirebaseManager {
             let returnSecureToken: Bool
         }
 
+        // Firebase error shape (when status != 200)
+        struct FirebaseErrorEnvelope: Content {
+            struct FirebaseError: Content {
+                let message: String
+            }
+            let error: FirebaseError
+        }
+
         let requestBody = RequestBody(
             email: email,
             password: password,
@@ -49,6 +57,15 @@ final class FirebaseManager {
         ) { req in
             try req.content.encode(requestBody)
         }.flatMapThrowing { response in
+            // ✅ If Firebase returns an error JSON (no idToken), decoding AuthResponse will fail.
+            // So we guard the HTTP status first and decode a helpful error message.
+            guard response.status == .ok else {
+                if let fbErr = try? response.content.decode(FirebaseErrorEnvelope.self) {
+                    throw Abort(.unauthorized, reason: "Firebase auth failed: \(fbErr.error.message)")
+                }
+                throw Abort(.unauthorized, reason: "Firebase auth failed with status \(response.status.code)")
+            }
+
             let data = try response.content.decode(AuthResponse.self)
             self.idToken = data.idToken
         }
@@ -57,7 +74,7 @@ final class FirebaseManager {
     // Uploads a File to Firebase Storage and returns a public download URL
     func uploadFile(file: File, to path: String) -> EventLoopFuture<String> {
         guard let idToken = idToken else {
-            return client.eventLoop.future(error: Abort(.unauthorized))
+            return client.eventLoop.future(error: Abort(.unauthorized, reason: "FirebaseManager missing idToken. Call authenticate() first."))
         }
 
         // Encode object name for use in Firebase REST API
@@ -80,12 +97,17 @@ final class FirebaseManager {
             req.body = file.data
         }.flatMapThrowing { response in
             guard response.status == .ok else {
-                throw Abort(.internalServerError, reason: "File upload failed")
+                // Try to capture Firebase's error body for easier debugging
+                let raw = response.body?.string ?? ""
+                if !raw.isEmpty {
+                    throw Abort(.internalServerError, reason: "File upload failed: \(raw)")
+                }
+                throw Abort(.internalServerError, reason: "File upload failed with status \(response.status.code)")
             }
 
             let data = try response.content.decode(UploadResponse.self)
 
-            guard let token = data.downloadTokens else {
+            guard let token = data.downloadTokens, !token.isEmpty else {
                 throw Abort(
                     .internalServerError,
                     reason: "Missing download token from Firebase response"
@@ -147,4 +169,10 @@ extension Application {
             self.storage[FirebaseManagerKey.self] = newValue
         }
     }
+}
+
+// MARK: - Helpers
+
+private extension ByteBuffer {
+    var string: String? { getString(at: readerIndex, length: readableBytes) }
 }

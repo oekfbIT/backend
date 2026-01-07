@@ -45,7 +45,7 @@ final class AppController: RouteCollection {
         setupStadiumRoutes(on: route)
         // MARK: PUSH NOTIFICATIONS
         setupPushRoutes(on: route)
-
+        setupTransferRoutes(on: route)
         // MARK: 💸 Team invoices (Rechnungen)
         setupInvoiceRoutes(on: route)
 
