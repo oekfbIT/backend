@@ -31,6 +31,7 @@ final class AppController: RouteCollection {
         try setupSearchRoutes(on: route)
         try setupChatRoutes(on: route)
         setupMatchRoutes(on: route)
+        setupSponsorRoutes(on: route)
         
         // MARK: - TEAM ROUTES
         setupTeamRoutes(on: route)

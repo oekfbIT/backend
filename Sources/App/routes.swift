@@ -31,6 +31,7 @@ func routes(_ app: Application) throws {
         HomepageController(path: "client"),
         ClientController(path: "webClient"),
         PostponeRequestController(path: "postpone"),
+        SponsorController(path: "sponsor"),
         AppController(path: "app"),
 ]
     
