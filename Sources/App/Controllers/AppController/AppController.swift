@@ -48,7 +48,8 @@ final class AppController: RouteCollection {
         setupTransferRoutes(on: route)
         // MARK: 💸 Team invoices (Rechnungen)
         setupInvoiceRoutes(on: route)
-
+        setupTransferSettingsRoutes(on: route)
+        setupLeaderboardRoutes(on: route)
     }
 
     func boot(routes: RoutesBuilder) throws {

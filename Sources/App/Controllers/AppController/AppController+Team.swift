@@ -25,6 +25,7 @@ extension AppController {
         team.get("sid", ":sid", use: getTeamBySID)
         team.get(":teamID", use: getTeamByID)
         team.get(":teamID", "fixtures", use: getFixturesByTeamID)
+        team.get(":teamID", "balance", use: getTeamBalance)
 
         // Trainer (kept as-is but grouped neatly)
         let trainer = root.grouped("trainer")
@@ -57,6 +58,23 @@ extension AppController {
         }
         
         return try await team.toAppTeam(league: leagueOverview, players: playerOverviews, req: req).get()
+    }
+
+    // MARK: - GET /app/team/:teamID/balance
+    func getTeamBalance(req: Request) async throws -> Double {
+        guard let teamID = req.parameters.get("teamID", as: UUID.self) else {
+            throw Abort(.badRequest, reason: "Missing or invalid team ID.")
+        }
+
+        guard let team = try await Team.query(on: req.db)
+            .filter(\.$id == teamID)
+            .first()
+        else {
+            throw Abort(.notFound, reason: "Team not found.")
+        }
+
+        // normalize: return 0.0 if nil (or return nil if you prefer optional)
+        return team.balance ?? 0.0
     }
 
     // GET /app/team/sid/:sid
