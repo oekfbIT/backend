@@ -457,7 +457,6 @@ extension AppController {
             throw Abort(.badRequest, reason: "Missing or invalid league ID.")
         }
 
-        // 1️⃣ Load the league and its teams
         guard let league = try await League.query(on: req.db)
             .filter(\.$id == leagueID)
             .with(\.$teams)
@@ -466,20 +465,9 @@ extension AppController {
             throw Abort(.notFound, reason: "League not found.")
         }
 
-        // 2️⃣ Ensure there is at least one primary season for this league
-        let hasPrimarySeason = try await Season.query(on: req.db)
-            .filter(\.$league.$id == leagueID)
-            .filter(\.$primary == true)
-            .count() > 0
+        // ✅ Desktop equivalent: NOT primary-season restricted
+        var tableItems = try await buildLeagueTable(for: league, on: req, onlyPrimarySeason: false)
 
-        guard hasPrimarySeason else {
-            throw Abort(.notFound, reason: "No primary season found for this league.")
-        }
-
-        // 3️⃣ Build league table based on primary season only
-        var tableItems = try await buildLeagueTable(for: league, on: req, onlyPrimarySeason: true)
-
-        // 4️⃣ Sort by points, then goal difference
         tableItems.sort {
             if $0.points == $1.points {
                 return $0.difference > $1.difference
@@ -487,7 +475,6 @@ extension AppController {
             return $0.points > $1.points
         }
 
-        // 5️⃣ Assign ranking positions
         for i in 0..<tableItems.count {
             tableItems[i].ranking = i + 1
         }
