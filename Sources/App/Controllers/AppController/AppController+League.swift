@@ -23,7 +23,8 @@ extension AppController {
         league.get(":leagueID", "fixtures", use: getFixturesByLeagueID)
         league.get("code", ":code", "fixtures", use: getFixturesByLeagueCode)
 
-        league.get(":leagueID", "table", use: getLeagueTableByID)
+//        league.get(":leagueID", "table", use: getLeagueTableByID)
+        league.get(":leagueID", "table", use: getLeagueCurrentSeasonTable_CLONE)
         league.get("primary", use: getAllPrimaryLeagueOverviews)
     }
 
@@ -480,6 +481,100 @@ extension AppController {
         }
 
         return tableItems
+    }
+
+    // MARK: - CURRENT SEASON TABLE (EXACT webClient clone)
+    func getLeagueCurrentSeasonTable_CLONE(req: Request) async throws -> [TableItem] {
+        guard let leagueID = req.parameters.get("leagueID", as: UUID.self) else {
+            throw Abort(.badRequest, reason: "Missing or invalid league ID.")
+        }
+
+        // 1️⃣ Load league
+        guard let league = try await League.find(leagueID, on: req.db) else {
+            throw Abort(.notFound, reason: "League not found.")
+        }
+
+        // 2️⃣ Load primary season with matches
+        guard let primarySeason = try await Season.query(on: req.db)
+            .filter(\.$league.$id == leagueID)
+            .filter(\.$primary == true)
+            .with(\.$matches)
+            .first()
+        else {
+            throw Abort(.notFound, reason: "No primary season found.")
+        }
+
+        let matches = primarySeason.matches
+
+        // 3️⃣ Load all league teams
+        let teams = try await league.$teams.query(on: req.db).all()
+
+        // 4️⃣ INLINE stats calculator (IDENTICAL to webClient)
+        func stats(for teamID: UUID) -> (w: Int, d: Int, l: Int, s: Int, a: Int) {
+            var w = 0, d = 0, l = 0, s = 0, a = 0
+
+            for m in matches {
+                let homeId = m.$homeTeam.id
+                let awayId = m.$awayTeam.id
+
+                guard homeId == teamID || awayId == teamID else { continue }
+
+                switch m.status {
+                case .pending, .first, .halftime, .second:
+                    continue
+                default:
+                    break
+                }
+
+                let isHome = homeId == teamID
+                let mine = isHome ? m.score.home : m.score.away
+                let opp  = isHome ? m.score.away : m.score.home
+
+                s += mine
+                a += opp
+
+                if mine > opp { w += 1 }
+                else if mine == opp { d += 1 }
+                else { l += 1 }
+            }
+
+            return (w, d, l, s, a)
+        }
+
+        // 5️⃣ Build table
+        var table: [TableItem] = teams.compactMap { team in
+            guard let tid = team.id else { return nil }
+            let st = stats(for: tid)
+            let pts = st.w * 3 + st.d
+
+            return TableItem(
+                image: team.logo,
+                name: team.teamName,
+                points: pts,
+                id: tid,
+                goals: st.s,
+                ranking: 0,
+                wins: st.w,
+                draws: st.d,
+                losses: st.l,
+                scored: st.s,
+                against: st.a,
+                difference: st.s - st.a,
+                form: []
+            )
+        }
+
+        // 6️⃣ Sort + rank (same as webClient)
+        table.sort {
+            if $0.points == $1.points { return $0.difference > $1.difference }
+            return $0.points > $1.points
+        }
+
+        for i in table.indices {
+            table[i].ranking = i + 1
+        }
+
+        return table
     }
 
 }
