@@ -30,6 +30,9 @@ extension AppController {
 
         // GET /transferSettings/isCancelPossible
         settings.get("isCancelPossible", use: isCancelPossible)
+        
+        // GET /transferSettings/isCancelPossible
+        settings.get("sponsors", use: showSponsors)
     }
 
     // MARK: - GET /app/transferSettings/settings
@@ -66,4 +69,13 @@ extension AppController {
         }
         return settings.isCancelPossible
     }
+    
+    // MARK: - GET /app/transferSettings/isCancelPossible
+    func showSponsors(req: Request) async throws -> Bool {
+        guard let settings = try await TransferSettings.query(on: req.db).first() else {
+            throw Abort(.notFound, reason: "No TransferSettings found.")
+        }
+        return settings.showSponsors
+    }
+
 }

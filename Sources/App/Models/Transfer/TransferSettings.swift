@@ -9,6 +9,7 @@ final class TransferSettings: Model, Content, Codable {
     @Field(key: FieldKeys.isTransferOpen) var isTransferOpen: Bool
     @Field(key: FieldKeys.isDressChangeOpen) var isDressChangeOpen: Bool
     @Field(key: FieldKeys.isCancelPossible) var isCancelPossible: Bool
+    @Field(key: FieldKeys.showSponsors) var showSponsors: Bool
     @Field(key: FieldKeys.fromDate) var fromDate: String
     @Field(key: FieldKeys.to) var to: String
     @OptionalField(key: FieldKeys.name) var name: String?
@@ -23,6 +24,7 @@ final class TransferSettings: Model, Content, Codable {
         static var to: FieldKey { "status"}
         static var name: FieldKey { "name"}
         static var created: FieldKey { "created"}
+        static var showSponsors: FieldKey { "showSponsors"}
     }
 
     init() {}
@@ -32,6 +34,7 @@ final class TransferSettings: Model, Content, Codable {
         isTransferOpen: Bool,
         isDressChangeOpen: Bool? = false,
         isCancelPossible: Bool? = false,
+        showSponsors: Bool? = false,
         fromDate: String,
         to: String,
         name: String?,
@@ -40,6 +43,7 @@ final class TransferSettings: Model, Content, Codable {
         self.id = id
         self.isTransferOpen = isTransferOpen
         self.isDressChangeOpen = isDressChangeOpen ?? false
+        self.showSponsors = showSponsors ?? false
         self.isCancelPossible = isCancelPossible ?? false
         self.fromDate = fromDate
         self.to = to
@@ -56,6 +60,7 @@ extension TransferSettings: Mergeable {
         merged.isTransferOpen = other.isTransferOpen
         merged.isDressChangeOpen = other.isDressChangeOpen
         merged.isCancelPossible = other.isCancelPossible
+        merged.showSponsors = other.showSponsors
         merged.fromDate = other.fromDate
         merged.to = other.to
         merged.created = other.created
@@ -72,6 +77,7 @@ extension TransferSettingsMigration: Migration {
             .field(TransferSettings.FieldKeys.isTransferOpen, .bool, .required)
             .field(TransferSettings.FieldKeys.isDressChangeOpen, .bool, .required)
             .field(TransferSettings.FieldKeys.isCancelPossible, .bool)
+            .field(TransferSettings.FieldKeys.showSponsors, .bool)
             .field(TransferSettings.FieldKeys.fromDate, .string, .required)
             .field(TransferSettings.FieldKeys.to, .string, .required)
             .field(TransferSettings.FieldKeys.name, .string)
