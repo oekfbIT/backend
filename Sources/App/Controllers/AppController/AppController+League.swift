@@ -484,6 +484,7 @@ extension AppController {
     }
 
     // MARK: - CURRENT SEASON TABLE (EXACT webClient clone)
+    // MARK: - CURRENT SEASON TABLE (CLONE + FORM)
     func getLeagueCurrentSeasonTable_CLONE(req: Request) async throws -> [TableItem] {
         guard let leagueID = req.parameters.get("leagueID", as: UUID.self) else {
             throw Abort(.badRequest, reason: "Missing or invalid league ID.")
@@ -494,7 +495,7 @@ extension AppController {
             throw Abort(.notFound, reason: "League not found.")
         }
 
-        // 2️⃣ Load primary season with matches
+        // 2️⃣ Load primary season with matches (for table stats)
         guard let primarySeason = try await Season.query(on: req.db)
             .filter(\.$league.$id == leagueID)
             .filter(\.$primary == true)
@@ -504,16 +505,25 @@ extension AppController {
             throw Abort(.notFound, reason: "No primary season found.")
         }
 
-        let matches = primarySeason.matches
+        let seasonMatches = primarySeason.matches
 
         // 3️⃣ Load all league teams
         let teams = try await league.$teams.query(on: req.db).all()
 
-        // 4️⃣ INLINE stats calculator (IDENTICAL to webClient)
+        // 4️⃣ Fetch ALL DONE matches for PRIMARY season ONCE (for form)
+        // This mirrors your Team.getRecentForm behavior but avoids querying per team.
+        let doneMatches: [Match] = try await Match.query(on: req.db)
+            .filter(\.$status == .done)
+            .join(parent: \Match.$season)
+            .filter(Season.self, \.$primary == true)
+            .filter(Season.self, \.$league.$id == leagueID)
+            .all()
+
+        // 5️⃣ Helper: table stats (your original)
         func stats(for teamID: UUID) -> (w: Int, d: Int, l: Int, s: Int, a: Int) {
             var w = 0, d = 0, l = 0, s = 0, a = 0
 
-            for m in matches {
+            for m in seasonMatches {
                 let homeId = m.$homeTeam.id
                 let awayId = m.$awayTeam.id
 
@@ -541,7 +551,49 @@ extension AppController {
             return (w, d, l, s, a)
         }
 
-        // 5️⃣ Build table
+        // 6️⃣ Helper: compute recent form in-memory from doneMatches
+        func recentForm(for teamID: UUID) -> [FormItem] {
+            let relevant = doneMatches.filter { m in
+                m.$homeTeam.id == teamID || m.$awayTeam.id == teamID
+            }
+
+            let sorted = relevant.sorted {
+                let d1 = $0.details.date ?? .distantPast
+                let d2 = $1.details.date ?? .distantPast
+                return d1 > d2
+            }
+
+            let recent = Array(sorted.prefix(5))
+
+            return recent.compactMap { match in
+                guard let matchID = match.id else { return nil }
+
+                let isHome = match.$homeTeam.id == teamID
+                let homeScore = match.score.home
+                let awayScore = match.score.away
+
+                let result: FormResultItem
+                if homeScore == awayScore {
+                    result = .D
+                } else if (isHome && homeScore > awayScore) || (!isHome && awayScore > homeScore) {
+                    result = .W
+                } else {
+                    result = .L
+                }
+
+                return FormItem(
+                    result: result,
+                    matchID: matchID,
+                    gameday: match.details.gameday,
+                    score: match.score,
+                    home: match.homeBlanket?.name,
+                    away: match.awayBlanket?.name,
+                    date: match.details.date
+                )
+            }
+        }
+
+        // 7️⃣ Build table (now with form)
         var table: [TableItem] = teams.compactMap { team in
             guard let tid = team.id else { return nil }
             let st = stats(for: tid)
@@ -560,11 +612,11 @@ extension AppController {
                 scored: st.s,
                 against: st.a,
                 difference: st.s - st.a,
-                form: []
+                form: recentForm(for: tid) // ✅ HERE
             )
         }
 
-        // 6️⃣ Sort + rank (same as webClient)
+        // 8️⃣ Sort + rank (same as webClient)
         table.sort {
             if $0.points == $1.points { return $0.difference > $1.difference }
             return $0.points > $1.points
