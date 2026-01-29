@@ -92,8 +92,8 @@ final class EmailController {
         req.application.smtp.configuration = smtpConfig
         guard let registrationID = registration?.id else {
             throw Abort(.notFound)
-
         }
+
         // Print the SMTP configuration for debugging
         print("SMTP Configuration: \(req.application.smtp.configuration)")
 
@@ -102,20 +102,29 @@ final class EmailController {
         <body>
         <p>Sehr geehrter Mannschaftsleiter,</p>
 
-        <p>Herzlich Willkommen bei der Österreichischen Kleinfeld Fußball Bund. Bitte senden Sie uns den Vertrag im Anhang ausgefüllt zurück.
-        Wir benötigen noch folgende Unterlagen:</p>
+        <p>Herzlich Willkommen beim Österreichischen Kleinfeld Fußball Bund.</p>
+
+        <p>
+          Bitte laden Sie den Vertrag und die erforderlichen Unterlagen über die App hoch.
+          Sollte etwas fehlen oder nicht in Ordnung sein, können Sie die Dokumente jederzeit in der App erneut hochladen oder Ihre Angaben bearbeiten.
+          Je nach Status Ihrer Anmeldung werden bestimmte Bearbeitungsoptionen automatisch gesperrt.
+          Alternativ können Sie uns die Unterlagen auch per E-Mail an <strong>office@oekfb.eu</strong> senden.
+        </p>
 
         <ul>
-          <li>Ausweiskopie beider Personen am Vertrag (<a href="\(vertragLink)" style="font-size: 16px; color: #007bff; text-decoration: none;">Vertrag Downloaden</a>)</li>
+          <li>Ausweiskopie beider Personen am Vertrag (<a href="\(vertragLink)" style="font-size: 16px; color: #007bff; text-decoration: none;">Vertrag downloaden</a>)</li>
           <li>Logo des Teams</li>
           <li>Bilder der Trikots (Heim und Auswärts komplett inklusive Stutzen)</li>
-          <li>Sie können diese Dokumente über diesen link Hochladen (<a href="https://oekfb.eu/#/team/upload/\(registrationID)" style="font-size: 16px; color: #007bff; text-decoration: none;">Upload Page</a>)</li>
+          <li>Upload-Link: <a href="https://oekfb.eu/#/team/upload/\(registrationID)" style="font-size: 16px; color: #007bff; text-decoration: none;">Upload Page</a></li>
         </ul>
 
-        <p>Falls Sie Trikots benötigen und noch keine haben, können Sie sich über die Angebote für ÖKFB Mannschaften hier erkundigen: <a href="https://erima.shop/oekfb</a></p>
+        <p>
+          Falls Sie Trikots benötigen und noch keine haben, können Sie sich über die Angebote für ÖKFB Mannschaften hier erkundigen:
+          <a href="https://erima.shop/oekfb">https://erima.shop/oekfb</a>
+        </p>
 
         <p>Wir freuen uns über Ihre baldige Rückmeldung und verbleiben.</p>
-        <p>Dies ist eine automatisch generierte E-Mail. Sollten Sie Fragen haben oder Unterstützung benötigen, zögern Sie bitte nicht, uns unter support@oekfb.eu zu kontaktieren. Wir stehen Ihnen gerne zur Verfügung.</p>
+        <p>Dies ist eine automatisch generierte E-Mail. Sollten Sie Fragen haben oder Unterstützung benötigen, zögern Sie bitte nicht, uns zu kontaktieren.</p>
         </body>
         </html>
         """

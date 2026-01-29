@@ -23,22 +23,169 @@ struct TeamAppRegistrationResponse: Content {
     let verified: Bool
 }
 
+struct TeamAppApplicationRequest: Content {
+    // Form fields
+    let teamName: String
+    let verein: String?
+    let bundesland: Bundesland
+
+    // These come as JSON-strings from the app (LosslessStringConvertible works)
+    let primary: ContactPerson
+    let secondary: ContactPerson
+
+    // Files
+    let primaryIdentification: File
+    let secondaryIdentification: File
+    let signedContract: File
+    let teamLogo: File
+}
+
+struct TeamAppApplicationResponse: Content {
+    let registrationId: UUID
+    let status: TeamRegistrationStatus
+    let created: Date?
+}
+
 extension AppController {
 
     func setupTeamRegistrationRoutes(on root: RoutesBuilder) {
         let teamregistration = root.grouped("application")
+
+        // ✅ create team-user + send verification email
         teamregistration.post("request", use: requestTeamRegistration)
 
-        // formatted verification routes
+        // ✅ verification route
         let user = teamregistration.grouped("user")
         let verify = user.grouped("verify")
         verify.get(":code", use: verifyEmailByCode)
         // => GET /app/application/user/verify/:code
 
-        // NEW: registrations by user id
+        // ✅ NEW: apply -> create TeamRegistration + upload docs
+        teamregistration.post("apply", use: applyTeamApplication)
+        // => POST /app/application/apply
+
+        // ✅ registrations by user id
         let registrations = teamregistration.grouped("registrations")
         registrations.get("user", ":userId", use: getTeamRegistrationsByUser)
         // => GET /app/application/registrations/user/:userId
+    }
+
+    // POST /app/application/apply
+    func applyTeamApplication(req: Request) async throws -> TeamAppApplicationResponse {
+
+        // ✅ must be logged in user
+        let user = try req.auth.require(User.self)
+        let userId = try user.requireID()
+
+        // ✅ decode multipart/form-data
+        let input = try req.content.decode(TeamAppApplicationRequest.self)
+
+        // Optional: require verified email before applying
+        // guard user.verified == true else {
+        //     throw Abort(.unauthorized, reason: "Bitte bestätigen Sie zuerst Ihre E-Mail-Adresse.")
+        // }
+
+        // Optional: prevent multiple active registrations
+        if let _ = try await TeamRegistration.query(on: req.db)
+            .filter(\.$user == userId)
+            .filter(\.$status != .completed)
+            .first()
+        {
+            throw Abort(.conflict, reason: "Es existiert bereits eine aktive Anmeldung für diesen Benutzer.")
+        }
+
+        // ✅ Firebase auth (if you already do this at app boot, you can remove)
+        try await req.application.firebaseManager.authenticate().get()
+
+        let basePath = "teamapplications/\(userId.uuidString)/\(UUID().uuidString)"
+
+        // ✅ upload files to Firebase
+        let primaryIdUrl = try await req.application.firebaseManager
+            .uploadFile(file: input.primaryIdentification, to: "\(basePath)/primary_id")
+            .get()
+
+        let secondaryIdUrl = try await req.application.firebaseManager
+            .uploadFile(file: input.secondaryIdentification, to: "\(basePath)/secondary_id")
+            .get()
+
+        let contractUrl = try await req.application.firebaseManager
+            .uploadFile(file: input.signedContract, to: "\(basePath)/signed_contract")
+            .get()
+
+        let logoUrl = try await req.application.firebaseManager
+            .uploadFile(file: input.teamLogo, to: "\(basePath)/team_logo")
+            .get()
+
+        // ✅ attach identification URLs into ContactPerson objects
+        let primary = ContactPerson(
+            first: input.primary.first,
+            last: input.primary.last,
+            phone: input.primary.phone,
+            email: input.primary.email,
+            identification: primaryIdUrl
+        )
+
+        let secondary = ContactPerson(
+            first: input.secondary.first,
+            last: input.secondary.last,
+            phone: input.secondary.phone,
+            email: input.secondary.email,
+            identification: secondaryIdUrl
+        )
+
+        // ✅ create registration
+        let registration = TeamRegistration(
+            id: nil,
+            primary: primary,
+            secondary: secondary,
+            verein: input.verein,
+            teamName: input.teamName,
+            status: .draft,
+            bundesland: input.bundesland,
+            initialPassword: String.randomString(length: 8), // required by your migration
+            refereerLink: nil,
+            assignedLeague: nil,
+            customerSignedContract: contractUrl,
+            adminSignedContract: nil,
+            teamLogo: logoUrl,
+            paidAmount: 0.0,
+            user: userId,
+            team: nil,
+            isWelcomeEmailSent: true,
+            isLoginDataSent: false,
+            dateCreated: Date.viennaNow,
+            kaution: nil
+        )
+
+        try await registration.save(on: req.db)
+        let regId = try registration.requireID()
+
+        // ✅ send welcome mail right away (same pattern as your old controller)
+        let emailController = EmailController()
+        let recipient = primary.email
+
+        req.eventLoop.execute {
+            do {
+                try emailController
+                    .sendWelcomeMail(req: req, recipient: recipient, registration: registration)
+                    .whenComplete { result in
+                        switch result {
+                        case .success:
+                            print("[applyTeamApplication] welcome email sent to \(recipient)")
+                        case .failure(let error):
+                            print("[applyTeamApplication] welcome email FAILED: \(error)")
+                        }
+                    }
+            } catch {
+                print("[applyTeamApplication] welcome email start FAILED: \(error)")
+            }
+        }
+
+        return TeamAppApplicationResponse(
+            registrationId: regId,
+            status: registration.status,
+            created: registration.dateCreated
+        )
     }
 
     // GET /app/application/registrations/user/:userId
@@ -99,7 +246,7 @@ extension AppController {
         try await verification.save(on: req.db)
 
         // Send verification LINK (backend GET route)
-        let verificationUrl = "https://www.oekfb.eu/app/user/verify/\(code)"
+        let verificationUrl = "https://www.oekfb.eu/#/app/application/user/verify/\(code)"
         let emailController = EmailController()
         try await emailController
             .sendEmailVerificationLink(req: req, recipient: input.email, verificationUrl: verificationUrl)
@@ -112,7 +259,10 @@ extension AppController {
         )
     }
 
-    // GET /app/user/verify/:code
+    
+    //
+    
+    
     // GET /app/user/verify/:code
     func verifyEmailByCode(req: Request) async throws -> HTTPStatus {
         guard let code = req.parameters.get("code") else {
