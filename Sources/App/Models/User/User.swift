@@ -17,6 +17,8 @@ final class User: Model, Content, Codable {
     @Field(key: FieldKeys.type) var type: UserType
     @Field(key: FieldKeys.firstName) var firstName: String
     @Field(key: FieldKeys.lastName) var lastName: String
+    @OptionalField(key: FieldKeys.verified) var verified: Bool?
+    @OptionalField(key: FieldKeys.tel) var tel: String?
     @Field(key: FieldKeys.email) var email: String
     @Field(key: FieldKeys.passwordHash) var passwordHash: String
     @Children(for: \.$user) var teams: [Team]
@@ -27,6 +29,8 @@ final class User: Model, Content, Codable {
         let id: UUID
         let userID: String
         let email: String
+        let tel: String?
+        let verified: Bool?
         let type: UserType
         let passwordHash: String
         let first: String
@@ -40,18 +44,22 @@ final class User: Model, Content, Codable {
         static var firstName: FieldKey { "firstName" }
         static var lastName: FieldKey { "lastName" }
         static var email: FieldKey { "email" }
+        static var tel: FieldKey { "tel" }
+        static var verified: FieldKey { "verified" }
         static var passwordHash: FieldKey { "passwordHash" }
     }
 
     init() {}
     
-    init(id: UUID? = nil, userID: String, type: UserType, firstName: String, lastName: String, email: String, passwordHash: String) {
+    init(id: UUID? = nil, userID: String, type: UserType, firstName: String, lastName: String, verified: Bool? = false,  email: String, tel: String? = nil, passwordHash: String) {
         self.id = id
         self.userID = userID
         self.type = type
         self.firstName = firstName
         self.lastName = lastName
         self.email = email
+        self.tel = tel
+        self.verified = verified
         self.passwordHash = passwordHash
     }
 }
@@ -64,6 +72,8 @@ extension UserMigration: Migration {
             .field(User.FieldKeys.firstName, .string, .required)
             .field(User.FieldKeys.lastName, .string, .required)
             .field(User.FieldKeys.email, .string, .required)
+            .field(User.FieldKeys.tel, .string)
+            .field(User.FieldKeys.verified, .bool)
             .field(User.FieldKeys.passwordHash, .string, .required)
             .unique(on: User.FieldKeys.email)
             .create()
@@ -127,6 +137,8 @@ extension User: Authenticatable {
         Public(id: try requireID(),
                userID: userID,
                email: email,
+               tel: tel,
+               verified: verified,
                type: type,
                passwordHash: passwordHash,
                first: firstName,

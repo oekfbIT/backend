@@ -32,7 +32,7 @@ final class AppController: RouteCollection {
         try setupChatRoutes(on: route)
         setupMatchRoutes(on: route)
         setupSponsorRoutes(on: route)
-        
+        setupTeamRegistrationRoutes(on: route)
         // MARK: - TEAM ROUTES
         setupTeamRoutes(on: route)
         // MARK: - LEAGUE ROUTES

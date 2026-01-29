@@ -57,7 +57,7 @@ final class RefereeController: RouteCollection {
 
     func create(req: Request) throws -> EventLoopFuture<Referee> {
         let item = try req.content.decode(RefereeSignUpRequest.self)
-        let userSignup = UserSignup(id: "REFUSER", firstName: item.first, lastName: item.last, email: item.email, password: item.password, type: .referee)
+        let userSignup = UserSignup(id: "REFUSER", firstName: item.first, lastName: item.last, email: item.email, password: item.password, type: .referee, tel: item.tel)
 
         do {
             let dbuser = try User.create(from: userSignup)
@@ -136,5 +136,6 @@ struct RefereeSignUpRequest: Codable {
     var image: String
     var identification: String
     var nationality: String
+    var tel: String? = nil
 }
 

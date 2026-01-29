@@ -677,3 +677,96 @@ extension EmailController {
         }
     }
 }
+
+
+// MARK: - EmailController: switch from "enter code" to "click link"
+
+extension EmailController {
+
+    func sendEmailVerificationLink(
+        req: Request,
+        recipient: String,
+        verificationUrl: String
+    ) throws -> EventLoopFuture<HTTPStatus> {
+
+        // Apply the SMTP configuration
+        req.application.smtp.configuration = smtpConfig
+
+        print("SMTP Configuration: \(req.application.smtp.configuration)")
+        print("Sending verification link to: \(recipient)")
+        print("Verification URL: \(verificationUrl)")
+
+        let subject = "OEKFB E-Mail bestätigen"
+
+        let emailBody = """
+        <!DOCTYPE html>
+        <html lang="de">
+        <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>\(subject)</title>
+            <style>
+                body { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #333; background-color: #f8f9fa; margin: 0; padding: 20px; }
+                .container { max-width: 560px; margin: 0 auto; background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+                h2 { margin: 0 0 10px 0; font-size: 18px; }
+                p { margin: 0 0 12px 0; }
+                .btn {
+                    display: inline-block;
+                    padding: 12px 18px;
+                    border-radius: 8px;
+                    background: #007bff;
+                    color: #fff !important;
+                    text-decoration: none;
+                    font-weight: bold;
+                }
+                .hint { font-size: 12px; color: #6b7280; margin-top: 12px; }
+                .footer { margin-top: 18px; font-size: 12px; color: #6b7280; }
+                a { color: #007bff; text-decoration: none; }
+                a:hover { text-decoration: underline; }
+                .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; word-break: break-all; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h2>Österreichischer Kleinfeld Fußball Bund</h2>
+
+                <p>Sehr geehrte Damen und Herren,</p>
+                <p>bitte bestätigen Sie Ihre E-Mail-Adresse, indem Sie auf folgenden Button klicken:</p>
+
+                <p>
+                    <a class="btn" href="\(verificationUrl)">E-Mail bestätigen</a>
+                </p>
+
+                <p class="hint">
+                    Falls der Button nicht funktioniert, öffnen Sie bitte diesen Link in Ihrem Browser:<br/>
+                    <span class="mono">\(verificationUrl)</span>
+                </p>
+
+                <div class="footer">
+                    <p>Dies ist eine automatisch generierte E-Mail. Sollten Sie Fragen haben oder Unterstützung benötigen, kontaktieren Sie uns bitte unter <a href="mailto:support@oekfb.eu">support@oekfb.eu</a>.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+        let email = try Email(
+            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
+            to: [EmailAddress(address: recipient)],
+            subject: subject,
+            body: emailBody,
+            isBodyHtml: true
+        )
+
+        return req.smtp.send(email).flatMapThrowing { result in
+            switch result {
+            case .success:
+                return .ok
+            case .failure(let error):
+                print("Email failed to send: \(error.localizedDescription)")
+                throw Abort(.internalServerError, reason: "Failed to send email: \(error.localizedDescription)")
+            }
+        }
+    }
+}
+

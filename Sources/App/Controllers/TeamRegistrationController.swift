@@ -125,7 +125,7 @@ final class TeamRegistrationController: RouteCollection {
                 lastName: registration.primary?.last ?? "",
                 email: registration.primary?.email ?? "",
                 password: registration.initialPassword ?? String.randomString(length: 8),
-                type: .team
+                type: .team, tel: registration.primary?.phone
             )
 
             do {

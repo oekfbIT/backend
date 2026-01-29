@@ -373,7 +373,7 @@ final class ScraperDetailController: RouteCollection {
                                     lastName: "User",
                                     email: email,
                                     password: password,
-                                    type: .team)
+                                    type: .team, tel: "")
         let user: User
         do {
             user = try User.create(from: userSignup)
