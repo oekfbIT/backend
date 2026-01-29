@@ -34,6 +34,27 @@ extension AppController {
         let verify = user.grouped("verify")
         verify.get(":code", use: verifyEmailByCode)
         // => GET /app/application/user/verify/:code
+
+        // NEW: registrations by user id
+        let registrations = teamregistration.grouped("registrations")
+        registrations.get("user", ":userId", use: getTeamRegistrationsByUser)
+        // => GET /app/application/registrations/user/:userId
+    }
+
+    // GET /app/application/registrations/user/:userId
+    func getTeamRegistrationsByUser(req: Request) async throws -> [TeamRegistration] {
+        guard
+            let userIdParam = req.parameters.get("userId"),
+            let userId = UUID(uuidString: userIdParam)
+        else {
+            throw Abort(.badRequest, reason: "Invalid or missing userId.")
+        }
+
+        return try await TeamRegistration.query(on: req.db)
+            .filter(\.$user == userId)
+            .filter(\.$status != .completed)
+            .sort(\.$dateCreated, .descending) // optional
+            .all()
     }
 
     // POST /app/teamregistration/request
