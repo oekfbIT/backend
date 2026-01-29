@@ -1,4 +1,3 @@
-
 import Vapor
 import Fluent
 
@@ -36,7 +35,47 @@ final class TeamRegistrationController: RouteCollection {
     func boot(routes: RoutesBuilder) throws {
         try setupRoutes(on: routes)
     }
-    
+
+    // MARK: - User Resolution
+    // Rule:
+    // - If registration.user exists -> use that user, DO NOT create a new one.
+    // - Else create a new user from primary contact.
+    private func resolveUser(for registration: TeamRegistration, on req: Request) -> EventLoopFuture<User> {
+        if let attachedUserId = registration.user {
+            return User.find(attachedUserId, on: req.db)
+                .unwrap(or: Abort(.notFound, reason: "Attached user not found"))
+        }
+
+        let primaryEmail = (registration.primary?.email ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !primaryEmail.isEmpty else {
+            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Primary contact email is missing"))
+        }
+
+        // Ensure we have a stable password (used for newly created user + email)
+        let password = registration.initialPassword ?? String.randomString(length: 8)
+        if registration.initialPassword == nil {
+            registration.initialPassword = password
+        }
+
+        let userSignup = UserSignup(
+            id: String.randomString(length: 5),
+            firstName: registration.primary?.first ?? "",
+            lastName: registration.primary?.last ?? "",
+            email: primaryEmail,
+            password: password,
+            type: .team,
+            tel: registration.primary?.phone
+        )
+
+        do {
+            let user = try User.create(from: userSignup)
+            return user.save(on: req.db).map { user }
+        } catch {
+            return req.eventLoop.makeFailedFuture(error)
+        }
+    }
+
+    // MARK: - Register
     func register(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let registrationRequest = try req.content.decode(TeamRegistrationRequest.self)
 
@@ -60,55 +99,58 @@ final class TeamRegistrationController: RouteCollection {
         newRegistration.isLoginDataSent = false
         
         return newRegistration.save(on: req.db).map { _ in
-            // Send the welcome email in the background
             print("Created: ", newRegistration)
-            self.sendWelcomeEmailInBackground(req: req, recipient: registrationRequest.primaryContact.email, registration: newRegistration)
+            self.sendWelcomeEmailInBackground(
+                req: req,
+                recipient: registrationRequest.primaryContact.email,
+                registration: newRegistration
+            )
             return HTTPStatus.ok
-        }.flatMapError { error in
+        }.flatMapError { _ in
             return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid request"))
         }
     }
 
-    // Background email sending function
+    // MARK: - Email Helpers
     private func sendWelcomeEmailInBackground(req: Request, recipient: String, registration: TeamRegistration?) {
-        // Run the email sending on the request's event loop
         req.eventLoop.execute {
             do {
-                try emailController.sendWelcomeMail(req: req, recipient: recipient, registration: registration).whenComplete { result in
-                    switch result {
-                    case .success:
-                        print("Welcome email sent successfully to \(recipient)")
-                    case .failure(let error):
-                        print("Failed to send welcome email to \(recipient): \(error)")
+                try emailController
+                    .sendWelcomeMail(req: req, recipient: recipient, registration: registration)
+                    .whenComplete { result in
+                        switch result {
+                        case .success:
+                            print("Welcome email sent successfully to \(recipient)")
+                        case .failure(let error):
+                            print("Failed to send welcome email to \(recipient): \(error)")
+                        }
                     }
-                }
-            } catch {
-                print("Failed to initiate sending welcome email to \(recipient): \(error)")
-            }
-        }
-    }
-    
-    private func sendTeamLogin(req: Request, recipient: String, email: String, password: String) {
-        // Run the email sending on the request's event loop
-        req.eventLoop.execute {
-            do {
-                try emailController.sendTeamLogin(req: req, recipient: recipient,
-                                                  email: email,
-                                                  password: password)
-                .whenComplete { result in
-                    switch result {
-                    case .success:
-                        print("Welcome email sent successfully to \(recipient)")
-                    case .failure(let error):
-                        print("Failed to send welcome email to \(recipient): \(error)")
-                    }
-                }
             } catch {
                 print("Failed to initiate sending welcome email to \(recipient): \(error)")
             }
         }
     }
 
+    private func sendTeamLogin(req: Request, recipient: String, email: String, password: String) {
+        req.eventLoop.execute {
+            do {
+                try emailController
+                    .sendTeamLogin(req: req, recipient: recipient, email: email, password: password)
+                    .whenComplete { result in
+                        switch result {
+                        case .success:
+                            print("Welcome email sent successfully to \(recipient)")
+                        case .failure(let error):
+                            print("Failed to send welcome email to \(recipient): \(error)")
+                        }
+                    }
+            } catch {
+                print("Failed to initiate sending welcome email to \(recipient): \(error)")
+            }
+        }
+    }
+
+    // MARK: - Confirm
     func confirm(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let id = try req.parameters.require("id", as: UUID.self)
 
@@ -119,21 +161,24 @@ final class TeamRegistrationController: RouteCollection {
 
             registration.status = .approved
 
-            let userSignup = UserSignup(
-                id: String.randomString(length: 5),
-                firstName: registration.primary?.first ?? "",
-                lastName: registration.primary?.last ?? "",
-                email: registration.primary?.email ?? "",
-                password: registration.initialPassword ?? String.randomString(length: 8),
-                type: .team, tel: registration.primary?.phone
-            )
+            // Ensure initialPassword exists for email payload (your current flow expects it)
+            let passwordForEmail = registration.initialPassword ?? String.randomString(length: 8)
+            if registration.initialPassword == nil {
+                registration.initialPassword = passwordForEmail
+            }
 
-            do {
-                let user = try User.create(from: userSignup)
-                print("User to be saved: \(user)")
+            return self.resolveUser(for: registration, on: req).flatMap { user in
+                // If user was newly created and registration.user is still nil, attach it
+                if registration.user == nil, let uid = user.id {
+                    registration.user = uid
+                }
+
+                // IMPORTANT: email triggers go to the USER email (primary & user can differ)
+                let recipientEmail = user.email
 
                 return self.findLeague(id: registration.assignedLeague!, req: req).flatMap { league in
-                    return user.save(on: req.db).flatMap {
+                    // Save registration first to persist status/user/password changes
+                    return registration.save(on: req.db).flatMap {
                         let team = Team(
                             sid: String.randomNum(length: 5),
                             userId: user.id,
@@ -146,7 +191,8 @@ final class TeamRegistrationController: RouteCollection {
                             foundationYear: Date.viennaNow.yearString,
                             membershipSince: Date.viennaNow.yearString,
                             averageAge: "0",
-                            coach: Trainer(name: "", email: "", image: ""), trikot: Trikot(home: "", away: ""),
+                            coach: Trainer(name: "", email: "", image: ""),
+                            trikot: Trikot(home: "", away: ""),
                             balance: registration.paidAmount ?? 0.0,
                             usremail: registration.primary?.email,
                             usrpass: registration.initialPassword,
@@ -157,15 +203,16 @@ final class TeamRegistrationController: RouteCollection {
                         print("Team to be saved: \(team)")
 
                         return team.save(on: req.db).flatMap {
-                            
-                            self.sendTeamLogin(req: req, recipient: userSignup.email, email: userSignup.email, password: userSignup.password)
+                            self.sendTeamLogin(
+                                req: req,
+                                recipient: recipientEmail,
+                                email: recipientEmail,
+                                password: passwordForEmail
+                            )
                             return registration.save(on: req.db).transform(to: .ok)
                         }
                     }
                 }
-            } catch let error {
-                print("Error occurred during user creation or saving: \(error)")
-                return req.eventLoop.makeFailedFuture(error)
             }
         }
     }
@@ -175,15 +222,18 @@ final class TeamRegistrationController: RouteCollection {
             .unwrap(or: Abort(.notFound, reason: "League with ID \(id) not found"))
     }
 
-    // Reject
+    // MARK: - Reject
     func reject(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let id = try req.parameters.require("id", as: UUID.self)
-        return TeamRegistration.find(id, on: req.db).unwrap(or: Abort(.notFound)).flatMap { registration in
-            registration.status = .rejected
-            return registration.save(on: req.db).transform(to: .ok)
-        }
+        return TeamRegistration.find(id, on: req.db)
+            .unwrap(or: Abort(.notFound))
+            .flatMap { registration in
+                registration.status = .rejected
+                return registration.save(on: req.db).transform(to: .ok)
+            }
     }
     
+    // MARK: - Assign League
     func assignLeague(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let registrationID = try req.parameters.require("id", as: UUID.self)
         let leagueID = try req.parameters.require("leagueid", as: UUID.self)
@@ -195,7 +245,7 @@ final class TeamRegistrationController: RouteCollection {
                     .unwrap(or: Abort(.notFound))
                     .flatMap { league in
                         let teamCount = league.teamcount ?? 0
-                        let topayAmount: Double  // Use Double for all calculations to maintain consistency
+                        let topayAmount: Double
                         switch teamCount {
                         case 0...6:
                             topayAmount = Double((teamCount - 1) * 2) * 70.0
@@ -204,7 +254,7 @@ final class TeamRegistrationController: RouteCollection {
                         case 10...:
                             topayAmount = Double(teamCount - 1) * 70.0
                         default:
-                            topayAmount = 0.0 // This can be adjusted if needed
+                            topayAmount = 0.0
                         }
 
                         registration.assignedLeague = leagueID
@@ -216,102 +266,107 @@ final class TeamRegistrationController: RouteCollection {
                         }
 
                         let primaryContactEmail = registration.primary?.email
-                        self.sendPaymentInstructionsInBackground(req: req, recipient: primaryContactEmail ?? "", registration: registration)
+                        self.sendPaymentInstructionsInBackground(
+                            req: req,
+                            recipient: primaryContactEmail ?? "",
+                            registration: registration
+                        )
                         return registration.save(on: req.db).transform(to: .ok)
                     }
             }
     }
 
-    // Background email sending function
     private func sendPaymentInstructionsInBackground(req: Request, recipient: String, registration: TeamRegistration) {
-        // Run the email sending on the request's event loop
         req.eventLoop.execute {
             do {
-                try emailController.sendPaymentMail(req: req, recipient: recipient, registration: registration).whenComplete { result in
-                    switch result {
-                    case .success:
-                        print("Payment instructions email sent successfully to \(recipient)")
-                    case .failure(let error):
-                        print("Failed to send payment instructions email to \(recipient): \(error)")
+                try emailController
+                    .sendPaymentMail(req: req, recipient: recipient, registration: registration)
+                    .whenComplete { result in
+                        switch result {
+                        case .success:
+                            print("Payment instructions email sent successfully to \(recipient)")
+                        case .failure(let error):
+                            print("Failed to send payment instructions email to \(recipient): \(error)")
+                        }
                     }
-                }
             } catch {
                 print("Failed to initiate sending payment instructions email to \(recipient): \(error)")
             }
         }
     }
 
-
-
-    // Update Payment Confirmation
+    // MARK: - Update Payment Confirmation
     func updatePaymentConfirmation(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let id = try req.parameters.require("id", as: UUID.self)
         let paymentRequest = try req.content.decode(UpdatePaymentRequest.self)
-        return TeamRegistration.find(id, on: req.db).unwrap(or: Abort(.notFound)).flatMap { registration in
-            if let currentPaidAmount = registration.paidAmount {
-                registration.paidAmount = currentPaidAmount + paymentRequest.paidAmount
-            } else {
-                registration.paidAmount = paymentRequest.paidAmount
+
+        return TeamRegistration.find(id, on: req.db)
+            .unwrap(or: Abort(.notFound))
+            .flatMap { registration in
+                if let currentPaidAmount = registration.paidAmount {
+                    registration.paidAmount = currentPaidAmount + paymentRequest.paidAmount
+                } else {
+                    registration.paidAmount = paymentRequest.paidAmount
+                }
+                return registration.save(on: req.db).transform(to: .ok)
             }
-            return registration.save(on: req.db).transform(to: .ok)
-        }
     }
 
+    // MARK: - Complete Registration
     func startTeamCustomization(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let id = try req.parameters.require("id", as: UUID.self)
+
         return TeamRegistration.find(id, on: req.db).flatMap { optionalRegistration in
-            if let registration = optionalRegistration {
-                let primary = registration.primary
-                
-                let password = String.randomString(length: 8)
-                
-                let user = User(
-                    userID: UUID().uuidString,
-                    type: .team,
-                    firstName: primary?.first ?? "",
-                    lastName: primary?.last ?? "",
-                    email: primary?.email ?? "",
-                    passwordHash: try! Bcrypt.hash(registration.initialPassword ?? password)
+            guard let registration = optionalRegistration else {
+                return req.eventLoop.future(error: Abort(.notFound))
+            }
+
+            // Ensure initialPassword exists for debug/email payload consistency
+            let passwordForEmail = registration.initialPassword ?? String.randomString(length: 8)
+            if registration.initialPassword == nil {
+                registration.initialPassword = passwordForEmail
+            }
+
+            return self.resolveUser(for: registration, on: req).flatMap { user in
+                // If user was newly created and registration.user is still nil, attach it
+                if registration.user == nil, let uid = user.id {
+                    registration.user = uid
+                }
+
+                // IMPORTANT: email triggers should use USER email (primary & user can differ)
+                let recipientEmail = user.email
+
+                let team = Team(
+                    sid: "",
+                    userId: try! user.requireID(),
+                    leagueId: registration.assignedLeague,
+                    leagueCode: registration.assignedLeague?.uuidString,
+                    points: 0,
+                    coverimg: "",
+                    logo: "",
+                    teamName: registration.teamName,
+                    foundationYear: "",
+                    membershipSince: "",
+                    averageAge: "",
+                    coach: Trainer(name: "", email: "", image: ""),
+                    trikot: Trikot(home: "", away: ""),
+                    referCode: registration.refereerLink,
+                    usremail: registration.primary?.email,
+                    usrpass: registration.initialPassword,
+                    usrtel: registration.primary?.phone
                 )
 
-                return user.save(on: req.db).flatMap {
-                    let team = Team(
-                        sid: "",
-                        userId: try! user.requireID(),
-                        leagueId: registration.assignedLeague,
-                        leagueCode: registration.assignedLeague?.uuidString,
-                        points: 0,
-                        coverimg: "",
-                        logo: "",
-                        teamName: registration.teamName,
-                        foundationYear: "",
-                        membershipSince: "",
-                        averageAge: "",
-                        coach: Trainer(name: "", email: "", image: ""),
-                        trikot: Trikot(home: "", away: ""),
-                        referCode: registration.refereerLink,
-                        usremail: registration.primary?.email,
-                        usrpass: registration.initialPassword,
-                        usrtel: registration.primary?.phone
-                    )
-
-                    // MARK: SEND EMAIL WITH THE LOGIN DATA
-                    
+                return registration.save(on: req.db).flatMap {
                     return team.save(on: req.db).map {
-                        // Print values for email sending
-                        print("User email: \(primary?.email)")
-                        print("User password: \(password)")
-
+                        print("User email: \(recipientEmail)")
+                        print("User password: \(passwordForEmail)")
                         return HTTPStatus.ok
                     }
                 }
-            } else {
-                return req.eventLoop.future(error: Abort(.notFound))
             }
         }
     }
 }
-
 
 extension Date {
     var yearString: String {

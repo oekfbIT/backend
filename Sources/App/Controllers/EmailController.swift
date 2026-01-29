@@ -115,7 +115,6 @@ final class EmailController {
           <li>Ausweiskopie beider Personen am Vertrag (<a href="\(vertragLink)" style="font-size: 16px; color: #007bff; text-decoration: none;">Vertrag downloaden</a>)</li>
           <li>Logo des Teams</li>
           <li>Bilder der Trikots (Heim und Auswärts komplett inklusive Stutzen)</li>
-          <li>Upload-Link: <a href="https://oekfb.eu/#/team/upload/\(registrationID)" style="font-size: 16px; color: #007bff; text-decoration: none;">Upload Page</a></li>
         </ul>
 
         <p>
