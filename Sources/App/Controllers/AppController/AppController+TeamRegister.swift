@@ -25,6 +25,7 @@ struct TeamAppRegistrationResponse: Content {
 
 struct TeamAppApplicationRequest: Content {
     // Form fields
+    let userid: UUID
     let teamName: String
     let verein: String?
     let bundesland: Bundesland
@@ -74,11 +75,18 @@ extension AppController {
     func applyTeamApplication(req: Request) async throws -> TeamAppApplicationResponse {
 
         // ✅ must be logged in user
-        let user = try req.auth.require(User.self)
-        let userId = try user.requireID()
-
-        // ✅ decode multipart/form-data
+//        let user = try req.auth.require(User.self)
+//        let userId = try user.requireID()
         let input = try req.content.decode(TeamAppApplicationRequest.self)
+        let userId = input.userid
+
+        guard let user = try await User.find(userId, on: req.db) else {
+            throw Abort(.unauthorized, reason: "User not found.")
+        }
+        guard user.type == .team else {
+            throw Abort(.unauthorized, reason: "Only team users can apply.")
+        }
+
 
         // Optional: require verified email before applying
         // guard user.verified == true else {
