@@ -33,6 +33,9 @@ extension AppController {
         
         // GET /transferSettings/isCancelPossible
         settings.get("sponsors", use: showSponsors)
+        
+        // GET /transferSettings/isCancelPossible
+        settings.get("appversion", use: minAppVersion)
     }
 
     // MARK: - GET /app/transferSettings/settings
@@ -76,6 +79,17 @@ extension AppController {
             throw Abort(.notFound, reason: "No TransferSettings found.")
         }
         return settings.showSponsors
+    }
+
+    struct MinAppVersionResponse: Content {
+        let minAppVersion: String?
+    }
+
+    func minAppVersion(req: Request) async throws -> MinAppVersionResponse {
+        guard let settings = try await TransferSettings.query(on: req.db).first() else {
+            throw Abort(.notFound, reason: "No TransferSettings found.")
+        }
+        return .init(minAppVersion: settings.minAppVersion)
     }
 
 }

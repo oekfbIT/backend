@@ -11,6 +11,7 @@ final class TransferSettings: Model, Content, Codable {
     @Field(key: FieldKeys.isCancelPossible) var isCancelPossible: Bool
     @Field(key: FieldKeys.showSponsors) var showSponsors: Bool
     @Field(key: FieldKeys.fromDate) var fromDate: String
+    @OptionalField(key: FieldKeys.minAppVersion) var minAppVersion: String?
     @Field(key: FieldKeys.to) var to: String
     @OptionalField(key: FieldKeys.name) var name: String?
     @Timestamp(key: FieldKeys.created, on: .update) var created: Date?
@@ -25,6 +26,7 @@ final class TransferSettings: Model, Content, Codable {
         static var name: FieldKey { "name"}
         static var created: FieldKey { "created"}
         static var showSponsors: FieldKey { "showSponsors"}
+        static var minAppVersion: FieldKey { "minAppVersion"}
     }
 
     init() {}
@@ -38,7 +40,8 @@ final class TransferSettings: Model, Content, Codable {
         fromDate: String,
         to: String,
         name: String?,
-        created: Date?
+        created: Date?,
+        minAppVersion: String
     ) {
         self.id = id
         self.isTransferOpen = isTransferOpen
@@ -49,7 +52,7 @@ final class TransferSettings: Model, Content, Codable {
         self.to = to
         self.name = name
         self.created = created
-        
+        self.minAppVersion = minAppVersion
     }
 }
 
@@ -65,6 +68,7 @@ extension TransferSettings: Mergeable {
         merged.to = other.to
         merged.created = other.created
         merged.name = other.name
+        merged.minAppVersion = other.minAppVersion
         return merged
     }
 }
@@ -81,6 +85,7 @@ extension TransferSettingsMigration: Migration {
             .field(TransferSettings.FieldKeys.fromDate, .string, .required)
             .field(TransferSettings.FieldKeys.to, .string, .required)
             .field(TransferSettings.FieldKeys.name, .string)
+            .field(TransferSettings.FieldKeys.minAppVersion, .string)
             .field(TransferSettings.FieldKeys.created, .string, .required)
             .create()
     }
