@@ -31,6 +31,8 @@ extension AppController {
         let trainer = root.grouped("trainer")
         trainer.put(":teamID", use: updateTeamTrainer)
         trainer.get(":teamID", use: getTrainer)
+        team.get(":teamID", "overdraft", use: setOverdraftLimit)
+
     }
 
     // GET /app/team/:teamID
@@ -292,5 +294,81 @@ extension AppController {
 
         return coach
     }
+    
+    // GET /app/team/:teamID/overdraft
+    func setOverdraftLimit(req: Request) async throws -> HTTPStatus {
+        let teamID = try req.parameters.require("teamID", as: UUID.self)
+
+        guard let team = try await Team.find(teamID, on: req.db) else {
+            throw Abort(.notFound, reason: "Team not found.")
+        }
+
+        // 1) balance must exist
+        guard let balance = team.balance else {
+            throw Abort(.badRequest, reason: "Team balance not available")
+        }
+
+        // 2) overdraft must not already be set
+        guard team.overdraft == false else {
+            throw Abort(.badRequest, reason: "Overdraft already set")
+        }
+
+        // 3) balance must be below 0
+        guard balance < 0 else {
+            throw Abort(.badRequest, reason: "Balance is non-negative; overdraft cannot be applied")
+        }
+
+        team.overdraft = true
+
+        // 4) next Tuesday @ 12:00 Europe/Vienna (same logic as your original)
+        let calendar = Calendar(identifier: .gregorian)
+        let now = Date.viennaNow
+        let weekday = calendar.component(.weekday, from: now)
+
+        // Tuesday is 3 in Gregorian calendar where Sunday = 1
+        let daysUntilTuesday = (3 - weekday + 7) % 7
+        let nextTuesday = calendar.date(
+            byAdding: .day,
+            value: (daysUntilTuesday == 0 ? 7 : daysUntilTuesday),
+            to: now
+        )!
+
+        var tuesdayComponents = calendar.dateComponents([.year, .month, .day], from: nextTuesday)
+        tuesdayComponents.hour = 12
+        tuesdayComponents.minute = 0
+        tuesdayComponents.second = 0
+
+        let overdraftDate = calendar.date(from: tuesdayComponents)!
+        let viennaTimeZone = TimeZone(identifier: "Europe/Vienna")!
+        let viennaOverdraftDate = overdraftDate.addingTimeInterval(
+            TimeInterval(viennaTimeZone.secondsFromGMT(for: overdraftDate))
+        )
+
+        team.overdraftDate = viennaOverdraftDate
+
+        // 5) create Rechnung + decrease balance
+        let year = calendar.component(.year, from: Date.viennaNow)
+        let randomFiveDigitNumber = String(format: "%05d", Int.random(in: 0..<100000))
+        let invoiceNumber = "\(year)\(randomFiveDigitNumber)"
+
+        let rechnungAmount: Double = 50.0
+
+        let rechnung = Rechnung(
+            team: team.id,
+            teamName: team.teamName,
+            number: invoiceNumber,
+            summ: rechnungAmount,
+            topay: nil,
+            kennzeichen: "Overdraft"
+        )
+
+        try await rechnung.save(on: req.db)
+
+        team.balance = balance - rechnungAmount
+        try await team.save(on: req.db)
+
+        return .ok
+    }
+
 
 }
