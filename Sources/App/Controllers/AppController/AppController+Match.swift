@@ -140,6 +140,10 @@ extension AppController {
             match.patch("teamcancel", use: teamCancelGame)
             match.patch("spielabbruch", use: spielabbruch)
             match.patch("done", use: done)
+            route.get("match", "matchday", ":day", use: matchesForMatchday)
+            route.get("match", "season", ":seasonID", "matchday", ":day", use: matchesForMatchdayForSeason)
+            route.get("match", "date", ":date", use: matchesForDate)
+
         }
 
         // legacy keep (same param name)
@@ -851,6 +855,234 @@ extension AppController {
         }
 
         return league
+    }
+    
+}
+
+extension AppController {
+    // What I need:
+    // a function that will return all the matches overviews for:
+    // - a matchesForMatchday day (across all leagues but only with active seasons)
+    // - a matchesForMatchdayforSeason day for a season (for a certain season)
+
+    /// GET /app/match/matchday/:day
+    /// Across ALL leagues, but only for seasons marked as `primary == true`.
+    func matchesForMatchday(req: Request) async throws -> [AppModels.AppMatchOverview] {
+        let day = try req.parameters.require("day", as: Int.self)
+
+        // "active seasons" = primary seasons
+        let activeSeasons = try await Season.query(on: req.db)
+            .filter(\.$primary == true)
+            .all()
+
+        let activeSeasonIDs = activeSeasons.compactMap(\.id)
+        guard !activeSeasonIDs.isEmpty else { return [] }
+
+        // Fetch all matches belonging to active seasons
+        let matches = try await Match.query(on: req.db)
+            .filter(\.$season.$id ~~ activeSeasonIDs)
+            .with(\.$homeTeam)
+            .with(\.$awayTeam)
+            .with(\.$season) { $0.with(\.$league) }
+            .all()
+
+        // Filter in-memory by matchday (details is JSON)
+        let filtered = matches
+            .filter { $0.details.gameday == day }
+            .sorted { (lhs, rhs) in
+                // best-effort sorting: date first, then league name, then team name
+                let lDate = lhs.details.date ?? .distantFuture
+                let rDate = rhs.details.date ?? .distantFuture
+                if lDate != rDate { return lDate < rDate }
+
+                let lLeague = lhs.season?.league?.name ?? ""
+                let rLeague = rhs.season?.league?.name ?? ""
+                if lLeague != rLeague { return lLeague < rLeague }
+
+                return lhs.homeTeam.teamName < rhs.homeTeam.teamName
+            }
+
+        return try await filtered.asyncMap { try await toAppMatchOverview(match: $0, req: req) }
+    }
+
+    /// GET /app/match/season/:seasonID/matchday/:day
+    /// Matchday for a specific season.
+    func matchesForMatchdayForSeason(req: Request) async throws -> [AppModels.AppMatchOverview] {
+        let seasonID = try req.parameters.require("seasonID", as: UUID.self)
+        let day = try req.parameters.require("day", as: Int.self)
+
+        // Ensure season exists (and eager-load league so toAppSeason can work)
+        guard let season = try await Season.query(on: req.db)
+            .filter(\.$id == seasonID)
+            .with(\.$league)
+            .first()
+        else {
+            throw Abort(.notFound, reason: "Season not found.")
+        }
+
+        guard let sid = season.id else {
+            throw Abort(.internalServerError, reason: "Season ID missing.")
+        }
+
+        let matches = try await Match.query(on: req.db)
+            .filter(\.$season.$id == sid)
+            .with(\.$homeTeam)
+            .with(\.$awayTeam)
+            .with(\.$season) { $0.with(\.$league) }
+            .all()
+
+        let filtered = matches
+            .filter { $0.details.gameday == day }
+            .sorted { (lhs, rhs) in
+                let lDate = lhs.details.date ?? .distantFuture
+                let rDate = rhs.details.date ?? .distantFuture
+                if lDate != rDate { return lDate < rDate }
+                return lhs.homeTeam.teamName < rhs.homeTeam.teamName
+            }
+
+        return try await filtered.asyncMap { try await toAppMatchOverview(match: $0, req: req) }
+    }
+
+    /// GET /app/match/date/:date
+    /// `date` must be in "yyyy-MM-dd" (no time), interpreted in Europe/Vienna.
+    /// Returns ALL matches on that calendar day across leagues,
+    /// but only for seasons marked as `primary == true` (active).
+    func matchesForDate(req: Request) async throws -> [AppModels.AppMatchOverview] {
+        let dateString = try req.parameters.require("date", as: String.self)
+
+        // Parse "yyyy-MM-dd" in Vienna timezone
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "Europe/Vienna")
+        formatter.dateFormat = "yyyy-MM-dd"
+
+        guard let targetDate = formatter.date(from: dateString) else {
+            throw Abort(.badRequest, reason: "Invalid date format. Use yyyy-MM-dd.")
+        }
+
+        // Calculate day range [startOfDay, startOfNextDay) in Vienna
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Europe/Vienna") ?? .current
+        let startOfDay = cal.startOfDay(for: targetDate)
+        guard let startOfNextDay = cal.date(byAdding: .day, value: 1, to: startOfDay) else {
+            throw Abort(.internalServerError, reason: "Failed to compute day range.")
+        }
+
+        // Active seasons = primary seasons
+        let activeSeasons = try await Season.query(on: req.db)
+            .filter(\.$primary == true)
+            .all()
+
+        let activeSeasonIDs = activeSeasons.compactMap(\.id)
+        guard !activeSeasonIDs.isEmpty else { return [] }
+
+        // Fetch matches from active seasons
+        let matches = try await Match.query(on: req.db)
+            .filter(\.$season.$id ~~ activeSeasonIDs)
+            .with(\.$homeTeam)
+            .with(\.$awayTeam)
+            .with(\.$season) { $0.with(\.$league) }
+            .all()
+
+        // Filter by calendar day (details.date is optional + stored as JSON)
+        let filtered = matches
+            .filter { m in
+                guard let d = m.details.date else { return false }
+                return d >= startOfDay && d < startOfNextDay
+            }
+            .sorted { lhs, rhs in
+                let lDate = lhs.details.date ?? .distantFuture
+                let rDate = rhs.details.date ?? .distantFuture
+                if lDate != rDate { return lDate < rDate }
+
+                let lLeague = lhs.season?.league?.name ?? ""
+                let rLeague = rhs.season?.league?.name ?? ""
+                if lLeague != rLeague { return lLeague < rLeague }
+
+                return lhs.homeTeam.teamName < rhs.homeTeam.teamName
+            }
+
+        return try await filtered.asyncMap { try await toAppMatchOverview(match: $0, req: req) }
+    }
+
+    // MARK: - Mapping
+
+    /// Converts a fully-loaded `Match` to `AppMatchOverview`.
+    /// Assumes: `homeTeam`, `awayTeam`, `season.league` are eager-loaded.
+    private func toAppMatchOverview(match: Match, req: Request) async throws -> AppModels.AppMatchOverview {
+        guard let matchID = match.id else {
+            throw Abort(.internalServerError, reason: "Match is missing ID.")
+        }
+        guard let season = match.season else {
+            throw Abort(.notFound, reason: "Season not found for match \(matchID).")
+        }
+        guard let league = season.league else {
+            throw Abort(.notFound, reason: "League not found for match \(matchID).")
+        }
+
+        let leagueOverview = try league.toAppLeagueOverview()
+        let appSeason = try season.toAppSeason()
+
+        let home = match.homeTeam
+        let away = match.awayTeam
+
+        let homeID = try home.requireID()
+        let awayID = try away.requireID()
+
+        // Keep this lightweight for lists (no StatsCache N+1).
+        let homeOverview = AppModels.AppTeamOverview(
+            id: homeID,
+            sid: home.sid ?? "",
+            league: leagueOverview,
+            points: home.points,
+            logo: home.logo,
+            name: home.teamName,
+            shortName: home.shortName,
+            stats: nil
+        )
+
+        let awayOverview = AppModels.AppTeamOverview(
+            id: awayID,
+            sid: away.sid ?? "",
+            league: leagueOverview,
+            points: away.points,
+            logo: away.logo,
+            name: away.teamName,
+            shortName: away.shortName,
+            stats: nil
+        )
+
+        // Ensure we always return a MiniBlankett even if blanket json was never created
+        let homeMini: MiniBlankett = match.homeBlanket?.toMini()
+            ?? Blankett(
+                name: home.teamName,
+                dress: home.trikot.home,
+                logo: home.logo,
+                players: [],
+                coach: home.coach
+            ).toMini()
+
+        let awayMini: MiniBlankett = match.awayBlanket?.toMini()
+            ?? Blankett(
+                name: away.teamName,
+                dress: away.trikot.away,
+                logo: away.logo,
+                players: [],
+                coach: away.coach
+            ).toMini()
+
+        return AppModels.AppMatchOverview(
+            id: matchID,
+            details: match.details,
+            score: match.score,
+            season: appSeason,
+            away: awayOverview,
+            home: homeOverview,
+            homeBlanket: homeMini,
+            awayBlanket: awayMini,
+            status: match.status
+        )
     }
 }
 
