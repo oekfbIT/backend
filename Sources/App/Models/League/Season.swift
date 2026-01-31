@@ -26,6 +26,8 @@ final class Season: Model, Content, Codable {
     @OptionalField(key: FieldKeys.winner) var winner: UUID?
     @OptionalField(key: FieldKeys.runnerup) var runnerup: UUID?
     @Children(for: \.$season) var matches: [Match]
+    @OptionalField(key: FieldKeys.gameday) var gameday: Int?
+    @OptionalField(key: FieldKeys.gameday) var matchdaycount: Int?
 
     struct FieldKeys {
         static var id: FieldKey { "id" }
@@ -38,12 +40,14 @@ final class Season: Model, Content, Codable {
         static var table: FieldKey { "table" }
         static var winner: FieldKey { "winner" }
         static var runnerup: FieldKey { "runnerup" }
-        
+        static var gameday: FieldKey { "gameday" }
+        static var matchdaycount: FieldKey { "matchdaycount" }
+
     }
 
     init() {}
 
-    init(id: UUID? = nil, leagueId: UUID? = nil, name: String, details: Int, primary: Bool?, table: SeasonTable? = nil, winner: UUID? = nil, runnerup: UUID? = nil) {
+    init(id: UUID? = nil, leagueId: UUID? = nil, name: String, details: Int, primary: Bool?, table: SeasonTable? = nil, winner: UUID? = nil, runnerup: UUID? = nil, gameday: Int? = 0, matchdaycount: Int? = 0) {
         self.id = id
         self.$league.id = leagueId
         self.name = name
@@ -52,6 +56,8 @@ final class Season: Model, Content, Codable {
         self.table = table
         self.winner = winner
         self.runnerup = runnerup
+        self.gameday = gameday
+        self.matchdaycount = matchdaycount
     }
 }
 
@@ -67,6 +73,8 @@ extension Season: Migration {
             .field(FieldKeys.details, .int, .required)
             .field(FieldKeys.winner, .uuid)
             .field(FieldKeys.runnerup, .uuid)
+            .field(FieldKeys.gameday, .int)
+            .field(FieldKeys.matchdaycount, .int)
             .create()
     }
 

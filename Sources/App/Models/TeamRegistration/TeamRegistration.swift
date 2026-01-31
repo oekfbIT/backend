@@ -25,9 +25,9 @@ final class TeamRegistration: Model, Content, Mergeable {
     @Field(key: FieldKeys.initialPassword) var initialPassword: String?
     @OptionalField(key: FieldKeys.refereerLink) var refereerLink: String?
     @OptionalField(key: FieldKeys.assignedLeague) var assignedLeague: UUID?
-    @OptionalField(key: FieldKeys.customerSignedContract) var customerSignedContract: String? // URL
-    @OptionalField(key: FieldKeys.adminSignedContract) var adminSignedContract: String? // URL
-    @OptionalField(key: FieldKeys.teamLogo) var teamLogo: String? // URL
+    @OptionalField(key: FieldKeys.customerSignedContract) var customerSignedContract: String?
+    @OptionalField(key: FieldKeys.adminSignedContract) var adminSignedContract: String?
+    @OptionalField(key: FieldKeys.teamLogo) var teamLogo: String?
     @OptionalField(key: FieldKeys.paidAmount) var paidAmount: Double?
     @OptionalField(key: FieldKeys.user) var user: UUID?
     @OptionalField(key: FieldKeys.team) var team: UUID?
