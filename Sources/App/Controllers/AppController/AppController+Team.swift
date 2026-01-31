@@ -32,7 +32,30 @@ extension AppController {
         trainer.put(":teamID", use: updateTeamTrainer)
         trainer.get(":teamID", use: getTrainer)
         team.get(":teamID", "overdraft", use: setOverdraftLimit)
+        team.get(":teamID", "overdraftInfo", use: getOverdraftInfo)
 
+    }
+
+    // MARK: - Overdraft Info DTO
+    struct TeamOverdraftInfoResponse: Content {
+        /// Can be nil (unknown/not set), false, or true depending on stored value
+        let overdraft: Bool?
+        /// Can be nil if not set
+        let overdraftDate: Date?
+    }
+
+    // GET /app/team/:teamID/overdraftInfo
+    func getOverdraftInfo(req: Request) async throws -> TeamOverdraftInfoResponse {
+        let teamID = try req.parameters.require("teamID", as: UUID.self)
+
+        guard let team = try await Team.find(teamID, on: req.db) else {
+            throw Abort(.notFound, reason: "Team not found.")
+        }
+
+        return TeamOverdraftInfoResponse(
+            overdraft: team.overdraft,
+            overdraftDate: team.overdraftDate
+        )
     }
 
     // GET /app/team/:teamID
