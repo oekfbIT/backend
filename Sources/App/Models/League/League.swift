@@ -143,21 +143,31 @@ extension LeagueMigration: Migration {
 }
 
 extension League {
-    func createSeason(db: Database, numberOfRounds: Int, switchBool: Bool) -> EventLoopFuture<Void> {
+    func createSeason(
+        db: Database,
+        seasonName: String,
+        numberOfRounds: Int,
+        switchBool: Bool
+    ) -> EventLoopFuture<Void> {
         guard let leagueID = self.id else {
             return db.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "League ID is required"))
         }
 
-        let currentYear = Calendar.current.component(.year, from: Date.viennaNow)
-        let nextYear = currentYear + 1
-        let seasonName = "\(currentYear)/\(nextYear)"
-        let season = Season(name: seasonName, details: 0, primary: false)
+        // optional: basic validation
+        let trimmedName = seasonName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else {
+            return db.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Season name is required"))
+        }
+
+        let season = Season(name: trimmedName, details: 0, primary: false)
         season.$league.id = leagueID
 
         return season.save(on: db).flatMap {
             self.$teams.query(on: db).all().flatMap { teams in
                 guard teams.count > 1 else {
-                    return db.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "League must have more than one team"))
+                    return db.eventLoop.makeFailedFuture(
+                        Abort(.badRequest, reason: "League must have more than one team")
+                    )
                 }
 
                 var matches: [Match] = []
@@ -165,20 +175,42 @@ extension League {
                 var teamsCopy = teams
 
                 if isOddTeamCount {
-                    let byeTeam = Team(id: UUID(), sid: "", userId: nil, leagueId: nil, leagueCode: nil, points: 0, coverimg: "", logo: "", teamName: "Bye", foundationYear: "", membershipSince: "", averageAge: "", coach: nil, captain: "", trikot: Trikot(home: "", away: ""), balance: 0.0, referCode: "", usremail: "", usrpass: "", usrtel: "")
+                    let byeTeam = Team(
+                        id: UUID(),
+                        sid: "",
+                        userId: nil,
+                        leagueId: nil,
+                        leagueCode: nil,
+                        points: 0,
+                        coverimg: "",
+                        logo: "",
+                        teamName: "Bye",
+                        foundationYear: "",
+                        membershipSince: "",
+                        averageAge: "",
+                        coach: nil,
+                        captain: "",
+                        trikot: Trikot(home: "", away: ""),
+                        balance: 0.0,
+                        referCode: "",
+                        usremail: "",
+                        usrpass: "",
+                        usrtel: ""
+                    )
                     teamsCopy.append(byeTeam)
                 }
 
                 var gameDay = 1
                 let totalGameDays = (teamsCopy.count - 1) * numberOfRounds
 
-                for round in 0..<numberOfRounds {
+                for _ in 0..<numberOfRounds {
                     var homeAwaySwitch = switchBool
 
                     for roundIndex in 0..<(teamsCopy.count - 1) {
                         for matchIndex in 0..<(teamsCopy.count / 2) {
                             let homeTeamIndex = (roundIndex + matchIndex) % (teamsCopy.count - 1)
-                            var awayTeamIndex = (teamsCopy.count - 1 - matchIndex + roundIndex) % (teamsCopy.count - 1)
+                            var awayTeamIndex =
+                                (teamsCopy.count - 1 - matchIndex + roundIndex) % (teamsCopy.count - 1)
 
                             if matchIndex == 0 {
                                 awayTeamIndex = teamsCopy.count - 1
@@ -195,12 +227,35 @@ extension League {
                                 swap(&homeTeam, &awayTeam)
                             }
 
+                            guard let homeID = homeTeam.id, let awayID = awayTeam.id else {
+                                return db.eventLoop.makeFailedFuture(
+                                    Abort(.badRequest, reason: "All teams must have an ID")
+                                )
+                            }
+
                             let match = Match(
-                                details: MatchDetails(gameday: gameDay, date: nil, stadium: nil, location: "Nicht Zugeordnet"),
-                                homeTeamId: homeTeam.id!,
-                                awayTeamId: awayTeam.id!,
-                                homeBlanket: Blankett(name: homeTeam.teamName, dress: homeTeam.trikot.home, logo: homeTeam.logo, players: [], coach: homeTeam.coach),
-                                awayBlanket: Blankett(name: awayTeam.teamName, dress: awayTeam.trikot.away, logo: awayTeam.logo, players: [], coach: awayTeam.coach),
+                                details: MatchDetails(
+                                    gameday: gameDay,
+                                    date: nil,
+                                    stadium: nil,
+                                    location: "Nicht Zugeordnet"
+                                ),
+                                homeTeamId: homeID,
+                                awayTeamId: awayID,
+                                homeBlanket: Blankett(
+                                    name: homeTeam.teamName,
+                                    dress: homeTeam.trikot.home,
+                                    logo: homeTeam.logo,
+                                    players: [],
+                                    coach: homeTeam.coach
+                                ),
+                                awayBlanket: Blankett(
+                                    name: awayTeam.teamName,
+                                    dress: awayTeam.trikot.away,
+                                    logo: awayTeam.logo,
+                                    players: [],
+                                    coach: awayTeam.coach
+                                ),
                                 score: Score(home: 0, away: 0),
                                 status: .pending
                             )
@@ -208,6 +263,7 @@ extension League {
                             match.$season.id = season.id!
                             matches.append(match)
                         }
+
                         gameDay += 1
                         if gameDay > totalGameDays {
                             gameDay = 1
@@ -222,6 +278,7 @@ extension League {
         }
     }
 }
+
 
 extension League {
     func addMatchesToSeason(

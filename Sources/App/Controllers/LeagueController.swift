@@ -23,7 +23,7 @@ final class LeagueController: RouteCollection {
         route.delete(":id", use: repository.deleteID)
         route.patch(":id", use: repository.updateID)
         route.patch("batch", use: repository.updateBatch)
-        route.post(":id", "createSeason", ":number", ":switch", use: createSeason)
+        route.post(":id", "createSeason", use: createSeason)
         route.post(":id", ":seasonID", "add", ":number", ":switch", use: addMatchesToSeason)
         
         route.get(":id", "seasons", use: getLeagueWithSeasons)
@@ -182,21 +182,55 @@ final class LeagueController: RouteCollection {
             }
     }
 
+    
+    struct CreateSeasonRequest: Content {
+        let title: String
+        let numberOfRounds: Int
+        let switchBool: Bool
+    }
+
     func createSeason(req: Request) -> EventLoopFuture<HTTPStatus> {
-        guard let leagueID = req.parameters.get("id", as: UUID.self),
-              let numberOfRounds = req.parameters.get("number", as: Int.self),
-              let switchBool = req.parameters.get("switch", as: Bool.self) else {
-            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing parameters"))
+        guard let leagueID = req.parameters.get("id", as: UUID.self) else {
+            return req.eventLoop.makeFailedFuture(
+                Abort(.badRequest, reason: "Invalid or missing league ID")
+            )
         }
-        
+
+        let body: CreateSeasonRequest
+        do {
+            body = try req.content.decode(CreateSeasonRequest.self)
+        } catch {
+            return req.eventLoop.makeFailedFuture(
+                Abort(.badRequest, reason: "Invalid request body")
+            )
+        }
+
+        let title = body.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else {
+            return req.eventLoop.makeFailedFuture(
+                Abort(.badRequest, reason: "Season title is required")
+            )
+        }
+
+        guard body.numberOfRounds >= 1 else {
+            return req.eventLoop.makeFailedFuture(
+                Abort(.badRequest, reason: "numberOfRounds must be ≥ 1")
+            )
+        }
+
         return League.find(leagueID, on: req.db)
             .unwrap(or: Abort(.notFound, reason: "League not found"))
             .flatMap { league in
-                league.createSeason(db: req.db, numberOfRounds: numberOfRounds, switchBool: switchBool).map {
-                    return .ok
-                }
+                league.createSeason(
+                    db: req.db,
+                    seasonName: title,
+                    numberOfRounds: body.numberOfRounds,
+                    switchBool: body.switchBool
+                )
+                .transform(to: .ok)
             }
     }
+
     
     func addMatchesToSeason(req: Request) -> EventLoopFuture<HTTPStatus> {
         // Parse params
