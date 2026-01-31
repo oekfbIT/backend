@@ -108,12 +108,25 @@ final class SeasonController: RouteCollection {
 
 extension Season: Mergeable {
     func merge(from other: Season) -> Season {
-        var merged = self
-        merged.id = other.id
-        merged.league?.id = other.league?.id
-        merged.name = other.name
-        merged.details = other.details
-        merged.matches = other.matches
-        return merged
+        // do NOT touch children relations here
+
+        // usually you do NOT want to overwrite id from request body either
+        // so we intentionally skip `id`
+
+        if other.$league.id != nil {
+            self.$league.id = other.$league.id
+        }
+
+        // update fields (only if you want PATCH semantics you can keep nil-checks for optionals)
+        self.name = other.name
+        self.details = other.details
+
+        if other.primary != nil { self.primary = other.primary }
+        if other.table != nil { self.table = other.table }
+        if other.winner != nil { self.winner = other.winner }
+        if other.runnerup != nil { self.runnerup = other.runnerup }
+        if other.gameday != nil { self.gameday = other.gameday }
+
+        return self
     }
 }

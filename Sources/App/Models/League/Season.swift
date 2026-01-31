@@ -1,6 +1,6 @@
 //
 //  File.swift
-//  
+//
 //
 //  Created by Alon Yakoby on 26.04.24.
 //
@@ -14,7 +14,7 @@ struct SeasonTable: Codable, Content {
     var table: [TableItem]
 }
 
-final class Season: Model, Content, Codable {
+final class Season: Model, Content {
     static let schema = "seasons"
 
     @ID(custom: "id") var id: UUID?
@@ -27,13 +27,27 @@ final class Season: Model, Content, Codable {
     @OptionalField(key: FieldKeys.runnerup) var runnerup: UUID?
     @Children(for: \.$season) var matches: [Match]
     @OptionalField(key: FieldKeys.gameday) var gameday: Int?
-    @OptionalField(key: FieldKeys.gameday) var matchdaycount: Int?
+
+    // IMPORTANT:
+    // Exclude `matches` from Codable/Content encoding to prevent:
+    // "Children relation not eager loaded" crashes during response encoding.
+    enum CodingKeys: String, CodingKey {
+        case id
+        case league
+        case name
+        case details
+        case primary
+        case table
+        case winner
+        case runnerup
+        case gameday
+    }
 
     struct FieldKeys {
         static var id: FieldKey { "id" }
         static var name: FieldKey { "name" }
         static var match: FieldKey { "match" }
-        static var league: FieldKey { "league"}
+        static var league: FieldKey { "league" }
         static var state: FieldKey { "state" }
         static var details: FieldKey { "details" }
         static var primary: FieldKey { "primary" }
@@ -41,13 +55,21 @@ final class Season: Model, Content, Codable {
         static var winner: FieldKey { "winner" }
         static var runnerup: FieldKey { "runnerup" }
         static var gameday: FieldKey { "gameday" }
-        static var matchdaycount: FieldKey { "matchdaycount" }
-
     }
 
     init() {}
 
-    init(id: UUID? = nil, leagueId: UUID? = nil, name: String, details: Int, primary: Bool?, table: SeasonTable? = nil, winner: UUID? = nil, runnerup: UUID? = nil, gameday: Int? = 0, matchdaycount: Int? = 0) {
+    init(
+        id: UUID? = nil,
+        leagueId: UUID? = nil,
+        name: String,
+        details: Int,
+        primary: Bool?,
+        table: SeasonTable? = nil,
+        winner: UUID? = nil,
+        runnerup: UUID? = nil,
+        gameday: Int? = 0
+    ) {
         self.id = id
         self.$league.id = leagueId
         self.name = name
@@ -57,7 +79,6 @@ final class Season: Model, Content, Codable {
         self.winner = winner
         self.runnerup = runnerup
         self.gameday = gameday
-        self.matchdaycount = matchdaycount
     }
 }
 
@@ -74,7 +95,6 @@ extension Season: Migration {
             .field(FieldKeys.winner, .uuid)
             .field(FieldKeys.runnerup, .uuid)
             .field(FieldKeys.gameday, .int)
-            .field(FieldKeys.matchdaycount, .int)
             .create()
     }
 
@@ -93,4 +113,3 @@ extension Season {
         )
     }
 }
-
