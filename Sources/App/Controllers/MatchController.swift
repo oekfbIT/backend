@@ -1,9 +1,9 @@
 import Vapor
 import Fluent
 
-struct LeagueMatches: Codable, Content{
-    var matches: [Match]
-    var league: String
+struct LeagueMatches: Content {
+    let league: String
+    var matches: [AppModels.AppMatchOverview]
 }
 
 struct LeagueMatchesShort: Codable, Content{
@@ -180,37 +180,124 @@ final class MatchController: RouteCollection {
             }
     }
     
-    func getLiveScore(req: Request) throws -> EventLoopFuture<[LeagueMatches]> {
-        return Match.query(on: req.db)
-            .filter(\.$status ~~ [.first, .second, .halftime])  // Filter matches that are in progress
-            .with(\.$season) { seasonQuery in  // Eager load the season and related league
-                seasonQuery.with(\.$league)  // Load the league through the season
-            }
-            .all()
-            .flatMap { matches in
-                // Group matches by the league name through season's league
-                var leagueMatchesDict = [String: LeagueMatches]()
-
-                for match in matches {
-                    guard let league = match.$season.value??.$league.value else {
-                        continue  // Skip matches without a valid league
-                    }
-
-                    let leagueName = league?.name  // Retrieve league name
-
-                    if leagueMatchesDict[leagueName ?? "Nicht Gennant"] == nil {
-                        leagueMatchesDict[leagueName ??  "Nicht Gennant"] = LeagueMatches(matches: [], league: leagueName ??  "Nicht Gennant")
-                    }
-
-                    leagueMatchesDict[leagueName ??  "Nicht Gennant"]?.matches.append(match)
-                }
-
-                // Convert the dictionary to an array of LeagueMatches
-                let leagueMatchesArray = Array(leagueMatchesDict.values)
-                return req.eventLoop.makeSucceededFuture(leagueMatchesArray)
-            }
+    struct LiveScoreLeagueMatches: Content {
+        let league: String
+        var matches: [AppModels.AppMatchOverview]
     }
     
+    func getLiveScore(req: Request) throws -> EventLoopFuture<[LeagueMatches]> {
+        Match.query(on: req.db)
+            .filter(\.$status ~~ [.first, .second, .halftime])
+            .with(\.$homeTeam)
+            .with(\.$awayTeam)
+            .with(\.$season) { $0.with(\.$league) }
+            .all()
+            .flatMapThrowing { matches in
+                var dict: [String: LeagueMatches] = [:]
+                dict.reserveCapacity(16)
+
+                for match in matches {
+                    let leagueName = match.season?.league?.name ?? "Nicht Gennant"
+
+                    // ✅ Convert Match -> AppMatchOverview
+                    let overview = try self.toAppMatchOverview(match: match)
+
+                    if dict[leagueName] == nil {
+                        dict[leagueName] = LeagueMatches(league: leagueName, matches: [])
+                    }
+
+                    dict[leagueName]?.matches.append(overview)
+                }
+
+                // optional: sort matches inside each league + sort leagues
+                return dict.values
+                    .map { leagueMatches in
+                        var copy = leagueMatches
+                        copy.matches.sort { lhs, rhs in
+                            let lDate = lhs.details.date ?? .distantFuture
+                            let rDate = rhs.details.date ?? .distantFuture
+                            if lDate != rDate { return lDate < rDate }
+                            return lhs.home.name < rhs.home.name
+                        }
+                        return copy
+                    }
+                    .sorted { $0.league.localizedCaseInsensitiveCompare($1.league) == .orderedAscending }
+            }
+    }
+
+    private func toAppMatchOverview(match: Match) throws -> AppModels.AppMatchOverview {
+        guard let matchID = match.id else {
+            throw Abort(.internalServerError, reason: "Match is missing id")
+        }
+
+        // These should be present because you eager-loaded them in getLiveScore
+        guard let season = match.season else {
+            throw Abort(.internalServerError, reason: "Season missing on match \(matchID)")
+        }
+        guard let league = season.league else {
+            throw Abort(.internalServerError, reason: "League missing on season for match \(matchID)")
+        }
+
+        let leagueOverview = try league.toAppLeagueOverview()
+        let appSeason = try season.toAppSeason()
+
+        // eager loaded
+        let home = match.homeTeam
+        let away = match.awayTeam
+
+        let homeOverview = AppModels.AppTeamOverview(
+            id: try home.requireID(),
+            sid: home.sid ?? "",
+            league: leagueOverview,
+            points: home.points,
+            logo: home.logo,
+            name: home.teamName,
+            shortName: home.shortName,
+            stats: nil
+        )
+
+        let awayOverview = AppModels.AppTeamOverview(
+            id: try away.requireID(),
+            sid: away.sid ?? "",
+            league: leagueOverview,
+            points: away.points,
+            logo: away.logo,
+            name: away.teamName,
+            shortName: away.shortName,
+            stats: nil
+        )
+
+        let homeMini: MiniBlankett = match.homeBlanket?.toMini()
+            ?? Blankett(
+                name: home.teamName,
+                dress: home.trikot.home,
+                logo: home.logo,
+                players: [],
+                coach: home.coach
+            ).toMini()
+
+        let awayMini: MiniBlankett = match.awayBlanket?.toMini()
+            ?? Blankett(
+                name: away.teamName,
+                dress: away.trikot.away,
+                logo: away.logo,
+                players: [],
+                coach: away.coach
+            ).toMini()
+
+        return AppModels.AppMatchOverview(
+            id: matchID,
+            details: match.details,
+            score: match.score,
+            season: appSeason,
+            away: awayOverview,
+            home: homeOverview,
+            homeBlanket: homeMini,
+            awayBlanket: awayMini,
+            status: match.status
+        )
+    }
+
     // Function to handle adding a goal and updating the score
     func addGoal(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let matchId = try req.parameters.require("id", as: UUID.self)
