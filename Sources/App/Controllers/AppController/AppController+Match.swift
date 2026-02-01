@@ -152,21 +152,39 @@ extension AppController {
 
     // GET /app/match/livescore
     func getLiveScore(req: Request) async throws -> [LeagueMatches] {
+        // Load ONLY what we need; no eager-load home/away teams to avoid missing-parent crashes.
         let matches = try await Match.query(on: req.db)
             .filter(\.$status ~~ [.first, .second, .halftime])
-            .with(\.$season) { $0.with(\.$league) }
             .all()
 
-        var dict: [String: LeagueMatches] = [:]
-        for match in matches {
-            let leagueName = match.season?.league?.name ?? "Nicht Gennant"
-            if dict[leagueName] == nil {
-                dict[leagueName] = LeagueMatches(matches: [], league: leagueName)
+        // Reuse your safe lookup + mapping (skips dangling refs).
+        let lookup = try await buildMatchLookup(matches: matches, on: req.db)
+
+        var mapped: [AppModels.AppMatchOverview] = []
+        mapped.reserveCapacity(matches.count)
+
+        for m in matches {
+            if let ov = try await toAppMatchOverviewSafe(match: m, lookup: lookup, req: req) {
+                mapped.append(ov)
             }
-            dict[leagueName]?.matches.append(match)
         }
 
-        return Array(dict.values)
+        // Group by league name (season.league is String in your AppModels)
+        let grouped = Dictionary(grouping: mapped) { $0.season.league }
+
+        let leagues: [LeagueMatches] = grouped
+            .map { leagueName, items in
+                let sorted = items.sorted { lhs, rhs in
+                    let lDate = lhs.details.date ?? .distantFuture
+                    let rDate = rhs.details.date ?? .distantFuture
+                    if lDate != rDate { return lDate < rDate }
+                    return lhs.home.name < rhs.home.name
+                }
+                return LeagueMatches(league: leagueName.isEmpty ? "Nicht Gennant" : leagueName, matches: sorted)
+            }
+            .sorted { $0.league.localizedCaseInsensitiveCompare($1.league) == .orderedAscending }
+
+        return leagues
     }
 
     // POST /app/match/:matchID/toggle
@@ -859,233 +877,6 @@ extension AppController {
     
 }
 
-extension AppController {
-    // What I need:
-    // a function that will return all the matches overviews for:
-    // - a matchesForMatchday day (across all leagues but only with active seasons)
-    // - a matchesForMatchdayforSeason day for a season (for a certain season)
-
-    /// GET /app/match/matchday/:day
-    /// Across ALL leagues, but only for seasons marked as `primary == true`.
-    func matchesForMatchday(req: Request) async throws -> [AppModels.AppMatchOverview] {
-        let day = try req.parameters.require("day", as: Int.self)
-
-        // "active seasons" = primary seasons
-        let activeSeasons = try await Season.query(on: req.db)
-            .filter(\.$primary == true)
-            .all()
-
-        let activeSeasonIDs = activeSeasons.compactMap(\.id)
-        guard !activeSeasonIDs.isEmpty else { return [] }
-
-        // Fetch all matches belonging to active seasons
-        let matches = try await Match.query(on: req.db)
-            .filter(\.$season.$id ~~ activeSeasonIDs)
-            .with(\.$homeTeam)
-            .with(\.$awayTeam)
-            .with(\.$season) { $0.with(\.$league) }
-            .all()
-
-        // Filter in-memory by matchday (details is JSON)
-        let filtered = matches
-            .filter { $0.details.gameday == day }
-            .sorted { (lhs, rhs) in
-                // best-effort sorting: date first, then league name, then team name
-                let lDate = lhs.details.date ?? .distantFuture
-                let rDate = rhs.details.date ?? .distantFuture
-                if lDate != rDate { return lDate < rDate }
-
-                let lLeague = lhs.season?.league?.name ?? ""
-                let rLeague = rhs.season?.league?.name ?? ""
-                if lLeague != rLeague { return lLeague < rLeague }
-
-                return lhs.homeTeam.teamName < rhs.homeTeam.teamName
-            }
-
-        return try await filtered.asyncMap { try await toAppMatchOverview(match: $0, req: req) }
-    }
-
-    /// GET /app/match/season/:seasonID/matchday/:day
-    /// Matchday for a specific season.
-    func matchesForMatchdayForSeason(req: Request) async throws -> [AppModels.AppMatchOverview] {
-        let seasonID = try req.parameters.require("seasonID", as: UUID.self)
-        let day = try req.parameters.require("day", as: Int.self)
-
-        // Ensure season exists (and eager-load league so toAppSeason can work)
-        guard let season = try await Season.query(on: req.db)
-            .filter(\.$id == seasonID)
-            .with(\.$league)
-            .first()
-        else {
-            throw Abort(.notFound, reason: "Season not found.")
-        }
-
-        guard let sid = season.id else {
-            throw Abort(.internalServerError, reason: "Season ID missing.")
-        }
-
-        let matches = try await Match.query(on: req.db)
-            .filter(\.$season.$id == sid)
-            .with(\.$homeTeam)
-            .with(\.$awayTeam)
-            .with(\.$season) { $0.with(\.$league) }
-            .all()
-
-        let filtered = matches
-            .filter { $0.details.gameday == day }
-            .sorted { (lhs, rhs) in
-                let lDate = lhs.details.date ?? .distantFuture
-                let rDate = rhs.details.date ?? .distantFuture
-                if lDate != rDate { return lDate < rDate }
-                return lhs.homeTeam.teamName < rhs.homeTeam.teamName
-            }
-
-        return try await filtered.asyncMap { try await toAppMatchOverview(match: $0, req: req) }
-    }
-
-    /// GET /app/match/date/:date
-    /// `date` must be in "yyyy-MM-dd" (no time), interpreted in Europe/Vienna.
-    /// Returns ALL matches on that calendar day across leagues,
-    /// but only for seasons marked as `primary == true` (active).
-    func matchesForDate(req: Request) async throws -> [AppModels.AppMatchOverview] {
-        let dateString = try req.parameters.require("date", as: String.self)
-
-        // Parse "yyyy-MM-dd" in Vienna timezone
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "Europe/Vienna")
-        formatter.dateFormat = "yyyy-MM-dd"
-
-        guard let targetDate = formatter.date(from: dateString) else {
-            throw Abort(.badRequest, reason: "Invalid date format. Use yyyy-MM-dd.")
-        }
-
-        // Calculate day range [startOfDay, startOfNextDay) in Vienna
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "Europe/Vienna") ?? .current
-        let startOfDay = cal.startOfDay(for: targetDate)
-        guard let startOfNextDay = cal.date(byAdding: .day, value: 1, to: startOfDay) else {
-            throw Abort(.internalServerError, reason: "Failed to compute day range.")
-        }
-
-        // Active seasons = primary seasons
-        let activeSeasons = try await Season.query(on: req.db)
-            .filter(\.$primary == true)
-            .all()
-
-        let activeSeasonIDs = activeSeasons.compactMap(\.id)
-        guard !activeSeasonIDs.isEmpty else { return [] }
-
-        // Fetch matches from active seasons
-        let matches = try await Match.query(on: req.db)
-            .filter(\.$season.$id ~~ activeSeasonIDs)
-            .with(\.$homeTeam)
-            .with(\.$awayTeam)
-            .with(\.$season) { $0.with(\.$league) }
-            .all()
-
-        // Filter by calendar day (details.date is optional + stored as JSON)
-        let filtered = matches
-            .filter { m in
-                guard let d = m.details.date else { return false }
-                return d >= startOfDay && d < startOfNextDay
-            }
-            .sorted { lhs, rhs in
-                let lDate = lhs.details.date ?? .distantFuture
-                let rDate = rhs.details.date ?? .distantFuture
-                if lDate != rDate { return lDate < rDate }
-
-                let lLeague = lhs.season?.league?.name ?? ""
-                let rLeague = rhs.season?.league?.name ?? ""
-                if lLeague != rLeague { return lLeague < rLeague }
-
-                return lhs.homeTeam.teamName < rhs.homeTeam.teamName
-            }
-
-        return try await filtered.asyncMap { try await toAppMatchOverview(match: $0, req: req) }
-    }
-
-    // MARK: - Mapping
-
-    /// Converts a fully-loaded `Match` to `AppMatchOverview`.
-    /// Assumes: `homeTeam`, `awayTeam`, `season.league` are eager-loaded.
-    private func toAppMatchOverview(match: Match, req: Request) async throws -> AppModels.AppMatchOverview {
-        guard let matchID = match.id else {
-            throw Abort(.internalServerError, reason: "Match is missing ID.")
-        }
-        guard let season = match.season else {
-            throw Abort(.notFound, reason: "Season not found for match \(matchID).")
-        }
-        guard let league = season.league else {
-            throw Abort(.notFound, reason: "League not found for match \(matchID).")
-        }
-
-        let leagueOverview = try league.toAppLeagueOverview()
-        let appSeason = try season.toAppSeason()
-
-        let home = match.homeTeam
-        let away = match.awayTeam
-
-        let homeID = try home.requireID()
-        let awayID = try away.requireID()
-
-        // Keep this lightweight for lists (no StatsCache N+1).
-        let homeOverview = AppModels.AppTeamOverview(
-            id: homeID,
-            sid: home.sid ?? "",
-            league: leagueOverview,
-            points: home.points,
-            logo: home.logo,
-            name: home.teamName,
-            shortName: home.shortName,
-            stats: nil
-        )
-
-        let awayOverview = AppModels.AppTeamOverview(
-            id: awayID,
-            sid: away.sid ?? "",
-            league: leagueOverview,
-            points: away.points,
-            logo: away.logo,
-            name: away.teamName,
-            shortName: away.shortName,
-            stats: nil
-        )
-
-        // Ensure we always return a MiniBlankett even if blanket json was never created
-        let homeMini: MiniBlankett = match.homeBlanket?.toMini()
-            ?? Blankett(
-                name: home.teamName,
-                dress: home.trikot.home,
-                logo: home.logo,
-                players: [],
-                coach: home.coach
-            ).toMini()
-
-        let awayMini: MiniBlankett = match.awayBlanket?.toMini()
-            ?? Blankett(
-                name: away.teamName,
-                dress: away.trikot.away,
-                logo: away.logo,
-                players: [],
-                coach: away.coach
-            ).toMini()
-
-        return AppModels.AppMatchOverview(
-            id: matchID,
-            details: match.details,
-            score: match.score,
-            season: appSeason,
-            away: awayOverview,
-            home: homeOverview,
-            homeBlanket: homeMini,
-            awayBlanket: awayMini,
-            status: match.status
-        )
-    }
-}
-
 // MARK: - Private helpers
 extension AppController {
 
@@ -1149,4 +940,390 @@ extension AppController {
 
         return .ok
     }
+}
+
+// Assumptions / decisions:
+// - We keep Match @Parent non-optional.
+// - Mongo can contain dangling references (teams/seasons deleted). We SKIP such matches in list endpoints.
+// - Performance: filter matchday/date in Mongo using nested JSON keys (`details.gameday`, `details.date`).
+// - Date endpoint: timezone handling removed. We treat `yyyy-MM-dd` as a pure calendar date.
+//   Implementation parses date as UTC midnight and compares by day components in UTC.
+// - DB-side date range filter is attempted first. If it yields 0 results (storage/index/type issues),
+//   we fall back to in-memory (still correct, potentially slower).
+
+extension AppController {
+
+    // MARK: - Public Endpoints
+
+    /// GET /app/match/matchday/:day
+    /// Across ALL leagues, but only for seasons marked as `primary == true`.
+    func matchesForMatchday(req: Request) async throws -> [AppModels.AppMatchOverview] {
+        let day = try req.parameters.require("day", as: Int.self)
+
+        let activeSeasonIDs = try await Season.query(on: req.db)
+            .filter(\.$primary == true)
+            .all()
+            .compactMap(\.id)
+
+        guard !activeSeasonIDs.isEmpty else { return [] }
+
+        // IMPORTANT: no eager-load of parents
+        // DB-side filter on nested JSON field via dot-path FieldKey
+        let matches = try await Match.query(on: req.db)
+            .filter(\.$season.$id ~~ activeSeasonIDs)
+            .filter(Match.FieldKeys.gameday, .equal, day)
+            .all()
+
+        let lookup = try await buildMatchLookup(matches: matches, on: req.db)
+
+        var mapped: [AppModels.AppMatchOverview] = []
+        mapped.reserveCapacity(matches.count)
+
+        for m in matches {
+            if let ov = try await toAppMatchOverviewSafe(match: m, lookup: lookup, req: req) {
+                mapped.append(ov)
+            }
+        }
+
+        // NOTE: In your AppModels, `season.league` appears to be String (not object), so no `.name`.
+        return mapped.sorted { lhs, rhs in
+            let lDate = lhs.details.date ?? .distantFuture
+            let rDate = rhs.details.date ?? .distantFuture
+            if lDate != rDate { return lDate < rDate }
+
+            let lLeague = lhs.season.league
+            let rLeague = rhs.season.league
+            if lLeague != rLeague { return lLeague < rLeague }
+
+            return lhs.home.name < rhs.home.name
+        }
+    }
+
+    /// GET /app/match/season/:seasonID/matchday/:day
+    /// Matchday for a specific season.
+    func matchesForMatchdayForSeason(req: Request) async throws -> [AppModels.AppMatchOverview] {
+        let seasonID = try req.parameters.require("seasonID", as: UUID.self)
+        let day = try req.parameters.require("day", as: Int.self)
+
+        // preserve prior semantics
+        guard let _ = try await Season.query(on: req.db)
+            .filter(\.$id == seasonID)
+            .first()
+        else {
+            throw Abort(.notFound, reason: "Season not found.")
+        }
+
+        // IMPORTANT: no eager-load of parents
+        let matches = try await Match.query(on: req.db)
+            .filter(\.$season.$id == seasonID)
+            .filter(Match.FieldKeys.gameday, .equal, day)
+            .all()
+
+        let lookup = try await buildMatchLookup(matches: matches, on: req.db)
+
+        var mapped: [AppModels.AppMatchOverview] = []
+        mapped.reserveCapacity(matches.count)
+
+        for m in matches {
+            if let ov = try await toAppMatchOverviewSafe(match: m, lookup: lookup, req: req) {
+                mapped.append(ov)
+            }
+        }
+
+        return mapped.sorted { lhs, rhs in
+            let lDate = lhs.details.date ?? .distantFuture
+            let rDate = rhs.details.date ?? .distantFuture
+            if lDate != rDate { return lDate < rDate }
+            return lhs.home.name < rhs.home.name
+        }
+    }
+
+    // MARK: - Matches For Date (grouped by league + availableDates)
+
+    struct MatchesForDateResponse: Content {
+        /// Matches grouped by league, sorted by league name.
+        let leagues: [LeagueMatches]
+        /// Unique calendar days (yyyy-MM-dd) that actually have matches (within a window).
+        let availableDates: [String]
+    }
+
+    struct LeagueMatches: Content {
+        let league: String
+        var matches: [AppModels.AppMatchOverview]
+    }
+
+    /// GET /app/match/date/:date
+    /// `date` must be in "yyyy-MM-dd" (no time).
+    /// Returns ALL matches on that calendar date across leagues,
+    /// but only for seasons marked as `primary == true` (active).
+    ///
+    /// Additional response fields (THIS endpoint only):
+    /// - leagues: grouped/sorted by league
+    /// - availableDates: unique yyyy-MM-dd for nav (within a configurable window)
+    ///
+    /// Query params:
+    /// - navWindowDays (default 180): +/- days around target date to compute availableDates
+    func matchesForDate(req: Request) async throws -> MatchesForDateResponse {
+        let dateString = try req.parameters.require("date", as: String.self)
+        let navWindowDays = max(1, req.query[Int.self, at: "navWindowDays"] ?? 180)
+
+        // Treat input as pure calendar date. Anchor to UTC for deterministic day boundaries.
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0) // date-only semantics
+        formatter.dateFormat = "yyyy-MM-dd"
+
+        guard let targetDate = formatter.date(from: dateString) else {
+            throw Abort(.badRequest, reason: "Invalid date format. Use yyyy-MM-dd.")
+        }
+
+        var utcCal = Calendar(identifier: .gregorian)
+        utcCal.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+
+        let startOfDay = utcCal.startOfDay(for: targetDate)
+        guard let startOfNextDay = utcCal.date(byAdding: .day, value: 1, to: startOfDay) else {
+            throw Abort(.internalServerError, reason: "Failed to compute day range.")
+        }
+
+        // Active seasons = primary seasons
+        let activeSeasonIDs = try await Season.query(on: req.db)
+            .filter(\.$primary == true)
+            .all()
+            .compactMap(\.id)
+
+        guard !activeSeasonIDs.isEmpty else {
+            return MatchesForDateResponse(leagues: [], availableDates: [])
+        }
+
+        // 1) Prefer DB-side date range on nested JSON date (fast if stored as BSON Date + indexed)
+        let dbFiltered: [Match] = (try? await Match.query(on: req.db)
+            .filter(\.$season.$id ~~ activeSeasonIDs)
+            .filter(Match.FieldKeys.date, .greaterThanOrEqual, startOfDay)
+            .filter(Match.FieldKeys.date, .lessThan, startOfNextDay)
+            .all()
+        ) ?? []
+
+        let matchesForThatDate: [Match]
+        if !dbFiltered.isEmpty {
+            matchesForThatDate = dbFiltered
+        } else {
+            // 2) Fallback: correct for "date-only" semantics even if stored dates are shifted/strings/etc.
+            let allActive = try await Match.query(on: req.db)
+                .filter(\.$season.$id ~~ activeSeasonIDs)
+                .all()
+
+            let targetComps = utcCal.dateComponents([.year, .month, .day], from: targetDate)
+
+            matchesForThatDate = allActive.filter { m in
+                guard let d = m.details.date else { return false }
+                let comps = utcCal.dateComponents([.year, .month, .day], from: d)
+                return comps.year == targetComps.year && comps.month == targetComps.month && comps.day == targetComps.day
+            }
+        }
+
+        // Lookup + safe mapping (skips dangling refs)
+        let lookup = try await buildMatchLookup(matches: matchesForThatDate, on: req.db)
+
+        var mapped: [AppModels.AppMatchOverview] = []
+        mapped.reserveCapacity(matchesForThatDate.count)
+
+        for m in matchesForThatDate {
+            if let ov = try await toAppMatchOverviewSafe(match: m, lookup: lookup, req: req) {
+                mapped.append(ov)
+            }
+        }
+
+        // Group by league + sort leagues + sort matches inside league
+        let grouped = Dictionary(grouping: mapped) { $0.season.league }
+
+        let leagues: [LeagueMatches] = grouped
+            .map { leagueName, items in
+                let sortedMatches = items.sorted { lhs, rhs in
+                    let lDate = lhs.details.date ?? .distantFuture
+                    let rDate = rhs.details.date ?? .distantFuture
+                    if lDate != rDate { return lDate < rDate }
+                    return lhs.home.name < rhs.home.name
+                }
+                return LeagueMatches(league: leagueName, matches: sortedMatches)
+            }
+            .sorted { $0.league.localizedCaseInsensitiveCompare($1.league) == .orderedAscending }
+
+        // Build availableDates for navigation (unique days that have matches)
+        guard
+            let windowStart = utcCal.date(byAdding: .day, value: -navWindowDays, to: startOfDay),
+            let windowEnd = utcCal.date(byAdding: .day, value: navWindowDays + 1, to: startOfDay)
+        else {
+            throw Abort(.internalServerError, reason: "Failed to compute navigation window.")
+        }
+
+        // Prefer DB-side range query for window
+        let dbWindowMatches: [Match] = (try? await Match.query(on: req.db)
+            .filter(\.$season.$id ~~ activeSeasonIDs)
+            .filter(Match.FieldKeys.date, .greaterThanOrEqual, windowStart)
+            .filter(Match.FieldKeys.date, .lessThan, windowEnd)
+            .all()
+        ) ?? []
+
+        let windowMatches: [Match]
+        if !dbWindowMatches.isEmpty {
+            windowMatches = dbWindowMatches
+        } else {
+            // Fallback: potentially heavier but correct
+            windowMatches = try await Match.query(on: req.db)
+                .filter(\.$season.$id ~~ activeSeasonIDs)
+                .all()
+        }
+
+        let availableDates = uniqueDateStrings(from: windowMatches, utcCal: utcCal)
+
+        return MatchesForDateResponse(leagues: leagues, availableDates: availableDates)
+    }
+
+    // MARK: - Safe Mapping (no eager-load)
+
+    private struct MatchLookup {
+        let teamsByID: [UUID: Team]
+        let seasonsByID: [UUID: Season] // league preloaded
+    }
+
+    private func buildMatchLookup(matches: [Match], on db: Database) async throws -> MatchLookup {
+        let teamIDs = Array(Set(matches.flatMap { [ $0.$homeTeam.id, $0.$awayTeam.id ] }))
+        let seasonIDs = Array(Set(matches.compactMap { $0.$season.id }))
+
+        let teams = try await Team.query(on: db)
+            .filter(\.$id ~~ teamIDs)
+            .all()
+
+        let seasons = try await Season.query(on: db)
+            .filter(\.$id ~~ seasonIDs)
+            .with(\.$league)
+            .all()
+
+        let teamsByID: [UUID: Team] = Dictionary(uniqueKeysWithValues: teams.compactMap { t in
+            guard let id = t.id else { return nil }
+            return (id, t)
+        })
+
+        let seasonsByID: [UUID: Season] = Dictionary(uniqueKeysWithValues: seasons.compactMap { s in
+            guard let id = s.id else { return nil }
+            return (id, s)
+        })
+
+        return MatchLookup(teamsByID: teamsByID, seasonsByID: seasonsByID)
+    }
+
+    /// Converts a `Match` to `AppMatchOverview` without relying on eager-loaded parents.
+    /// Returns nil when required references are missing.
+    private func toAppMatchOverviewSafe(
+        match: Match,
+        lookup: MatchLookup,
+        req: Request
+    ) async throws -> AppModels.AppMatchOverview? {
+        guard let matchID = match.id else {
+            req.logger.warning("Skipping match without id.")
+            return nil
+        }
+
+        guard let seasonID = match.$season.id else {
+            req.logger.warning("Skipping match \(matchID) because season id is nil.")
+            return nil
+        }
+        guard let season = lookup.seasonsByID[seasonID] else {
+            req.logger.warning("Skipping match \(matchID) because season \(seasonID) is missing.")
+            return nil
+        }
+        guard let league = season.league else {
+            req.logger.warning("Skipping match \(matchID) because league is missing on season \(seasonID).")
+            return nil
+        }
+
+        let homeID = match.$homeTeam.id
+        let awayID = match.$awayTeam.id
+
+        guard let home = lookup.teamsByID[homeID] else {
+            req.logger.warning("Skipping match \(matchID) because home team \(homeID) is missing.")
+            return nil
+        }
+        guard let away = lookup.teamsByID[awayID] else {
+            req.logger.warning("Skipping match \(matchID) because away team \(awayID) is missing.")
+            return nil
+        }
+
+        let leagueOverview = try league.toAppLeagueOverview()
+        let appSeason = try season.toAppSeason()
+
+        let homeOverview = AppModels.AppTeamOverview(
+            id: try home.requireID(),
+            sid: home.sid ?? "",
+            league: leagueOverview,
+            points: home.points,
+            logo: home.logo,
+            name: home.teamName,
+            shortName: home.shortName,
+            stats: nil
+        )
+
+        let awayOverview = AppModels.AppTeamOverview(
+            id: try away.requireID(),
+            sid: away.sid ?? "",
+            league: leagueOverview,
+            points: away.points,
+            logo: away.logo,
+            name: away.teamName,
+            shortName: away.shortName,
+            stats: nil
+        )
+
+        let homeMini: MiniBlankett = match.homeBlanket?.toMini()
+            ?? Blankett(
+                name: home.teamName,
+                dress: home.trikot.home,
+                logo: home.logo,
+                players: [],
+                coach: home.coach
+            ).toMini()
+
+        let awayMini: MiniBlankett = match.awayBlanket?.toMini()
+            ?? Blankett(
+                name: away.teamName,
+                dress: away.trikot.away,
+                logo: away.logo,
+                players: [],
+                coach: away.coach
+            ).toMini()
+
+        return AppModels.AppMatchOverview(
+            id: matchID,
+            details: match.details,
+            score: match.score,
+            season: appSeason,
+            away: awayOverview,
+            home: homeOverview,
+            homeBlanket: homeMini,
+            awayBlanket: awayMini,
+            status: match.status
+        )
+    }
+}
+
+// MARK: - File-private helpers
+
+private func uniqueDateStrings(from matches: [Match], utcCal: Calendar) -> [String] {
+    var set = Set<String>()
+    set.reserveCapacity(matches.count)
+
+    let fmt = DateFormatter()
+    fmt.calendar = utcCal
+    fmt.locale = Locale(identifier: "en_US_POSIX")
+    fmt.timeZone = TimeZone(secondsFromGMT: 0)
+    fmt.dateFormat = "yyyy-MM-dd"
+
+    for m in matches {
+        guard let d = m.details.date else { continue }
+        set.insert(fmt.string(from: d))
+    }
+
+    // yyyy-MM-dd sorts lexicographically == chronologically
+    return set.sorted()
 }

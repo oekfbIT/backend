@@ -129,6 +129,8 @@ final class Match: Model, Content, Codable {
         static var homeBlanket: FieldKey { "homeBlanket" }
         static var awayBlanket: FieldKey { "awayBlanket" }
         static var postponerequest: FieldKey { "postponerequest" }
+        static let gameday: FieldKey = "details.gameday"
+        static let date: FieldKey = "details.date"
     }
 
     init() {}
