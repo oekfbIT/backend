@@ -13,13 +13,14 @@ extension AppController {
 
   // MARK: - Push Types (string contract with frontend)
 
-  enum PushType: String, Content {
-    case broadcast = "broadcast"
-    case newsOpen = "news.open"
-    case conversationMessage = "conversation.message"
-    case followTeamUpdated = "follow.team.updated"
-    case followPlayerUpdated = "follow.player.updated"
-  }
+    enum PushType: String, Content {
+      case broadcast = "broadcast"
+      case newsOpen = "news.open"
+      case conversationMessage = "conversation.message"
+      case followTeamUpdated = "follow.team.updated"
+      case followPlayerUpdated = "follow.player.updated"
+      case followMatchUpdated = "follow.match.updated"
+    }
 
   // MARK: - DTOs
 

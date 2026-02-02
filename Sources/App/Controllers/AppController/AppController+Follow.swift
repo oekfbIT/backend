@@ -3,13 +3,11 @@
 //  oekfbbackend
 //
 //  Follow API for:
-//  - Following a team or a player
+//  - Following a team, player, or match
 //  - Listing follows by guestId
 //  - Deleting a follow subscription
 //
-//  Binding choice (for now):
-//  - guestId (per-install, anonymous-friendly)
-//  - later we can add userId binding if you want
+//  Binding: guestId
 //
 //  Routes (base /app):
 //    POST   /app/follow                 -> upsert follow
@@ -27,7 +25,7 @@ extension AppController {
 
   struct UpsertFollowRequest: Content {
     let guestId: String
-    let targetType: FollowTargetType // team | player
+    let targetType: FollowTargetType // team | player | match
     let targetId: UUID
     let isActive: Bool?
   }
@@ -61,9 +59,9 @@ extension AppController {
       throw Abort(.badRequest, reason: "guestId is empty.")
     }
 
-    // Guard: only allow team/player (already enforced by enum, but keep explicit)
+    // Guard: only allow team/player/match (enum enforces, but explicit is ok)
     switch dto.targetType {
-    case .team, .player:
+    case .team, .player, .match:
       break
     }
 

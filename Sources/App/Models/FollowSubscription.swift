@@ -1,5 +1,5 @@
 //
-//  File.swift
+//  FollowSubscription.swift
 //  oekfbbackend
 //
 //  Created by Alon Yakoby on 14.12.25.
@@ -12,6 +12,7 @@ import Vapor
 enum FollowTargetType: String, Codable {
   case team
   case player
+  case match
 }
 
 final class FollowSubscription: Model, Content {
