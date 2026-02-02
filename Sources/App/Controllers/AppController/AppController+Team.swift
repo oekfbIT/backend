@@ -32,6 +32,7 @@ extension AppController {
         trainer.put(":teamID", use: updateTeamTrainer)
         trainer.put(":teamID", "alt", use: updateTeamAltTrainer)
         trainer.get(":teamID", use: getTrainer)
+        trainer.get(":teamID","alt", use: getTrainer)
         team.get(":teamID", "overdraft", use: setOverdraftLimit)
         team.get(":teamID", "overdraftInfo", use: getOverdraftInfo)
 
@@ -319,6 +320,21 @@ extension AppController {
         return coach
     }
     
+    // GET /app/team/:teamID/trainer
+    func getAltTrainer(req: Request) async throws -> Trainer {
+        let teamID = try req.parameters.require("teamID", as: UUID.self)
+
+        guard let team = try await Team.find(teamID, on: req.db) else {
+            throw Abort(.notFound, reason: "Team not found.")
+        }
+
+        guard let altCoach = team.altCoach else {
+            throw Abort(.notFound, reason: "Trainer not set for this team.")
+        }
+
+        return altCoach
+    }
+
     // GET /app/team/:teamID/overdraft
     func setOverdraftLimit(req: Request) async throws -> HTTPStatus {
         let teamID = try req.parameters.require("teamID", as: UUID.self)
