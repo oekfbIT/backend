@@ -301,10 +301,10 @@ final class MatchController: RouteCollection {
     // Function to handle adding a goal and updating the score
     func addGoal(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let matchId = try req.parameters.require("id", as: UUID.self)
-        
+
         struct GoalRequest: Content {
             let playerId: UUID
-            let scoreTeam: String  // Indicates whether the goal is for the home or away team
+            let scoreTeam: String  // "home" | "away"
             let minute: Int
             let name: String?
             let image: String?
@@ -312,13 +312,17 @@ final class MatchController: RouteCollection {
             let assign: MatchAssignment?
             let ownGoal: Bool?
         }
-        
+
         let goalRequest = try req.content.decode(GoalRequest.self)
 
-        return Match.find(matchId, on: req.db)
+        return Match.query(on: req.db)
+            .filter(\.$id == matchId)
+            .with(\.$homeTeam)
+            .with(\.$awayTeam)
+            .first()
             .unwrap(or: Abort(.notFound))
             .flatMap { match in
-                // Update the score based on the scoreTeam parameter
+
                 switch goalRequest.scoreTeam.lowercased() {
                 case "home":
                     match.score.home += 1
@@ -328,7 +332,6 @@ final class MatchController: RouteCollection {
                     return req.eventLoop.future(error: Abort(.badRequest, reason: "Invalid team specified"))
                 }
 
-                // Save the updated match with the new score
                 return match.save(on: req.db).flatMap {
                     let event = MatchEvent(
                         matchId: match.id ?? UUID(),
@@ -345,7 +348,16 @@ final class MatchController: RouteCollection {
 
                     return event.save(on: req.db)
                         .flatMap { _ in self.invalidateStats(for: match, on: req.db) }
-                        .transform(to: .created)
+                        .map { _ in
+                            _ = MatchPushNotifier.fire(.goal, match: match, req: req, extra: [
+                                "minute": String(goalRequest.minute),
+                                "playerName": goalRequest.name ?? "",
+                                "playerNumber": goalRequest.number ?? "",
+                                "playerId": goalRequest.playerId.uuidString,
+                                "teamSide": goalRequest.scoreTeam.lowercased() // "home" | "away"
+                            ])
+                            return HTTPStatus.created
+                        }
                 }
             }
     }
@@ -486,48 +498,83 @@ final class MatchController: RouteCollection {
 
     // Helper function to handle card events
     private func addCardEvent(req: Request, cardType: MatchEventType) -> EventLoopFuture<HTTPStatus> {
-        // Use a do-catch block to safely handle any errors thrown during parameter retrieval
         do {
             let matchId = try req.parameters.require("id", as: UUID.self)
-
-            // Decode the request content and handle any potential decoding errors
             let cardRequest = try req.content.decode(CardRequest.self)
 
-            // Find the match based on the matchId
-            return Match.find(matchId, on: req.db)
+            return Match.query(on: req.db)
+                .filter(\.$id == matchId)
+                .with(\.$homeTeam)
+                .with(\.$awayTeam)
+                .first()
                 .unwrap(or: Abort(.notFound))
                 .flatMap { match in
-                    // Check if the teamId matches either home or away team
+
+                    let side: String
                     if cardRequest.teamId == match.$homeTeam.id {
-                        updatePlayerCardStatus(in: &match.homeBlanket, playerId: cardRequest.playerId, cardType: cardType)
+                        side = "home"
+                        updatePlayerCardStatus(in: &match.homeBlanket,
+                                               playerId: cardRequest.playerId,
+                                               cardType: cardType)
                     } else if cardRequest.teamId == match.$awayTeam.id {
-                        updatePlayerCardStatus(in: &match.awayBlanket, playerId: cardRequest.playerId, cardType: cardType)
+                        side = "away"
+                        updatePlayerCardStatus(in: &match.awayBlanket,
+                                               playerId: cardRequest.playerId,
+                                               cardType: cardType)
                     } else {
-                        return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Team ID does not match home or away team."))
+                        return req.eventLoop.makeFailedFuture(
+                            Abort(.badRequest, reason: "Team ID does not match home or away team.")
+                        )
                     }
 
-                    // Save the updated match
                     return match.save(on: req.db).flatMap {
-                        // Create a card event
-                        let event = MatchEvent(matchId: match.id ?? UUID(),
-                                               type: cardType,
-                                               playerId: cardRequest.playerId,
-                                               minute: cardRequest.minute,
-                                               name: cardRequest.name,
-                                               image: cardRequest.image,
-                                               number: cardRequest.number)
-                        if let matchId = match.id {
-                            event.$match.id = matchId
-                        } else {
-                            return req.eventLoop.makeFailedFuture(Abort(.internalServerError, reason: "Match ID is missing."))
+                        let event = MatchEvent(
+                            matchId: match.id ?? UUID(),
+                            type: cardType,
+                            playerId: cardRequest.playerId,
+                            minute: cardRequest.minute,
+                            name: cardRequest.name,
+                            image: cardRequest.image,
+                            number: cardRequest.number
+                        )
+
+                        guard let mid = match.id else {
+                            return req.eventLoop.makeFailedFuture(
+                                Abort(.internalServerError, reason: "Match ID is missing.")
+                            )
                         }
-                        return event.create(on: req.db).transform(to: .ok)
+                        event.$match.id = mid
+
+                        return event.create(on: req.db).map {
+                            // 🔥 PUSH
+                            let pushEvent: MatchPushNotifier.Event? = {
+                                switch cardType {
+                                case .redCard: return .redCard
+                                case .yellowCard: return .yellowCard
+                                case .yellowRedCard: return .yellowRedCard
+                                default: return nil
+                                }
+                            }()
+
+                            if let pushEvent {
+                                _ = MatchPushNotifier.fire(pushEvent, match: match, req: req, extra: [
+                                    "minute": String(cardRequest.minute),
+                                    "playerName": cardRequest.name ?? "",
+                                    "playerNumber": cardRequest.number ?? "",
+                                    "playerId": cardRequest.playerId.uuidString,
+                                    "teamSide": side // "home" | "away"
+                                ])
+                            }
+
+                            return HTTPStatus.ok
+                        }
                     }
                 }
 
         } catch {
-            // Handle any errors that may occur during request parameter extraction or content decoding
-            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid request parameters: \(error.localizedDescription)"))
+            return req.eventLoop.makeFailedFuture(
+                Abort(.badRequest, reason: "Invalid request parameters: \(error.localizedDescription)")
+            )
         }
     }
 
@@ -726,45 +773,73 @@ final class MatchController: RouteCollection {
 
     func startGame(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let matchId = try req.parameters.require("id", as: UUID.self)
-        return Match.find(matchId, on: req.db)
+        return Match.query(on: req.db)
+            .filter(\.$id == matchId)
+            .with(\.$homeTeam)
+            .with(\.$awayTeam)
+            .first()
             .unwrap(or: Abort(.notFound))
             .flatMap { match in
                 match.status = .first
                 match.firstHalfStartDate = Date.viennaNow
-                return match.save(on: req.db).transform(to: .ok)
+                return match.save(on: req.db).map {
+                    _ = MatchPushNotifier.fire(.gameStarted, match: match, req: req)
+                    return .ok
+                }
             }
     }
 
     func endFirstHalf(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let matchId = try req.parameters.require("id", as: UUID.self)
-        return Match.find(matchId, on: req.db)
+        return Match.query(on: req.db)
+            .filter(\.$id == matchId)
+            .with(\.$homeTeam)
+            .with(\.$awayTeam)
+            .first()
             .unwrap(or: Abort(.notFound))
             .flatMap { match in
                 match.status = .halftime
                 match.firstHalfEndDate = Date.viennaNow
-                return match.save(on: req.db).transform(to: .ok)
+                return match.save(on: req.db).map {
+                    _ = MatchPushNotifier.fire(.halftime, match: match, req: req)
+                    return .ok
+                }
             }
     }
 
     func startSecondHalf(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let matchId = try req.parameters.require("id", as: UUID.self)
-        return Match.find(matchId, on: req.db)
+        return Match.query(on: req.db)
+            .filter(\.$id == matchId)
+            .with(\.$homeTeam)
+            .with(\.$awayTeam)
+            .first()
             .unwrap(or: Abort(.notFound))
             .flatMap { match in
                 match.status = .second
                 match.secondHalfStartDate = Date.viennaNow
-                return match.save(on: req.db).transform(to: .ok)
+                return match.save(on: req.db).map {
+                    _ = MatchPushNotifier.fire(.secondHalfStarted, match: match, req: req)
+                    return .ok
+                }
             }
     }
 
     func endGame(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let matchId = try req.parameters.require("id", as: UUID.self)
-        return Match.find(matchId, on: req.db)
+        return Match.query(on: req.db)
+            .filter(\.$id == matchId)
+            .with(\.$homeTeam)
+            .with(\.$awayTeam)
+            .first()
             .unwrap(or: Abort(.notFound))
             .flatMap { match in
                 match.status = .completed
                 match.secondHalfEndDate = Date.viennaNow
-                return match.save(on: req.db).transform(to: .ok)
+                return match.save(on: req.db).map {
+                    _ = MatchPushNotifier.fire(.gameEnded, match: match, req: req)
+                    return .ok
+                }
             }
     }
 
