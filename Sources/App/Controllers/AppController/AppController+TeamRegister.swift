@@ -9,43 +9,6 @@ import Foundation
 import Vapor
 import Fluent
 
-struct TeamAppRegistrationRequest: Content {
-    let firstName: String
-    let lastName: String
-    let email: String
-    let tel: String?
-    let password: String
-}
-
-struct TeamAppRegistrationResponse: Content {
-    let userId: UUID
-    let email: String
-    let verified: Bool
-}
-
-struct TeamAppApplicationRequest: Content {
-    // Form fields
-    let userid: UUID
-    let teamName: String
-    let verein: String?
-    let bundesland: Bundesland
-
-    // These come as JSON-strings from the app (LosslessStringConvertible works)
-    let primary: ContactPerson
-    let secondary: ContactPerson
-
-    // Files
-    let primaryIdentification: File
-    let secondaryIdentification: File
-    let signedContract: File
-    let teamLogo: File
-}
-
-struct TeamAppApplicationResponse: Content {
-    let registrationId: UUID
-    let status: TeamRegistrationStatus
-    let created: Date?
-}
 
 extension AppController {
 
@@ -67,8 +30,17 @@ extension AppController {
 
         // ✅ registrations by user id
         let registrations = teamregistration.grouped("registrations")
+
+        // existing
         registrations.get("user", ":userId", use: getTeamRegistrationsByUser)
-        // => GET /app/application/registrations/user/:userId
+
+        // ✅ NEW: get by registration id
+        registrations.get(":registrationId", use: getTeamRegistrationById)
+        // => GET /app/application/registrations/:registrationId
+
+        // ✅ NEW: patch/update by registration id
+        registrations.patch(":registrationId", use: updateTeamRegistration)
+        // => PATCH /app/application/registrations/:registrationId
     }
 
     // POST /app/application/apply
@@ -267,10 +239,6 @@ extension AppController {
         )
     }
 
-    
-    //
-    
-    
     // GET /app/user/verify/:code
     func verifyEmailByCode(req: Request) async throws -> HTTPStatus {
         guard let code = req.parameters.get("code") else {
@@ -324,4 +292,128 @@ extension AppController {
         headers.add(name: .contentType, value: "text/html; charset=utf-8")
         return Response(status: .ok, headers: headers, body: .init(string: html))
     }
+    
+    // GET /app/application/registrations/:registrationId
+    func getTeamRegistrationById(req: Request) async throws -> TeamRegistration {
+        guard
+            let regIdParam = req.parameters.get("registrationId"),
+            let regId = UUID(uuidString: regIdParam)
+        else {
+            throw Abort(.badRequest, reason: "Invalid or missing registrationId.")
+        }
+
+        guard let registration = try await TeamRegistration.find(regId, on: req.db) else {
+            throw Abort(.notFound, reason: "Registration not found.")
+        }
+
+        return registration
+    }
+
+    // PATCH /app/application/registrations/:registrationId
+    func updateTeamRegistration(req: Request) async throws -> TeamRegistration {
+        guard
+            let regIdParam = req.parameters.get("registrationId"),
+            let regId = UUID(uuidString: regIdParam)
+        else {
+            throw Abort(.badRequest, reason: "Invalid or missing registrationId.")
+        }
+
+        guard let registration = try await TeamRegistration.find(regId, on: req.db) else {
+            throw Abort(.notFound, reason: "Registration not found.")
+        }
+
+        let input = try req.content.decode(UpdateTeamRegistrationRequest.self)
+
+        // apply only provided fields
+        if let primary = input.primary { registration.primary = primary }
+        if let secondary = input.secondary { registration.secondary = secondary }
+        if let verein = input.verein { registration.verein = verein }
+
+        if let teamName = input.teamName { registration.teamName = teamName }
+        if let status = input.status { registration.status = status }
+        if let bundesland = input.bundesland { registration.bundesland = bundesland }
+
+        if let refereerLink = input.refereerLink { registration.refereerLink = refereerLink }
+        if let assignedLeague = input.assignedLeague { registration.assignedLeague = assignedLeague }
+
+        if let customerSignedContract = input.customerSignedContract { registration.customerSignedContract = customerSignedContract }
+        if let adminSignedContract = input.adminSignedContract { registration.adminSignedContract = adminSignedContract }
+        if let teamLogo = input.teamLogo { registration.teamLogo = teamLogo }
+
+        if let paidAmount = input.paidAmount { registration.paidAmount = paidAmount }
+        if let user = input.user { registration.user = user }
+        if let team = input.team { registration.team = team }
+
+        if let isWelcomeEmailSent = input.isWelcomeEmailSent { registration.isWelcomeEmailSent = isWelcomeEmailSent }
+        if let isLoginDataSent = input.isLoginDataSent { registration.isLoginDataSent = isLoginDataSent }
+
+        if let kaution = input.kaution { registration.kaution = kaution }
+
+        try await registration.save(on: req.db)
+        return registration
+    }
+
+}
+struct TeamAppRegistrationRequest: Content {
+    let firstName: String
+    let lastName: String
+    let email: String
+    let tel: String?
+    let password: String
+}
+
+struct TeamAppRegistrationResponse: Content {
+    let userId: UUID
+    let email: String
+    let verified: Bool
+}
+
+struct TeamAppApplicationRequest: Content {
+    // Form fields
+    let userid: UUID
+    let teamName: String
+    let verein: String?
+    let bundesland: Bundesland
+
+    // These come as JSON-strings from the app (LosslessStringConvertible works)
+    let primary: ContactPerson
+    let secondary: ContactPerson
+
+    // Files
+    let primaryIdentification: File
+    let secondaryIdentification: File
+    let signedContract: File
+    let teamLogo: File
+}
+
+struct TeamAppApplicationResponse: Content {
+    let registrationId: UUID
+    let status: TeamRegistrationStatus
+    let created: Date?
+}
+
+struct UpdateTeamRegistrationRequest: Content {
+    var primary: ContactPerson?
+    var secondary: ContactPerson?
+    var verein: String?
+
+    var teamName: String?
+    var status: TeamRegistrationStatus?
+    var bundesland: Bundesland?
+
+    var refereerLink: String?
+    var assignedLeague: UUID?
+
+    var customerSignedContract: String?
+    var adminSignedContract: String?
+    var teamLogo: String?
+
+    var paidAmount: Double?
+    var user: UUID?
+    var team: UUID?
+
+    var isWelcomeEmailSent: Bool?
+    var isLoginDataSent: Bool?
+
+    var kaution: Double?
 }
