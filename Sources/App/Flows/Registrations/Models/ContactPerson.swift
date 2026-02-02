@@ -3,8 +3,8 @@
 import Foundation
 
 struct ContactPerson: Codable, LosslessStringConvertible {
-    let first, last, phone, email: String
-    let identification: String?
+    var first, last, phone, email: String
+    var identification: String?
 
     // ✅ Add this initializer
     init(first: String, last: String, phone: String, email: String, identification: String?) {

@@ -147,6 +147,8 @@ extension AppController {
     route.post("notifications", "send", use: sendNotification)
     route.post("notifications", "sendToTokens", use: sendToTokens)
     route.post("notifications", "broadcast", use: broadcastNotification)
+    setupDirectTokenPushRoute(on: route)
+
   }
 
   // MARK: - Handlers

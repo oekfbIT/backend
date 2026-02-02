@@ -322,9 +322,102 @@ extension AppController {
             throw Abort(.notFound, reason: "Registration not found.")
         }
 
+        // Branch by Content-Type
+        let contentType = req.headers.contentType
+
+        // ----------------------------
+        // 1) MULTIPART (files + fields)
+        // ----------------------------
+        if contentType?.type == "multipart" {
+            let input = try req.content.decode(UpdateTeamRegistrationMultipartRequest.self)
+
+            // 1) patch non-file fields (only if provided)
+            if let primaryJSON = input.primary {
+                let primary = try decodeContactPersonJSON(primaryJSON, field: "primary")
+                registration.primary = primary
+            }
+            if let secondaryJSON = input.secondary {
+                let secondary = try decodeContactPersonJSON(secondaryJSON, field: "secondary")
+                registration.secondary = secondary
+            }
+            if let verein = input.verein { registration.verein = verein }
+
+            if let teamName = input.teamName { registration.teamName = teamName }
+            if let status = try parseStatus(input.status) { registration.status = status }
+            if let bundesland = try parseBundesland(input.bundesland) { registration.bundesland = bundesland }
+
+            if let refereerLink = input.refereerLink { registration.refereerLink = refereerLink }
+            if let assignedLeague = try parseUUID(input.assignedLeague, field: "assignedLeague") {
+                registration.assignedLeague = assignedLeague
+            }
+
+            if let customerSignedContract = input.customerSignedContract {
+                registration.customerSignedContract = customerSignedContract
+            }
+            if let adminSignedContract = input.adminSignedContract {
+                registration.adminSignedContract = adminSignedContract
+            }
+            if let teamLogo = input.teamLogo {
+                registration.teamLogo = teamLogo
+            }
+
+            if let paidAmount = input.paidAmount { registration.paidAmount = paidAmount }
+            if let user = try parseUUID(input.user, field: "user") { registration.user = user }
+            if let team = try parseUUID(input.team, field: "team") { registration.team = team }
+
+            if let isWelcomeEmailSent = input.isWelcomeEmailSent { registration.isWelcomeEmailSent = isWelcomeEmailSent }
+            if let isLoginDataSent = input.isLoginDataSent { registration.isLoginDataSent = isLoginDataSent }
+
+            if let kaution = input.kaution { registration.kaution = kaution }
+
+            // 2) upload files if present, update URLs accordingly
+            let hasAnyFile =
+                input.primaryIdentification != nil ||
+                input.secondaryIdentification != nil ||
+                input.signedContract != nil ||
+                input.teamLogoFile != nil
+
+            if hasAnyFile {
+                try await req.application.firebaseManager.authenticate().get()
+
+                // stable path per registration (overwrite-friendly)
+                let basePath = "teamapplications/\(registration.user?.uuidString)/\(regId.uuidString)"
+
+                func uploadIfPresent(_ file: File?, to path: String) async throws -> String? {
+                    guard let file else { return nil }
+                    return try await req.application.firebaseManager.uploadFile(file: file, to: path).get()
+                }
+
+                if let url = try await uploadIfPresent(input.primaryIdentification, to: "\(basePath)/primary_id") {
+                    var p = registration.primary
+                    p?.identification = url
+                    registration.primary = p
+                }
+
+                if let url = try await uploadIfPresent(input.secondaryIdentification, to: "\(basePath)/secondary_id") {
+                    var s = registration.secondary
+                    s?.identification = url
+                    registration.secondary = s
+                }
+
+                if let url = try await uploadIfPresent(input.signedContract, to: "\(basePath)/signed_contract") {
+                    registration.customerSignedContract = url
+                }
+
+                if let url = try await uploadIfPresent(input.teamLogoFile, to: "\(basePath)/team_logo") {
+                    registration.teamLogo = url
+                }
+            }
+
+            try await registration.save(on: req.db)
+            return registration
+        }
+
+        // ----------------------------
+        // 2) JSON (existing behavior)
+        // ----------------------------
         let input = try req.content.decode(UpdateTeamRegistrationRequest.self)
 
-        // apply only provided fields
         if let primary = input.primary { registration.primary = primary }
         if let secondary = input.secondary { registration.secondary = secondary }
         if let verein = input.verein { registration.verein = verein }
@@ -352,6 +445,7 @@ extension AppController {
         try await registration.save(on: req.db)
         return registration
     }
+
 
 }
 struct TeamAppRegistrationRequest: Content {
@@ -416,4 +510,77 @@ struct UpdateTeamRegistrationRequest: Content {
     var isLoginDataSent: Bool?
 
     var kaution: Double?
+}
+
+// MARK: - Multipart request (strings + files)
+//
+// IMPORTANT: For multipart/form-data, primary/secondary should be JSON strings.
+// Example "primary": {"first":"A","last":"B","phone":"...","email":"...","identification":null}
+struct UpdateTeamRegistrationMultipartRequest: Content {
+    var primary: String?
+    var secondary: String?
+    var verein: String?
+
+    var teamName: String?
+    var status: String?
+    var bundesland: String?
+
+    var refereerLink: String?
+    var assignedLeague: String?
+
+    // URLs still allowed as fallback (if client sends)
+    var customerSignedContract: String?
+    var adminSignedContract: String?
+    var teamLogo: String?
+
+    // Files (optional overwrite / fill missing)
+    var primaryIdentification: File?
+    var secondaryIdentification: File?
+    var signedContract: File?
+    var teamLogoFile: File?     // avoid name clash with teamLogo string
+
+    var paidAmount: Double?
+    var user: String?
+    var team: String?
+
+    var isWelcomeEmailSent: Bool?
+    var isLoginDataSent: Bool?
+
+    var kaution: Double?
+}
+
+private func decodeContactPersonJSON(_ raw: String, field: String) throws -> ContactPerson {
+    guard let data = raw.data(using: .utf8) else {
+        throw Abort(.badRequest, reason: "Invalid \(field) JSON.")
+    }
+    do {
+        return try JSONDecoder().decode(ContactPerson.self, from: data)
+    } catch {
+        throw Abort(.badRequest, reason: "Could not decode \(field).")
+    }
+}
+
+private func parseUUID(_ raw: String?, field: String) throws -> UUID? {
+    guard let raw, !raw.isEmpty else { return nil }
+    guard let uuid = UUID(uuidString: raw) else {
+        throw Abort(.badRequest, reason: "Invalid UUID for \(field).")
+    }
+    return uuid
+}
+
+private func parseBundesland(_ raw: String?) throws -> Bundesland? {
+    guard let raw, !raw.isEmpty else { return nil }
+    // if Bundesland is RawRepresentable by String:
+    if let v = Bundesland(rawValue: raw) {
+        return v
+    }
+    throw Abort(.badRequest, reason: "Invalid bundesland.")
+}
+
+private func parseStatus(_ raw: String?) throws -> TeamRegistrationStatus? {
+    guard let raw, !raw.isEmpty else { return nil }
+    if let v = TeamRegistrationStatus(rawValue: raw) {
+        return v
+    }
+    throw Abort(.badRequest, reason: "Invalid status.")
 }
