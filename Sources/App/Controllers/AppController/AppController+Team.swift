@@ -30,6 +30,7 @@ extension AppController {
         // Trainer (kept as-is but grouped neatly)
         let trainer = root.grouped("trainer")
         trainer.put(":teamID", use: updateTeamTrainer)
+        trainer.put(":teamID", "alt", use: updateTeamAltTrainer)
         trainer.get(":teamID", use: getTrainer)
         team.get(":teamID", "overdraft", use: setOverdraftLimit)
         team.get(":teamID", "overdraftInfo", use: getOverdraftInfo)
@@ -393,5 +394,59 @@ extension AppController {
         return .ok
     }
 
+    // PUT /app/trainer/:teamID/alt
+    func updateTeamAltTrainer(_ req: Request) async throws -> HTTPStatus {
+        let teamID = try req.parameters.require("teamID", as: UUID.self)
+        let payload = try req.content.decode(UpdateTrainerRequest.self)
+
+        // If all optional fields are nil -> 400
+        if payload.name == nil && payload.email == nil && payload.image == nil {
+            throw Abort(.badRequest, reason: "No updatable fields provided.")
+        }
+
+        guard let team = try await Team.find(teamID, on: req.db) else {
+            throw Abort(.notFound, reason: "Team not found")
+        }
+
+        let existingAltCoach = team.altCoach
+
+        // If there is no existing alt coach and no name was provided,
+        // we don't have a non-empty name for Trainer.name (non-optional).
+        if existingAltCoach == nil && payload.name == nil {
+            throw Abort(
+                .badRequest,
+                reason: "Trainer name is required when setting an alternative trainer for the first time."
+            )
+        }
+
+        // --- Firebase upload for alt trainer image (if a file was sent) ---
+        var finalImageURL: String? = existingAltCoach?.image
+
+        if let imageFile = payload.image, imageFile.data.readableBytes > 0 {
+            let firebaseManager = req.application.firebaseManager
+
+            // e.g. trainers/<teamUUID>/alt_trainer_image
+            let basePath = "trainers/\(teamID.uuidString)"
+            let altTrainerImagePath = "\(basePath)/alt_trainer_image"
+
+            try await firebaseManager.authenticate().get()
+            let uploadedURL = try await firebaseManager
+                .uploadFile(file: imageFile, to: altTrainerImagePath)
+                .get()
+
+            finalImageURL = uploadedURL
+        }
+
+        let updatedAltCoach = Trainer(
+            name: payload.name ?? existingAltCoach?.name ?? "Unbekannt",
+            email: payload.email ?? existingAltCoach?.email,
+            image: finalImageURL
+        )
+
+        team.altCoach = updatedAltCoach
+
+        try await team.save(on: req.db)
+        return .ok
+    }
 
 }
