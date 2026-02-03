@@ -26,7 +26,8 @@ let app_migrations: [Migration] = [
     CreateDeviceToken(),
     SponsorMigration(),
     VerificationCodeMigration(),
-    CreateFollowSubscription()
+    CreateFollowSubscription(),
+    VoteItemMigration()
 ]
 
 struct UserMigration { }
@@ -51,3 +52,5 @@ struct RuleMigration {}
 struct CreateDeviceToken {}
 struct SponsorMigration {}
 struct VerificationCodeMigration {}
+struct VoteItemMigration {}
+

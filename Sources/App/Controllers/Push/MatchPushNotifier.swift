@@ -1,4 +1,3 @@
-```swift
 import Vapor
 import Fluent
 import Foundation
@@ -416,4 +415,3 @@ gameEnded:
   Title: "ABPFIFF · 2:1"
   Body:  "Endstand."
 */
-```
