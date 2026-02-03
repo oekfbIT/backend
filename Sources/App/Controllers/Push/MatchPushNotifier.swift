@@ -38,15 +38,6 @@ enum MatchPushNotifier {
 
   // MARK: - Public API (one-liner friendly)
 
-  /// One-liner (typical):
-  /// `MatchPushNotifier.fire(.goal, match: match, req: req, extra: ["minute":"17", "playerName":"Max Mustermann"])`
-  ///
-  /// Recommended extra keys you can pass (all optional):
-  /// - minute: String
-  /// - playerName: String
-  /// - playerNumber: String
-  /// - teamSide: "home" | "away"
-  /// - cardReason: String (optional)
   static func fire(
     _ event: Event,
     match: Match,
@@ -84,13 +75,19 @@ enum MatchPushNotifier {
           }
 
           // 4) Send push (ExpoPushService is async)
-          var data = preview.extraData.merging(extra, uniquingKeysWith: { _, new in new })
-          data["type"] = preview.type.rawValue
-          data["path"] = preview.path
-          data["matchId"] = matchId.uuidString
-          data["homeTeamId"] = homeId.uuidString
-          data["awayTeamId"] = awayId.uuidString
-          data["reason"] = preview.reason
+          // ✅ Build immutable payload BEFORE crossing into async task
+          let payload: [String: String] = {
+            var dict = preview.extraData.merging(extra, uniquingKeysWith: { _, new in new })
+            dict["type"] = preview.type.rawValue
+            dict["path"] = preview.path
+            dict["matchId"] = matchId.uuidString
+            dict["homeTeamId"] = homeId.uuidString
+            dict["awayTeamId"] = awayId.uuidString
+            dict["reason"] = preview.reason
+            return dict
+          }()
+
+          let logger = req.logger
 
           return req.eventLoop.makeFutureWithTask {
             do {
@@ -98,11 +95,11 @@ enum MatchPushNotifier {
                 to: tokens,
                 title: preview.title,
                 body: preview.body,
-                data: data,
+                data: payload,
                 req: req
               )
             } catch {
-              req.logger.warning("[push] MatchPushNotifier failed: \(error)")
+              logger.warning("[push] MatchPushNotifier failed: \(error)")
             }
           }
         }
@@ -121,44 +118,30 @@ enum MatchPushNotifier {
   // MARK: - Templates
 
   private static func buildPreview(_ event: Event, match: Match, extra: [String: String]) -> Preview {
-    // Adjust to your expo-router route
     let matchIdString = match.id?.uuidString ?? "unknown"
-    let path = "/match/\(matchIdString)" // <-- CHANGE if your route differs
+    let path = "/match/\(matchIdString)"
 
-    // Dynamic bits
     let scoreText = "\(match.score.home):\(match.score.away)"
 
-    // Common optional extras
     let minute = extra["minute"]
-    let playerName = extra["playerName"] ?? extra["name"] // allow both
+    let playerName = extra["playerName"] ?? extra["name"]
     let playerNumber = extra["playerNumber"] ?? extra["number"]
-    let side = extra["teamSide"] // "home" | "away" (optional)
+    let side = extra["teamSide"]
 
     func formatPlayerLine() -> String {
-      // Examples:
-      // "Max Mustermann (10)"
-      // "Max Mustermann"
-      // "Torschütze unbekannt"
       if let n = playerName, !n.isEmpty {
-        if let num = playerNumber, !num.isEmpty {
-          return "\(n) (\(num))"
-        }
+        if let num = playerNumber, !num.isEmpty { return "\(n) (\(num))" }
         return n
       }
       return "Torschütze unbekannt"
     }
 
     func formatMinute() -> String {
-      // "17'" or "" if not provided
-      if let m = minute, !m.isEmpty {
-        return "\(m)′"
-      }
+      if let m = minute, !m.isEmpty { return "\(m)′" }
       return ""
     }
 
     func formatTeamPrefix() -> String {
-      // Optional hint in title; keep short
-      // "HEIM: " / "GAST: "
       switch side?.lowercased() {
       case "home": return "HEIM · "
       case "away": return "GAST · "
@@ -168,8 +151,6 @@ enum MatchPushNotifier {
 
     switch event {
     case .goal:
-      // Title: "TOR · 2:1"
-      // Body:  "Max Mustermann (10) · 17′"
       return Preview(
         title: "\(formatTeamPrefix())TOR · \(scoreText)",
         body: "\(formatPlayerLine())\(formatMinute().isEmpty ? "" : " · \(formatMinute())")",
@@ -180,8 +161,6 @@ enum MatchPushNotifier {
       )
 
     case .redCard:
-      // Title: "ROTE KARTE · 2:1"
-      // Body:  "Max Mustermann (10) · 54′"
       return Preview(
         title: "\(formatTeamPrefix())ROTE KARTE · \(scoreText)",
         body: "\(playerName?.isEmpty == false ? formatPlayerLine() : "Spieler unbekannt")\(formatMinute().isEmpty ? "" : " · \(formatMinute())")",
@@ -300,118 +279,3 @@ enum MatchPushNotifier {
       }
   }
 }
-
-/*
-================================================================================
-DOCS / HOW TO USE (MatchController one-liners)
-================================================================================
-
-1) Goal
---------
-After you updated score + saved match + created MatchEvent (or after save succeeds),
-call:
-
-  _ = MatchPushNotifier.fire(.goal, match: match, req: req, extra: [
-    "minute": String(goalRequest.minute),
-    "playerName": goalRequest.name ?? "",     // or resolve from Player
-    "playerNumber": goalRequest.number ?? "", // optional
-    "playerId": goalRequest.playerId.uuidString,
-    "teamSide": goalRequest.scoreTeam.lowercased() // "home" | "away"
-  ])
-
-If you don’t have name/number at that point, pass only minute + playerId and
-optionally teamSide; templates will degrade gracefully.
-
-2) Cards (red/yellow/yellowRed)
--------------------------------
-In your addCardEvent helper, you already have CardRequest { playerId, minute, name, image, number }
-and you can infer teamSide by comparing teamId to match.$homeTeam.id.
-
-  let side = (cardRequest.teamId == match.$homeTeam.id) ? "home" : "away"
-
-  _ = MatchPushNotifier.fire(.yellowCard, match: match, req: req, extra: [
-    "minute": String(cardRequest.minute),
-    "playerName": cardRequest.name ?? "",
-    "playerNumber": cardRequest.number ?? "",
-    "playerId": cardRequest.playerId.uuidString,
-    "teamSide": side
-  ])
-
-3) Game flow
-------------
-- startGame        -> .gameStarted
-- endFirstHalf     -> .halftime
-- startSecondHalf  -> .secondHalfStarted
-- endGame / done   -> .gameEnded  (pick the one you consider “final”)
-
-Example:
-
-  return match.save(on: req.db).map { _ in
-    _ = MatchPushNotifier.fire(.gameStarted, match: match, req: req)
-    return .ok
-  }
-
-4) Who receives the push?
--------------------------
-MatchPushNotifier currently sends to:
-- all active follow subscriptions where targetType == .match AND targetId == matchId
-- all active follow subscriptions where targetType == .team AND targetId == homeTeamId
-- all active follow subscriptions where targetType == .team AND targetId == awayTeamId
-
-Then it resolves DeviceToken rows by guestId and sends to active tokens.
-
-5) Path routing (app)
----------------------
-MatchPushNotifier sets:
-  data["path"] = "/match/<matchId>"
-
-Your frontend hook (usePushRouting) pushes data.path if present.
-Change the path template in buildPreview(...) if your expo-router route differs.
-
-6) Extra payload keys you can use on the client
------------------------------------------------
-We send:
-- type: "follow.match.updated"
-- path: "/match/<id>"
-- matchId, homeTeamId, awayTeamId
-- reason: one of the Event reasons ("goal", "yellowCard", ...)
-
-And you can pass-through extra values like:
-- minute, playerName, playerNumber, playerId, teamSide
-
-================================================================================
-EXAMPLE NOTIFICATION BODIES (by Event)
-================================================================================
-
-goal:
-  Title: "HEIM · TOR · 2:1"
-  Body:  "Max Mustermann (10) · 17′"
-
-redCard:
-  Title: "GAST · ROTE KARTE · 2:1"
-  Body:  "John Doe (4) · 54′"
-
-yellowCard:
-  Title: "HEIM · GELBE KARTE · 0:0"
-  Body:  "Max Mustermann (10) · 8′"
-
-yellowRedCard:
-  Title: "GAST · GELB-ROT · 1:1"
-  Body:  "John Doe (4) · 71′"
-
-gameStarted:
-  Title: "ANPFIFF · 0:0"
-  Body:  "Das Spiel hat begonnen."
-
-halftime:
-  Title: "HALBZEIT · 1:0"
-  Body:  "Zwischenstand zur Pause."
-
-secondHalfStarted:
-  Title: "2. HALBZEIT · 1:0"
-  Body:  "Weiter geht’s!"
-
-gameEnded:
-  Title: "ABPFIFF · 2:1"
-  Body:  "Endstand."
-*/
