@@ -52,6 +52,7 @@ final class AppController: RouteCollection {
         setupLeaderboardRoutes(on: route)
         
         setupFollowRoutes(on: route)
+        setupVotingRoutes(on: route)
 
     }
 
