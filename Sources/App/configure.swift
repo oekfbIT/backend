@@ -86,6 +86,7 @@ public func configure(_ app: Application) throws {
         "http://localhost:4500",
         "http://localhost:5500",
         "http://localhost:8081",
+        "http://localhost:5173",
         
         // Homepage on DigitalOcean
         "https://homepage-kbe6d.ondigitalocean.app",
