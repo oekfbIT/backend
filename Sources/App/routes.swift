@@ -33,6 +33,7 @@ func routes(_ app: Application) throws {
         PostponeRequestController(path: "postpone"),
         SponsorController(path: "sponsor"),
         AppController(path: "app"),
+        AdminController(path: "admin")
 ]
     
     app.get("status") { req async -> String in

@@ -107,3 +107,4 @@ struct AppStadiumWithForecast: Content {
     let stadium: Stadium
     let forecast: Stadium.WeatherResponse
 }
+

@@ -26,7 +26,7 @@ final class Season: Model, Content {
     @OptionalField(key: FieldKeys.winner) var winner: UUID?
     @OptionalField(key: FieldKeys.runnerup) var runnerup: UUID?
     @Children(for: \.$season) var matches: [Match]
-    @OptionalField(key: FieldKeys.gameday) var gameday: Int?
+    @OptionalField(key: FieldKeys.gameday) var gameday: Int? // Gameday should never be more then season matches.gameday unique list if theres 20 gamedays this cant be 21
 
     // IMPORTANT:
     // Exclude `matches` from Codable/Content encoding to prevent:
