@@ -16,6 +16,7 @@ final class Rechnung: Model, Content, Codable {
     @Field(key: FieldKeys.number) var number: String
     @Field(key: FieldKeys.summ) var summ: Double
     @Field(key: FieldKeys.topay) var topay: Double?
+    @OptionalField(key: FieldKeys.previousBalance) var previousBalance: Double?
     @Field(key: FieldKeys.kennzeichen) var kennzeichen: String
     @Field(key: FieldKeys.dueDate) var dueDate: String?
     @Timestamp(key: FieldKeys.created, on: .create) var created: Date?
@@ -31,6 +32,7 @@ final class Rechnung: Model, Content, Codable {
         static var kennzeichen: FieldKey { "kennzeichen" }
         static var dueDate: FieldKey { "due_date" }
         static var created: FieldKey { "created" }
+        static var previousBalance: FieldKey { "previousBalance" }
     }
 
     init() {}
@@ -43,6 +45,7 @@ final class Rechnung: Model, Content, Codable {
         number: String,
         summ: Double,
         topay: Double?,
+        previousBalance: Double? = nil ,
         kennzeichen: String,
         created: Date? = nil
     ) {
@@ -53,6 +56,7 @@ final class Rechnung: Model, Content, Codable {
         self.number = number
         self.summ = summ
         self.topay = topay ?? summ
+        self.previousBalance = previousBalance
         self.kennzeichen = kennzeichen
         self.created = created ?? Date.viennaNow
         
@@ -87,6 +91,8 @@ extension Rechnung: Mergeable {
         merged.teamName = other.teamName
         merged.number = other.number
         merged.summ = other.summ
+        merged.topay = other.topay
+        merged.previousBalance = other.previousBalance
         merged.kennzeichen = other.kennzeichen
         merged.dueDate = other.dueDate
         merged.created = other.created
@@ -104,6 +110,8 @@ extension RechnungMigration: Migration {
             .field(Rechnung.FieldKeys.teamName, .string, .required)
             .field(Rechnung.FieldKeys.number, .string, .required)
             .field(Rechnung.FieldKeys.summ, .double, .required)
+            .field(Rechnung.FieldKeys.previousBalance, .double)
+            .field(Rechnung.FieldKeys.topay, .double)
             .field(Rechnung.FieldKeys.kennzeichen, .string, .required)
             .field(Rechnung.FieldKeys.dueDate, .string)
             .field(Rechnung.FieldKeys.created, .datetime)

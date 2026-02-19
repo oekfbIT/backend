@@ -734,6 +734,7 @@ extension AppController {
             number: invoiceNumber,
             summ: Double(rechnungAmount),
             topay: nil,
+            previousBalance: losingTeam.balance,
             kennzeichen: "Spiel Absage: \(newCancelled)"
         )
 

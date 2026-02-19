@@ -76,6 +76,11 @@ extension AdminController {
 
         // MARK: Manual player creation (multipart + optional image upload)
         teams.post(":id", "players", "manual", use: createPlayerManual)
+        teams.post(":id", "rechnungen", ":rechnungId", "refund", use: refundRechnung)
+
+        
+        teams.post(":id", "logo", use: uploadTeamLogo)
+        teams.post(":id", "cover", use: uploadTeamCoverImage)
 
         
     }
@@ -83,6 +88,22 @@ extension AdminController {
 
 // MARK: - DTOs (Query / Request / Response)
 extension AdminController {
+    
+    struct UploadTeamLogoRequest: Content {
+        let logo: File
+    }
+
+    struct UploadTeamCoverRequest: Content {
+        let coverimg: File
+    }
+
+    
+    struct RefundRechnungResponse: Content {
+        let teamId: UUID
+        let newBalance: Double
+        let refundRechnung: Rechnung
+    }
+
     /// Slim index row for fast filtering/listing
     struct AdminTeamIndexItem: Content {
         let id: UUID
@@ -382,6 +403,7 @@ extension AdminController {
             number: number,
             summ: body.amount,
             topay: nil,
+            previousBalance: team.balance,
             kennzeichen: kennzeichen,
             created: Date.viennaNow
         )
@@ -629,6 +651,62 @@ private extension AdminController {
         return league
     }
 }
+
+// MARK: - Handlers
+extension AdminController {
+
+    func refundRechnung(req: Request) async throws -> RefundRechnungResponse {
+        let team = try await requireTeam(req: req, param: "id")
+        let teamId = try team.requireID()
+
+        guard let rechnungId = req.parameters.get("rechnungId", as: UUID.self) else {
+            throw Abort(.badRequest, reason: "Missing or invalid rechnungId.")
+        }
+
+        guard let original = try await Rechnung.find(rechnungId, on: req.db) else {
+            throw Abort(.notFound, reason: "Rechnung not found.")
+        }
+
+        guard original.$team.id == teamId else {
+            throw Abort(.badRequest, reason: "Rechnung does not belong to this team.")
+        }
+
+        let refundDelta = -original.summ
+        team.balance = (team.balance ?? 0) + refundDelta
+
+        let currentYear = Calendar.current.component(.year, from: Date.viennaNow)
+        let randomNumber = String.randomNum(length: 5)
+        let number = "\(currentYear)-\(randomNumber)"
+
+        let df = DateFormatter()
+        df.dateFormat = "dd.MM.yyyy"
+        let currentDate = df.string(from: Date.viennaNow)
+
+        let refund = Rechnung(
+            team: teamId,
+            teamName: team.teamName,
+            status: .bezahlt,
+            number: number,
+            summ: refundDelta,
+            topay: 0,
+            previousBalance: team.balance,
+            kennzeichen: "\(currentDate) Refund für Rechnung \(original.number) - \(original.kennzeichen)",
+            created: Date.viennaNow
+        )
+
+        // Mongo standalone friendly: sequential writes
+        try await team.save(on: req.db)
+        try await refund.create(on: req.db)
+        try await original.delete(on: req.db)   // ✅ delete original
+
+        return RefundRechnungResponse(
+            teamId: teamId,
+            newBalance: team.balance ?? 0,
+            refundRechnung: refund
+        )
+    }
+}
+
 // MARK: - Batch handlers
 extension AdminController {
 
@@ -703,6 +781,57 @@ extension AdminController {
         }
 
         return .ok
+    }
+}
+
+// MARK: - File Upload
+extension AdminController {
+
+    // POST /admin/teams/:id/logo (multipart/form-data)
+    func uploadTeamLogo(req: Request) async throws -> Team {
+        let team = try await requireTeam(req: req, param: "id")
+        _ = try team.requireID()
+
+        let body = try req.content.decode(UploadTeamLogoRequest.self)
+        guard body.logo.data.readableBytes > 0 else {
+            throw Abort(.badRequest, reason: "logo file is required.")
+        }
+
+        let firebaseManager = req.application.firebaseManager
+        try await firebaseManager.authenticate().get()
+
+        // Use teamId for stable path
+        let teamId = try team.requireID()
+        let path = "teams/\(teamId.uuidString)/logo"
+
+        let url = try await firebaseManager.uploadFile(file: body.logo, to: path).get()
+
+        team.logo = url
+        try await team.save(on: req.db)
+        return team
+    }
+
+    // POST /admin/teams/:id/cover (multipart/form-data)
+    func uploadTeamCoverImage(req: Request) async throws -> Team {
+        let team = try await requireTeam(req: req, param: "id")
+        _ = try team.requireID()
+
+        let body = try req.content.decode(UploadTeamCoverRequest.self)
+        guard body.coverimg.data.readableBytes > 0 else {
+            throw Abort(.badRequest, reason: "coverimg file is required.")
+        }
+
+        let firebaseManager = req.application.firebaseManager
+        try await firebaseManager.authenticate().get()
+
+        let teamId = try team.requireID()
+        let path = "teams/\(teamId.uuidString)/coverimg"
+
+        let url = try await firebaseManager.uploadFile(file: body.coverimg, to: path).get()
+
+        team.coverimg = url
+        try await team.save(on: req.db)
+        return team
     }
 }
 

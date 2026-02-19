@@ -24,10 +24,14 @@ final class AdminController: RouteCollection {
         let admin = authed.grouped(AdminOnlyMiddleware())
         // MARK: - AUTH ROUTES
 //        try setupAuthRoutes(on: route)
-        try setupLeagueRoutes(on: admin)
-        try setupTeamRoutes(on: admin)
-        try setupSeasonRoutes(on: admin)
-        try setupMatchRoutes(on: admin) 
+        setupLeagueRoutes(on: admin)
+        setupTeamRoutes(on: admin)
+        setupSeasonRoutes(on: admin)
+        setupMatchRoutes(on: admin)
+        setupPlayerRoutes(on: admin)
+        setupRefereeRoutes(on: admin)
+        setupNewsRoutes(on: admin)
+        setupStadiumRoutes(on: admin)
     }
 
     func boot(routes: RoutesBuilder) throws {

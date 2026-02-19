@@ -204,6 +204,7 @@ extension AppController {
                     number: invoiceNumber,
                     summ: rechnungAmount,
                     topay: nil,
+                    previousBalance: team.balance,
                     kennzeichen: team.teamName + " " + savedPlayer.sid + ": Anmeldung"
                 )
 

@@ -189,6 +189,7 @@ final class TeamController: RouteCollection {
                                         number: number,
                                         summ: amount,
                                         topay: nil,
+                                        previousBalance: team.balance,
                                         kennzeichen: kennzeichen)
                                         
                 team.balance = (team.balance ?? 0) + rechnung.summ
@@ -307,6 +308,7 @@ final class TeamController: RouteCollection {
                     number: invoiceNumber,
                     summ: rechnungAmount,
                     topay: nil,
+                    previousBalance: team.balance,
                     kennzeichen: "Overdraft"
                 )
                 
