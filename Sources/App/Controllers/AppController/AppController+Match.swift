@@ -1331,7 +1331,9 @@ extension AppController {
             home: homeOverview,
             homeBlanket: homeMini,
             awayBlanket: awayMini,
-            status: match.status
+            status: match.status,
+            firstHalfStartDate: match.firstHalfEndDate,
+            secondHalfStartDate: match.secondHalfStartDate
         )
     }
 }

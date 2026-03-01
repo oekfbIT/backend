@@ -32,6 +32,8 @@ final class AdminController: RouteCollection {
         setupRefereeRoutes(on: admin)
         setupNewsRoutes(on: admin)
         setupStadiumRoutes(on: admin)
+        setupUserRoutes(on: admin)
+        setupRegistrationRoutes(on: admin)
     }
 
     func boot(routes: RoutesBuilder) throws {

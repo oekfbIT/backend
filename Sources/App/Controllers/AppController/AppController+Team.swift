@@ -238,7 +238,9 @@ extension AppController {
                         logo: away.logo,
                         players: []
                     )).toMini(),
-                    status: match.status
+                    status: match.status,
+                    firstHalfStartDate: match.firstHalfEndDate,
+                    secondHalfStartDate: match.secondHalfStartDate
                 )
             }
 

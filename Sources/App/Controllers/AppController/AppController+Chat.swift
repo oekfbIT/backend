@@ -270,10 +270,25 @@ extension AppController {
 
     // MARK: - CRUD + status (APP)
 
+    // Add near AppController+Conversation.swift
+
+    struct CreateConversationAppRequest: Content {
+        var teamId: UUID
+        var subject: String
+    }
     /// POST /app/conversation
     func createConversationApp(req: Request) throws -> EventLoopFuture<ConversationWrapper> {
-        let conversation = try req.content.decode(Conversation.self)
-        conversation.open = true
+        let payload = try req.content.decode(CreateConversationAppRequest.self)
+
+        let conversation = Conversation(
+            id: nil,
+            teamId: payload.teamId,
+            subject: payload.subject,
+            open: true
+        )
+
+        // ✅ IMPORTANT: messages must be initialized (your DB stores JSON array)
+        conversation.messages = []
 
         return conversation.create(on: req.db).flatMap {
             conversation.$team.load(on: req.db).map {
@@ -300,7 +315,7 @@ extension AppController {
             }
         }
     }
-
+    
     /// GET /app/conversation
     func indexConversationsApp(req: Request) throws -> EventLoopFuture<[ConversationWrapper]> {
         return Conversation.query(on: req.db)

@@ -202,6 +202,25 @@ struct AppModels {
         let homeBlanket: MiniBlankett
         let awayBlanket: MiniBlankett
         let status: GameStatus
+        let firstHalfStartDate: Date?
+        let secondHalfStartDate: Date?
+        
+        
+        init(id: UUID, details: MatchDetails, score: Score, season: AppSeason, away: AppTeamOverview, home: AppTeamOverview, homeBlanket: MiniBlankett, awayBlanket: MiniBlankett, status: GameStatus, firstHalfStartDate: Date? = nil, secondHalfStartDate: Date? = nil) {
+            self.id = id
+            self.details = details
+            self.score = score
+            self.season = season
+            self.away = away
+            self.home = home
+            self.homeBlanket = homeBlanket
+            self.awayBlanket = awayBlanket
+            self.status = status
+            self.firstHalfStartDate = firstHalfStartDate
+            self.secondHalfStartDate = secondHalfStartDate
+        }
+        
+        
     }
     
 }

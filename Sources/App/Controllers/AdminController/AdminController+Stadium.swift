@@ -166,14 +166,28 @@ extension AdminController {
         let stadium = try await requireStadium(req: req, param: "id")
         let stadiumId = try stadium.requireID()
 
-        // Load matches, then filter in-memory by details.stadium
-        // (because details is JSON; querying inside JSON is DB-dependent)
-        let matches = try await Match.query(on: req.db)
-            .with(\.$homeTeam)
-            .with(\.$awayTeam)
-            .all()
+        // ✅ do NOT eager-load parents (avoids "parent missing" warning)
+        let matches = try await Match.query(on: req.db).all()
 
         let filtered = matches.filter { $0.details.stadium == stadiumId }
+
+        // Collect all team IDs referenced by these matches
+        var teamIds: [UUID] = []
+        teamIds.reserveCapacity(filtered.count * 2)
+        for m in filtered {
+            teamIds.append(m.$homeTeam.id)
+            teamIds.append(m.$awayTeam.id)
+        }
+        let uniqueTeamIds = Array(Set(teamIds))
+
+        // Batch fetch teams that still exist
+        let teams = try await Team.query(on: req.db)
+            .filter(\.$id ~~ uniqueTeamIds)
+            .all()
+
+        let teamById: [UUID: Team] = Dictionary(uniqueKeysWithValues: try teams.map { t in
+            (try t.requireID(), t)
+        })
 
         // Sort by date asc (nil last)
         let sorted = filtered.sorted {
@@ -183,7 +197,20 @@ extension AdminController {
         }
 
         return try sorted.map { m in
-            AdminMatchCompact(
+            let homeId = m.$homeTeam.id
+            let awayId = m.$awayTeam.id
+
+            let homeTeam = teamById[homeId]
+            let awayTeam = teamById[awayId]
+
+            // ✅ fallbacks if team row is missing
+            let homeName = homeTeam?.teamName ?? m.homeBlanket?.name ?? "Unknown team"
+            let homeLogo = homeTeam?.logo ?? m.homeBlanket?.logo
+
+            let awayName = awayTeam?.teamName ?? m.awayBlanket?.name ?? "Unknown team"
+            let awayLogo = awayTeam?.logo ?? m.awayBlanket?.logo
+
+            return AdminMatchCompact(
                 id: try m.requireID(),
                 gameday: m.details.gameday,
                 date: m.details.date,
@@ -191,21 +218,81 @@ extension AdminController {
                 stadiumId: m.details.stadium,
                 status: m.status,
                 paid: m.paid,
-                homeTeamName: m.homeTeam.teamName,
-                homeTeamLogo: m.homeTeam.logo,
-                awayTeamName: m.awayTeam.teamName,
-                awayTeamLogo: m.awayTeam.logo
+                homeTeamName: homeName,
+                homeTeamLogo: homeLogo,
+                awayTeamName: awayName,
+                awayTeamLogo: awayLogo
             )
         }
     }
 
-    // GET /admin/stadiums/:id/matches/open   (not done)
+    // GET /admin/stadiums/:id/matches/open
     func getOpenMatchesForStadium(req: Request) async throws -> [AdminMatchCompact] {
-        let all = try await getMatchesForStadium(req: req)
-        // keep anything that isn't done
-        return all.filter { $0.status != .done }
+        let stadium = try await requireStadium(req: req, param: "id")
+        let stadiumId = try stadium.requireID()
+
+        // ✅ only load open matches (status != .done)
+        // (still can't filter JSON stadium in DB → filter in-memory after reducing set)
+        let openMatches = try await Match.query(on: req.db)
+            .filter(\.$status == .pending)
+            .all()
+
+        let filtered = openMatches.filter { $0.details.stadium == stadiumId }
+
+        // Batch fetch teams that still exist (safe against missing parents)
+        var teamIds: [UUID] = []
+        teamIds.reserveCapacity(filtered.count * 2)
+        for m in filtered {
+            teamIds.append(m.$homeTeam.id)
+            teamIds.append(m.$awayTeam.id)
+        }
+        let uniqueTeamIds = Array(Set(teamIds))
+
+        let teams = try await Team.query(on: req.db)
+            .filter(\.$id ~~ uniqueTeamIds)
+            .all()
+
+        let teamById: [UUID: Team] = Dictionary(uniqueKeysWithValues: try teams.map { t in
+            (try t.requireID(), t)
+        })
+
+        // Sort by date asc (nil last)
+        let sorted = filtered.sorted {
+            let d1 = $0.details.date ?? .distantFuture
+            let d2 = $1.details.date ?? .distantFuture
+            return d1 < d2
+        }
+
+        return try sorted.map { m in
+            let homeId = m.$homeTeam.id
+            let awayId = m.$awayTeam.id
+
+            let homeTeam = teamById[homeId]
+            let awayTeam = teamById[awayId]
+
+            // fallbacks if team row is missing
+            let homeName = homeTeam?.teamName ?? m.homeBlanket?.name ?? "Unknown team"
+            let homeLogo = homeTeam?.logo ?? m.homeBlanket?.logo
+
+            let awayName = awayTeam?.teamName ?? m.awayBlanket?.name ?? "Unknown team"
+            let awayLogo = awayTeam?.logo ?? m.awayBlanket?.logo
+
+            return AdminMatchCompact(
+                id: try m.requireID(),
+                gameday: m.details.gameday,
+                date: m.details.date,
+                location: m.details.location,
+                stadiumId: m.details.stadium,
+                status: m.status,
+                paid: m.paid,
+                homeTeamName: homeName,
+                homeTeamLogo: homeLogo,
+                awayTeamName: awayName,
+                awayTeamLogo: awayLogo
+            )
+        }
     }
-}
+ }
 
 // MARK: - Helpers
 private extension AdminController {

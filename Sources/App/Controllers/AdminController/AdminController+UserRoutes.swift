@@ -24,6 +24,7 @@ extension AdminController {
         let users = root.grouped("users")
 
         users.get("admins", use: getAllAdminUsers)
+        users.get("team", use: getAllTeamUsers)
         users.get(":id", use: getUserByID)
 
         users.post(use: adminCreateUser)
@@ -60,6 +61,12 @@ extension AdminController {
         let verified: Bool?
         // NOTE: no password here (use reset endpoint)
     }
+    
+    struct AdminTeamUserIndexItem: Content {
+        let user: User.Public
+        let teamNames: [String]
+        let teamIds: [UUID]
+    }
 
     struct ResetPasswordRequest: Content {
         let newPassword: String
@@ -73,6 +80,47 @@ extension AdminController {
 
 // MARK: - Handlers
 extension AdminController {
+    
+    // GET /admin/users/admins
+    // GET /admin/users/team
+    func getAllTeamUsers(req: Request) async throws -> [AdminTeamUserIndexItem] {
+        let teamUsers = try await User.query(on: req.db)
+            .filter(\.$type == .team)
+            .sort(\.$lastName, .ascending)
+            .sort(\.$firstName, .ascending)
+            .all()
+
+        let userIds: [UUID] = teamUsers.compactMap { $0.id }
+        if userIds.isEmpty { return [] }
+
+        // Load all teams for these users in one query
+        let teams = try await Team.query(on: req.db)
+            .filter(\.$user.$id ~~ userIds)
+            .sort(\.$teamName, .ascending)
+            .all()
+
+        // Group teams by userId
+        var teamsByUserId: [UUID: [Team]] = [:]
+        teamsByUserId.reserveCapacity(userIds.count)
+
+        for t in teams {
+            if let uid = t.$user.id {
+                teamsByUserId[uid, default: []].append(t)
+            }
+        }
+
+        // Map users to index rows
+        return try teamUsers.map { u in
+            let uid = try u.requireID()
+            let userTeams = teamsByUserId[uid] ?? []
+
+            return AdminTeamUserIndexItem(
+                user: try u.asPublic(),
+                teamNames: userTeams.map { $0.teamName },
+                teamIds: userTeams.compactMap { $0.id }
+            )
+        }
+    }
 
     // GET /admin/users/admins
     func getAllAdminUsers(req: Request) async throws -> [User.Public] {

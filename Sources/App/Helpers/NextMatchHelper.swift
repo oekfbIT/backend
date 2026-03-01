@@ -178,7 +178,9 @@ extension Team {
                 logo: away.logo,
                 players: []
             )).toMini(),
-            status: rawMatch.status
+            status: rawMatch.status,
+            firstHalfStartDate: rawMatch.firstHalfEndDate,
+            secondHalfStartDate: rawMatch.secondHalfStartDate
         )
 
         return AppModels.NextMatch(match: overview)
