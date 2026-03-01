@@ -107,6 +107,10 @@ extension AppController {
 
 // MARK: - Match Endpoints
 extension AppController {
+    
+    struct IsAnyGameLiveResponse: Content {
+        let isAnyGameLive: Bool
+    }
 
     func setupMatchRoutes(on route: RoutesBuilder) {
         // live score
@@ -119,6 +123,7 @@ extension AppController {
 
         // NEW: available dates (primary seasons only)
         route.get("match", "availableDates", use: availableMatchDates)
+        route.get("matches","isAnyGameLive", use: isAnyGameLive)
 
         // ✅ single param name for everything under here: :matchID
         route.group("match", ":matchID") { match in
@@ -149,6 +154,7 @@ extension AppController {
             match.patch("teamcancel", use: teamCancelGame)
             match.patch("spielabbruch", use: spielabbruch)
             match.patch("done", use: done)
+
         }
 
         // legacy keep (same param name)
@@ -881,6 +887,17 @@ extension AppController {
         return league
     }
     
+    // MARK: GET /admin/matches/isAnyGameLive
+    func isAnyGameLive(req: Request) async throws -> IsAnyGameLiveResponse {
+        let liveStatuses: [GameStatus] = [.first, .second, .halftime]
+
+        let hasLiveMatch = try await Match.query(on: req.db)
+            .filter(\.$status ~~ liveStatuses)
+            .first() != nil
+
+        return IsAnyGameLiveResponse(isAnyGameLive: hasLiveMatch)
+    }
+
 }
 
 // MARK: - Private helpers

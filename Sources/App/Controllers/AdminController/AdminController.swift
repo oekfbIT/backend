@@ -34,6 +34,7 @@ final class AdminController: RouteCollection {
         setupStadiumRoutes(on: admin)
         setupUserRoutes(on: admin)
         setupRegistrationRoutes(on: admin)
+
     }
 
     func boot(routes: RoutesBuilder) throws {

@@ -55,7 +55,6 @@ extension AdminController {
         matches.patch(":id", "spielabbruch", use: spielabbruch)
         // GET /admin/matches/:id/referee
         matches.get(":id", "referee", use: getMatchReferee)
-        matches.get("isAnyGameLive", use: isAnyGameLive)
 
     }
 }
@@ -118,10 +117,6 @@ extension AdminController {
 
     struct NoShowRequest: Content {
         let winningTeam: String // "home" | "away"
-    }
-    
-    struct IsAnyGameLiveResponse: Content {
-        let isAnyGameLive: Bool
     }
 
 }
@@ -669,16 +664,6 @@ extension AdminController {
         return MatchRefereeResponse(assigned: referee != nil, referee: referee)
     }
 
-    // MARK: GET /admin/matches/isAnyGameLive
-    func isAnyGameLive(req: Request) async throws -> IsAnyGameLiveResponse {
-        let liveStatuses: [GameStatus] = [.first, .second, .halftime]
-
-        let hasLiveMatch = try await Match.query(on: req.db)
-            .filter(\.$status ~~ liveStatuses)
-            .first() != nil
-
-        return IsAnyGameLiveResponse(isAnyGameLive: hasLiveMatch)
-    }
 }
 
 // MARK: - Internals (cards)
