@@ -28,6 +28,8 @@ import Foundation
 import Vapor
 import Fluent
 
+let leagueFixAmountPerGame = 80.00
+
 // MARK: - Admin Registration Routes
 extension AdminController {
 
@@ -376,11 +378,11 @@ extension AdminController {
         let topayAmount: Double
         switch teamCount {
         case 0...6:
-            topayAmount = Double((teamCount - 1) * 2) * 70.0
+            topayAmount = Double((teamCount - 1) * 2) * leagueFixAmountPerGame
         case 7...9:
-            topayAmount = Double(teamCount - 1) * 1.5 * 70.0
+            topayAmount = Double(teamCount - 1) * 1.5 * leagueFixAmountPerGame
         case 10...:
-            topayAmount = Double(teamCount - 1) * 70.0
+            topayAmount = Double(teamCount - 1) * leagueFixAmountPerGame
         default:
             topayAmount = 0.0
         }
