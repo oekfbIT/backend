@@ -248,11 +248,11 @@ final class TeamRegistrationController: RouteCollection {
                         let topayAmount: Double
                         switch teamCount {
                         case 0...6:
-                            topayAmount = Double((teamCount - 1) * 2) * 70.0
+                            topayAmount = Double((teamCount - 1) * 2) * 80.0
                         case 7...9:
-                            topayAmount = Double(teamCount - 1) * 1.5 * 70.0
+                            topayAmount = Double(teamCount - 1) * 1.5 * 80.0
                         case 10...:
-                            topayAmount = Double(teamCount - 1) * 70.0
+                            topayAmount = Double(teamCount - 1) * 80.0
                         default:
                             topayAmount = 0.0
                         }
