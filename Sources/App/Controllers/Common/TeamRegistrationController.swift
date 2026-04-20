@@ -88,13 +88,15 @@ final class TeamRegistrationController: RouteCollection {
         newRegistration.verein = registrationRequest.verein
         newRegistration.refereerLink = registrationRequest.referCode
         newRegistration.status = .draft
-        newRegistration.paidAmount = nil
         newRegistration.bundesland = registrationRequest.bundesland
         newRegistration.initialPassword = registrationRequest.initialPassword ?? String.randomString(length: 8)
         newRegistration.refereerLink = registrationRequest.referCode
         newRegistration.customerSignedContract = nil
         newRegistration.adminSignedContract = nil
-        newRegistration.paidAmount = 0.0
+
+        // Keep this nil until league assignment calculates the real amount
+        newRegistration.paidAmount = nil
+
         newRegistration.isWelcomeEmailSent = true
         newRegistration.isLoginDataSent = false
         
@@ -110,7 +112,7 @@ final class TeamRegistrationController: RouteCollection {
             return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid request"))
         }
     }
-
+    
     // MARK: - Email Helpers
     private func sendWelcomeEmailInBackground(req: Request, recipient: String, registration: TeamRegistration?) {
         req.eventLoop.execute {
@@ -246,36 +248,43 @@ final class TeamRegistrationController: RouteCollection {
                     .flatMap { league in
                         let teamCount = league.teamcount ?? 0
                         let topayAmount: Double
+                        let teamPrice = 80.0
+
                         switch teamCount {
                         case 0...6:
-                            topayAmount = Double((teamCount - 1) * 2) * 80.0
+                            topayAmount = Double(teamCount - 1) * 2.0 * teamPrice
                         case 7...9:
-                            topayAmount = Double(teamCount - 1) * 1.5 * 80.0
+                            topayAmount = Double(teamCount - 1) * 1.5 * teamPrice
                         case 10...:
-                            topayAmount = Double(teamCount - 1) * 80.0
+                            topayAmount = Double(teamCount - 1) * teamPrice
                         default:
                             topayAmount = 0.0
                         }
 
                         registration.assignedLeague = leagueID
                         registration.kaution = 300.00
-                        if let currentPaidAmount = registration.paidAmount {
-                            registration.paidAmount = currentPaidAmount - topayAmount
-                        } else {
-                            registration.paidAmount = -(topayAmount + (registration.kaution ?? 0))
-                        }
 
-                        let primaryContactEmail = registration.primary?.email
+                        // Always recalculate from scratch
+                        registration.paidAmount = -(topayAmount + (registration.kaution ?? 0.0))
+
+                        print("Assign league calculation:")
+                        print("teamCount: \(teamCount)")
+                        print("teamPrice: \(teamPrice)")
+                        print("topayAmount: \(topayAmount)")
+                        print("kaution: \(registration.kaution ?? 0.0)")
+                        print("paidAmount: \(registration.paidAmount ?? 0.0)")
+
+                        let primaryContactEmail = registration.primary?.email ?? ""
                         self.sendPaymentInstructionsInBackground(
                             req: req,
-                            recipient: primaryContactEmail ?? "",
+                            recipient: primaryContactEmail,
                             registration: registration
                         )
+
                         return registration.save(on: req.db).transform(to: .ok)
                     }
             }
     }
-
     private func sendPaymentInstructionsInBackground(req: Request, recipient: String, registration: TeamRegistration) {
         req.eventLoop.execute {
             do {
@@ -303,15 +312,17 @@ final class TeamRegistrationController: RouteCollection {
         return TeamRegistration.find(id, on: req.db)
             .unwrap(or: Abort(.notFound))
             .flatMap { registration in
-                if let currentPaidAmount = registration.paidAmount {
-                    registration.paidAmount = currentPaidAmount + paymentRequest.paidAmount
-                } else {
-                    registration.paidAmount = paymentRequest.paidAmount
-                }
+                let currentPaidAmount = registration.paidAmount ?? 0.0
+                registration.paidAmount = currentPaidAmount + paymentRequest.paidAmount
+
+                print("Payment update:")
+                print("currentPaidAmount: \(currentPaidAmount)")
+                print("incomingPayment: \(paymentRequest.paidAmount)")
+                print("newPaidAmount: \(registration.paidAmount ?? 0.0)")
+
                 return registration.save(on: req.db).transform(to: .ok)
             }
     }
-
     // MARK: - Complete Registration
     func startTeamCustomization(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let id = try req.parameters.require("id", as: UUID.self)
