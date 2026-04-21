@@ -39,6 +39,7 @@ final class PostponeRequestController: RouteCollection {
         route.post(":id", "approve", use: approveRequest)
         route.post(":id", "deny", use: denyRequest)
         route.post(":id", "toggle", use: toggleStatus)
+        route.get("team", ":id", "all", use: getAllPostponeRequestsForTeam)
     }
 
     func boot(routes: RoutesBuilder) throws {
@@ -49,6 +50,18 @@ final class PostponeRequestController: RouteCollection {
         return req.eventLoop.makeSucceededFuture(["Is Online"])
     }
 
+    func getAllPostponeRequestsForTeam(req: Request) throws -> EventLoopFuture<[PostponeRequest]> {
+        let teamID = try req.parameters.require("id", as: UUID.self)
+
+        return PostponeRequest.query(on: req.db)
+            .all()
+            .map { requests in
+                requests.filter {
+                    $0.requester.id == teamID || $0.requestee.id == teamID
+                }
+            }
+    }
+    
     func getOpenRequests(req: Request) throws -> EventLoopFuture<[PostponeRequest]> {
         guard let teamID = req.query[UUID.self, at: "teamID"] else {
             throw Abort(.badRequest, reason: "Missing or invalid teamID query param")
