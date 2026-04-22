@@ -24,8 +24,7 @@ final class PostponeRequestController: RouteCollection {
 //        route.post(use: repository.create)
         route.post("batch", use: repository.createBatch)
 
-        route.get(use: repository.index)
-//        route.get(":id", "index", use: repository.getbyID)
+        route.get(use: getAllPostponeRequestsSorted)
         route.get(":id", use: getTeamPostponeRequests)
         route.get(":id", "id", use: repository.getbyID)
         route.get("test", use: test)
@@ -44,6 +43,16 @@ final class PostponeRequestController: RouteCollection {
 
     func boot(routes: RoutesBuilder) throws {
         try setupRoutes(on: routes)
+    }
+    
+    func getAllPostponeRequestsSorted(req: Request) throws -> EventLoopFuture<[PostponeRequest]> {
+        return PostponeRequest.query(on: req.db)
+            .all()
+            .map { requests in
+                requests.sorted {
+                    ($0.created ?? .distantPast) > ($1.created ?? .distantPast)
+                }
+            }
     }
     
     func test(req: Request) throws -> EventLoopFuture<[String]> {
