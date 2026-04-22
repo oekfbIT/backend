@@ -20,8 +20,10 @@ extension AppController {
       case followTeamUpdated = "follow.team.updated"
       case followPlayerUpdated = "follow.player.updated"
       case followMatchUpdated = "follow.match.updated"
+      case postponeRequestCreated = "postpone.request.created"
+      case postponeRequestApproved = "postpone.request.approved"
+      case postponeRequestDenied = "postpone.request.denied"
     }
-
   // MARK: - DTOs
 
   /// Accept multiple token key names from older app builds:

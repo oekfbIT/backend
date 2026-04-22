@@ -15,4 +15,8 @@ enum PushType: String, Content {
   case conversationMessage = "conversation.message"
   case followTeamUpdated = "follow.team.updated"
   case followPlayerUpdated = "follow.player.updated"
+  case followMatchUpdated = "follow.match.updated"
+  case postponeRequestCreated = "postpone.request.created"
+  case postponeRequestApproved = "postpone.request.approved"
+  case postponeRequestDenied = "postpone.request.denied"
 }

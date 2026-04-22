@@ -53,8 +53,6 @@ final class PostponeRequestController: RouteCollection {
     }
 
     /// GET /postpone?per=300
-    /// Returns all postpone requests sorted newest -> oldest.
-    /// If `per` is provided, limits the result count.
     func getAllPostponeRequestsSorted(req: Request) throws -> EventLoopFuture<[PostponeRequest]> {
         let per = req.query[Int.self, at: "per"]
 
@@ -69,7 +67,6 @@ final class PostponeRequestController: RouteCollection {
     }
 
     /// GET /postpone/team/:id/all
-    /// Returns all postpone requests for a team, newest -> oldest.
     func getAllPostponeRequestsForTeam(req: Request) throws -> EventLoopFuture<[PostponeRequest]> {
         let teamID = try req.parameters.require("id", as: UUID.self)
 
@@ -84,7 +81,6 @@ final class PostponeRequestController: RouteCollection {
     }
 
     /// GET /postpone/open?teamID=...
-    /// Returns open postpone requests for a team, newest -> oldest.
     func getOpenRequests(req: Request) throws -> EventLoopFuture<[PostponeRequest]> {
         guard let teamID = req.query[UUID.self, at: "teamID"] else {
             throw Abort(.badRequest, reason: "Missing or invalid teamID query param")
@@ -102,7 +98,6 @@ final class PostponeRequestController: RouteCollection {
     }
 
     /// GET /postpone/:id
-    /// Returns open postpone requests for a team, newest -> oldest.
     func getTeamPostponeRequests(req: Request) throws -> EventLoopFuture<[PostponeRequest]> {
         let teamID = try req.parameters.require("id", as: UUID.self)
 
@@ -146,14 +141,15 @@ final class PostponeRequestController: RouteCollection {
                 match.postponerequest = true
 
                 return match.save(on: req.db).flatMap {
-                    req.logger.info("POST /postpone -> sending email", metadata: [
+                    req.logger.info("POST /postpone -> sending email + push", metadata: [
                         "recipient": .string(recipient),
                         "matchID": .string(match.id?.uuidString ?? "nil"),
                         "requestID": .string(req.headers.first(name: "request-id") ?? "n/a")
                     ])
 
+                    let emailFuture: EventLoopFuture<Void>
                     do {
-                        return try self.emailController
+                        emailFuture = try self.emailController
                             .sendPostPone(
                                 req: req,
                                 postpone: newRequest,
@@ -161,16 +157,7 @@ final class PostponeRequestController: RouteCollection {
                                 recipient: recipient,
                                 match: match
                             )
-                            .map { _ in newRequest }
-                            .flatMapError { error in
-                                req.logger.report(error: error)
-                                return req.eventLoop.makeFailedFuture(
-                                    Abort(
-                                        .internalServerError,
-                                        reason: "Failed to send postpone email: \(error.localizedDescription)"
-                                    )
-                                )
-                            }
+                            .transform(to: ())
                     } catch {
                         req.logger.report(error: error)
                         return req.eventLoop.makeFailedFuture(
@@ -180,6 +167,25 @@ final class PostponeRequestController: RouteCollection {
                             )
                         )
                     }
+
+                    let pushFuture = PostponePushNotifier.notifyRequestCreated(
+                        req: req,
+                        postponeRequest: newRequest,
+                        targetTeamId: requesteeID
+                    )
+
+                    return emailFuture
+                        .and(pushFuture)
+                        .map { _ in newRequest }
+                        .flatMapError { error in
+                            req.logger.report(error: error)
+                            return req.eventLoop.makeFailedFuture(
+                                Abort(
+                                    .internalServerError,
+                                    reason: "Failed to process postpone request notification: \(error.localizedDescription)"
+                                )
+                            )
+                        }
                 }
             }
         }
@@ -221,16 +227,28 @@ final class PostponeRequestController: RouteCollection {
 
                     return request.update(on: req.db)
                         .flatMap {
+                            let emailFuture: EventLoopFuture<Void>
                             do {
-                                return try self.emailController.approve(
+                                emailFuture = try self.emailController.approve(
                                     req: req,
                                     approverName: request.requestee.teamName,
                                     recipient: email,
                                     match: match
-                                ).map { _ in request }
+                                )
+                                .transform(to: ())
                             } catch {
                                 return req.eventLoop.makeFailedFuture(error)
                             }
+
+                            let pushFuture = PostponePushNotifier.notifyRequestApproved(
+                                req: req,
+                                postponeRequest: request,
+                                targetTeamId: requesterID
+                            )
+
+                            return emailFuture
+                                .and(pushFuture)
+                                .map { _ in request }
                         }
                 }
             }
@@ -272,16 +290,28 @@ final class PostponeRequestController: RouteCollection {
 
                     return request.update(on: req.db)
                         .flatMap {
+                            let emailFuture: EventLoopFuture<Void>
                             do {
-                                return try self.emailController.deny(
+                                emailFuture = try self.emailController.deny(
                                     req: req,
                                     denierName: request.requestee.teamName,
                                     recipient: email,
                                     match: match
-                                ).map { _ in request }
+                                )
+                                .transform(to: ())
                             } catch {
                                 return req.eventLoop.makeFailedFuture(error)
                             }
+
+                            let pushFuture = PostponePushNotifier.notifyRequestDenied(
+                                req: req,
+                                postponeRequest: request,
+                                targetTeamId: requesterID
+                            )
+
+                            return emailFuture
+                                .and(pushFuture)
+                                .map { _ in request }
                         }
                 }
             }
