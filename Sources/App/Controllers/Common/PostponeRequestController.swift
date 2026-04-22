@@ -47,13 +47,10 @@ final class PostponeRequestController: RouteCollection {
     
     func getAllPostponeRequestsSorted(req: Request) throws -> EventLoopFuture<[PostponeRequest]> {
         return PostponeRequest.query(on: req.db)
+            .sort(\.$created, .descending)
             .all()
-            .map { requests in
-                requests.sorted {
-                    ($0.created ?? .distantPast) > ($1.created ?? .distantPast)
-                }
-            }
     }
+    
     
     func test(req: Request) throws -> EventLoopFuture<[String]> {
         return req.eventLoop.makeSucceededFuture(["Is Online"])
