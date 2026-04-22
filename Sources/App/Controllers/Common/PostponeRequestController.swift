@@ -4,7 +4,6 @@
 //  Alon Yakobichvili
 //  All rights reserved.
 //
-  
 
 import Vapor
 import Fluent
@@ -12,7 +11,7 @@ import Fluent
 final class PostponeRequestController: RouteCollection {
     let repository: StandardControllerRepository<PostponeRequest>
     let emailController: EmailController
-    
+
     init(path: String) {
         self.repository = StandardControllerRepository<PostponeRequest>(path: path)
         self.emailController = EmailController()
@@ -20,46 +19,62 @@ final class PostponeRequestController: RouteCollection {
 
     func setupRoutes(on app: RoutesBuilder) throws {
         let route = app.grouped(PathComponent(stringLiteral: repository.path))
-        
-//        route.post(use: repository.create)
+
+        // route.post(use: repository.create)
         route.post("batch", use: repository.createBatch)
 
+        // list / info routes
         route.get(use: getAllPostponeRequestsSorted)
-        route.get(":id", use: getTeamPostponeRequests)
-        route.get(":id", "id", use: repository.getbyID)
         route.get("test", use: test)
+        route.get("open", use: getOpenRequests)
+        route.get("team", ":id", "all", use: getAllPostponeRequestsForTeam)
+
+        // item routes
+        route.get(":id", "id", use: repository.getbyID)
+        route.get(":id", use: getTeamPostponeRequests)
         route.delete(":id", use: repository.deleteID)
 
         route.patch(":id", use: repository.updateID)
         route.patch("batch", use: repository.updateBatch)
-        
-        route.get("open", use: getOpenRequests)
+
+        // actions
         route.post(use: createNewRequest)
         route.post(":id", "approve", use: approveRequest)
         route.post(":id", "deny", use: denyRequest)
         route.post(":id", "toggle", use: toggleStatus)
-        route.get("team", ":id", "all", use: getAllPostponeRequestsForTeam)
     }
 
     func boot(routes: RoutesBuilder) throws {
         try setupRoutes(on: routes)
     }
-    
-    func getAllPostponeRequestsSorted(req: Request) throws -> EventLoopFuture<[PostponeRequest]> {
-        return PostponeRequest.query(on: req.db)
-            .sort(\.$created, .descending)
-            .all()
-    }
-    
-    
+
     func test(req: Request) throws -> EventLoopFuture<[String]> {
-        return req.eventLoop.makeSucceededFuture(["Is Online"])
+        req.eventLoop.makeSucceededFuture(["Is Online"])
     }
 
+    /// GET /postpone?per=300
+    /// Returns all postpone requests sorted newest -> oldest.
+    /// If `per` is provided, limits the result count.
+    func getAllPostponeRequestsSorted(req: Request) throws -> EventLoopFuture<[PostponeRequest]> {
+        let per = req.query[Int.self, at: "per"]
+
+        var query = PostponeRequest.query(on: req.db)
+            .sort(\.$created, .descending)
+
+        if let per = per, per > 0 {
+            query = query.range(..<per)
+        }
+
+        return query.all()
+    }
+
+    /// GET /postpone/team/:id/all
+    /// Returns all postpone requests for a team, newest -> oldest.
     func getAllPostponeRequestsForTeam(req: Request) throws -> EventLoopFuture<[PostponeRequest]> {
         let teamID = try req.parameters.require("id", as: UUID.self)
 
         return PostponeRequest.query(on: req.db)
+            .sort(\.$created, .descending)
             .all()
             .map { requests in
                 requests.filter {
@@ -67,7 +82,9 @@ final class PostponeRequestController: RouteCollection {
                 }
             }
     }
-    
+
+    /// GET /postpone/open?teamID=...
+    /// Returns open postpone requests for a team, newest -> oldest.
     func getOpenRequests(req: Request) throws -> EventLoopFuture<[PostponeRequest]> {
         guard let teamID = req.query[UUID.self, at: "teamID"] else {
             throw Abort(.badRequest, reason: "Missing or invalid teamID query param")
@@ -75,6 +92,7 @@ final class PostponeRequestController: RouteCollection {
 
         return PostponeRequest.query(on: req.db)
             .filter(\.$status == true)
+            .sort(\.$created, .descending)
             .all()
             .map { requests in
                 requests.filter {
@@ -82,12 +100,15 @@ final class PostponeRequestController: RouteCollection {
                 }
             }
     }
-    
+
+    /// GET /postpone/:id
+    /// Returns open postpone requests for a team, newest -> oldest.
     func getTeamPostponeRequests(req: Request) throws -> EventLoopFuture<[PostponeRequest]> {
         let teamID = try req.parameters.require("id", as: UUID.self)
 
         return PostponeRequest.query(on: req.db)
             .filter(\.$status == true)
+            .sort(\.$created, .descending)
             .all()
             .map { requests in
                 requests.filter {
@@ -99,9 +120,12 @@ final class PostponeRequestController: RouteCollection {
     func createNewRequest(req: Request) throws -> EventLoopFuture<PostponeRequest> {
         let newRequest = try req.content.decode(PostponeRequest.self)
         newRequest.status = true
+
         return newRequest.save(on: req.db).flatMap {
             guard let requesteeID = newRequest.requestee.id else {
-                return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Missing requestee ID"))
+                return req.eventLoop.makeFailedFuture(
+                    Abort(.badRequest, reason: "Missing requestee ID")
+                )
             }
 
             let matchID = newRequest.$match.id
@@ -114,20 +138,20 @@ final class PostponeRequestController: RouteCollection {
 
             return teamFuture.and(matchFuture).flatMap { opponentTeam, match in
                 guard let recipient = opponentTeam.usremail else {
-                    return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Missing opponent team email"))
+                    return req.eventLoop.makeFailedFuture(
+                        Abort(.badRequest, reason: "Missing opponent team email")
+                    )
                 }
 
                 match.postponerequest = true
 
                 return match.save(on: req.db).flatMap {
-                    // structured log with the request-id header if present
                     req.logger.info("POST /postpone -> sending email", metadata: [
                         "recipient": .string(recipient),
                         "matchID": .string(match.id?.uuidString ?? "nil"),
                         "requestID": .string(req.headers.first(name: "request-id") ?? "n/a")
                     ])
 
-                    // send email; EmailController.sendPostPone currently throws, so wrap in do/catch
                     do {
                         return try self.emailController
                             .sendPostPone(
@@ -137,18 +161,23 @@ final class PostponeRequestController: RouteCollection {
                                 recipient: recipient,
                                 match: match
                             )
-                            .map { _ in newRequest } // success: return the created request
+                            .map { _ in newRequest }
                             .flatMapError { error in
-                                // surface the error to the client and logs
                                 req.logger.report(error: error)
                                 return req.eventLoop.makeFailedFuture(
-                                    Abort(.internalServerError, reason: "Failed to send postpone email: \(error.localizedDescription)")
+                                    Abort(
+                                        .internalServerError,
+                                        reason: "Failed to send postpone email: \(error.localizedDescription)"
+                                    )
                                 )
                             }
                     } catch {
                         req.logger.report(error: error)
                         return req.eventLoop.makeFailedFuture(
-                            Abort(.internalServerError, reason: "Failed to prepare postpone email: \(error.localizedDescription)")
+                            Abort(
+                                .internalServerError,
+                                reason: "Failed to prepare postpone email: \(error.localizedDescription)"
+                            )
                         )
                     }
                 }
@@ -166,9 +195,11 @@ final class PostponeRequestController: RouteCollection {
             .unwrap(or: Abort(.notFound))
             .flatMap { request in
                 guard let requesterID = request.requester.id else {
-                    return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Missing requester or match ID"))
+                    return req.eventLoop.makeFailedFuture(
+                        Abort(.badRequest, reason: "Missing requester or match ID")
+                    )
                 }
-                
+
                 let matchID = request.$match.id
 
                 let teamFuture = Team.find(requesterID, on: req.db)
@@ -179,12 +210,14 @@ final class PostponeRequestController: RouteCollection {
 
                 return teamFuture.and(matchFuture).flatMap { team, match in
                     guard let email = team.usremail else {
-                        return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Missing team email"))
+                        return req.eventLoop.makeFailedFuture(
+                            Abort(.badRequest, reason: "Missing team email")
+                        )
                     }
 
                     request.response = true
                     request.responseDate = Date.viennaNow
-                    request.response = true
+                    request.status = false
 
                     return request.update(on: req.db)
                         .flatMap {
@@ -212,7 +245,12 @@ final class PostponeRequestController: RouteCollection {
             .first()
             .unwrap(or: Abort(.notFound))
             .flatMap { request in
-                let requesterID = request.requester.id
+                guard let requesterID = request.requester.id else {
+                    return req.eventLoop.makeFailedFuture(
+                        Abort(.badRequest, reason: "Missing requester or match ID")
+                    )
+                }
+
                 let matchID = request.$match.id
 
                 let teamFuture = Team.find(requesterID, on: req.db)
@@ -223,12 +261,14 @@ final class PostponeRequestController: RouteCollection {
 
                 return teamFuture.and(matchFuture).flatMap { team, match in
                     guard let email = team.usremail else {
-                        return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Missing team email"))
+                        return req.eventLoop.makeFailedFuture(
+                            Abort(.badRequest, reason: "Missing team email")
+                        )
                     }
 
                     request.response = false
                     request.responseDate = Date.viennaNow
-                    request.status = true
+                    request.status = false
 
                     return request.update(on: req.db)
                         .flatMap {
@@ -249,6 +289,7 @@ final class PostponeRequestController: RouteCollection {
 
     func toggleStatus(req: Request) throws -> EventLoopFuture<PostponeRequest> {
         let id = try req.parameters.require("id", as: UUID.self)
+
         return PostponeRequest.find(id, on: req.db)
             .unwrap(or: Abort(.notFound))
             .flatMap { request in
@@ -257,6 +298,3 @@ final class PostponeRequestController: RouteCollection {
             }
     }
 }
-
-
-
