@@ -59,21 +59,18 @@ final class ClientController: RouteCollection {
         }
 
         return fetchLeagueAndCurrentSeason(code, db: req.db).flatMap { (league, season) in
-            // Pull matches for the primary season and all league teams
             season.$matches.query(on: req.db).all().and(league.$teams.query(on: req.db).all())
                 .map { (matches, teams) in
-                    // Local stats calculator, scoped to this season’s matches
+
                     func stats(for teamID: UUID, in matches: [Match]) -> (wins: Int, draws: Int, losses: Int, scored: Int, against: Int) {
                         var w = 0, d = 0, l = 0, s = 0, a = 0
+
                         for m in matches {
-                            // use relation ids (no direct `homeTeamId`/`awayTeamId` fields)
-                            
                             let homeId = m.$homeTeam.id
                             let awayId = m.$awayTeam.id
-                            
+
                             guard homeId == teamID || awayId == teamID else { continue }
 
-                            // Skip live/unplayed statuses; count the rest (e.g., finished)
                             switch m.status {
                             case .pending, .first, .halftime, .second:
                                 continue
@@ -81,27 +78,31 @@ final class ClientController: RouteCollection {
                                 break
                             }
 
-                            let isHome = (homeId == teamID)
-                            let mine  = isHome ? m.score.home : m.score.away
-                            let opp   = isHome ? m.score.away : m.score.home
+                            let isHome = homeId == teamID
+                            let mine = isHome ? m.score.home : m.score.away
+                            let opp = isHome ? m.score.away : m.score.home
 
-                            s += mine; a += opp
+                            s += mine
+                            a += opp
+
                             if mine > opp { w += 1 }
                             else if mine == opp { d += 1 }
                             else { l += 1 }
                         }
+
                         return (w, d, l, s, a)
                     }
 
-                    var table: [TableItem] = teams.compactMap { team in
+                    var rows: [(item: TableItem, sortingPoints: Double)] = teams.compactMap { team in
                         guard let tid = team.id else { return nil }
-                        let st = stats(for: tid, in: matches)
-                        let pts = st.wins * 3 + st.draws
 
-                        return TableItem(
+                        let st = stats(for: tid, in: matches)
+                        let calculatedPoints = st.wins * 3 + st.draws
+
+                        let item = TableItem(
                             image: team.logo,
                             name: team.teamName,
-                            points: pts,
+                            points: calculatedPoints,
                             id: tid,
                             goals: st.scored,
                             ranking: 0,
@@ -113,20 +114,31 @@ final class ClientController: RouteCollection {
                             difference: st.scored - st.against,
                             form: []
                         )
+
+                        return (
+                            item: item,
+                            sortingPoints: team.hiddenpoints ?? Double(calculatedPoints)
+                        )
                     }
 
-                    // sort by points, then goal difference
-                    table.sort {
-                        if $0.points == $1.points { return $0.difference > $1.difference }
-                        return $0.points > $1.points
+                    rows.sort {
+                        if $0.sortingPoints == $1.sortingPoints {
+                            return $0.item.difference > $1.item.difference
+                        }
+
+                        return $0.sortingPoints > $1.sortingPoints
                     }
-                    // assign rankings
-                    for i in table.indices { table[i].ranking = i + 1 }
+
+                    var table = rows.map { $0.item }
+
+                    for i in table.indices {
+                        table[i].ranking = i + 1
+                    }
+
                     return table
                 }
         }
     }
-
     // MARK: League Selection
     func fetchLeagueSelection(req: Request) throws -> EventLoopFuture<[PublicLeagueOverview]> {
         return League.query(on: req.db).all().mapEach { league in

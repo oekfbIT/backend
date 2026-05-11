@@ -23,7 +23,10 @@ final class Team: Model, Content {
     @OptionalParent(key: FieldKeys.userId) var user: User?
     @OptionalParent(key: FieldKeys.leagueId) var league: League?
     @OptionalField(key: FieldKeys.leagueCode) var leagueCode: String?
+
     @Field(key: FieldKeys.points) var points: Int
+    @OptionalField(key: FieldKeys.hiddenpoints) var hiddenpoints: Double?
+
     @Field(key: FieldKeys.logo) var logo: String
     @OptionalField(key: FieldKeys.coverimg) var coverimg: String?
     @Field(key: FieldKeys.teamName) var teamName: String
@@ -58,6 +61,7 @@ final class Team: Model, Content {
         static var sid: FieldKey { "sid" }
         static var userId: FieldKey { "user" }
         static var points: FieldKey { "points" }
+        static var hiddenpoints: FieldKey { "hiddenpoints" }
         static var logo: FieldKey { "logo" }
         static var cancelled: FieldKey { "cancelled" }
         static var postponed: FieldKey { "postponed" }
@@ -93,6 +97,7 @@ final class Team: Model, Content {
          leagueId: UUID?,
          leagueCode: String?,
          points: Int,
+         hiddenpoints: Double? = nil,
          coverimg: String,
          logo: String,
          teamName: String,
@@ -120,6 +125,7 @@ final class Team: Model, Content {
         self.$league.id = leagueId
         self.leagueCode = leagueCode
         self.points = points
+        self.hiddenpoints = hiddenpoints
         self.logo = logo
         self.coverimg = coverimg
         self.teamName = teamName
@@ -192,6 +198,7 @@ extension Team: Mergeable {
     func merge(from other: Team) -> Team {
         var merged = self
         merged.points = other.points
+        merged.hiddenpoints = other.hiddenpoints
         merged.coverimg = other.coverimg
         merged.logo = other.logo
         merged.$league.id = other.$league.id
@@ -226,6 +233,7 @@ extension TeamMigration: Migration {
             .field(Team.FieldKeys.userId, .uuid, .references(User.schema, User.FieldKeys.id))
             .field(Team.FieldKeys.leagueId, .uuid, .references(League.schema, League.FieldKeys.id))
             .field(Team.FieldKeys.points, .int)
+            .field(Team.FieldKeys.hiddenpoints, .double)
             .field(Team.FieldKeys.logo, .string)
             .field(Team.FieldKeys.coverimg, .string)
             .field(Team.FieldKeys.teamName, .string)

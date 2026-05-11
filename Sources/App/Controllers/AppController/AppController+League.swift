@@ -496,12 +496,10 @@ extension AppController {
             throw Abort(.badRequest, reason: "Missing or invalid league ID.")
         }
 
-        // 1️⃣ Load league
         guard let league = try await League.find(leagueID, on: req.db) else {
             throw Abort(.notFound, reason: "League not found.")
         }
 
-        // 2️⃣ Load primary season with matches (for table stats)
         guard let primarySeason = try await Season.query(on: req.db)
             .filter(\.$league.$id == leagueID)
             .filter(\.$primary == true)
@@ -512,12 +510,8 @@ extension AppController {
         }
 
         let seasonMatches = primarySeason.matches
-
-        // 3️⃣ Load all league teams
         let teams = try await league.$teams.query(on: req.db).all()
 
-        // 4️⃣ Fetch ALL DONE matches for PRIMARY season ONCE (for form)
-        // This mirrors your Team.getRecentForm behavior but avoids querying per team.
         let doneMatches: [Match] = try await Match.query(on: req.db)
             .filter(\.$status == .done)
             .join(parent: \Match.$season)
@@ -525,7 +519,6 @@ extension AppController {
             .filter(Season.self, \.$league.$id == leagueID)
             .all()
 
-        // 5️⃣ Helper: table stats (your original)
         func stats(for teamID: UUID) -> (w: Int, d: Int, l: Int, s: Int, a: Int) {
             var w = 0, d = 0, l = 0, s = 0, a = 0
 
@@ -544,7 +537,7 @@ extension AppController {
 
                 let isHome = homeId == teamID
                 let mine = isHome ? m.score.home : m.score.away
-                let opp  = isHome ? m.score.away : m.score.home
+                let opp = isHome ? m.score.away : m.score.home
 
                 s += mine
                 a += opp
@@ -557,7 +550,6 @@ extension AppController {
             return (w, d, l, s, a)
         }
 
-        // 6️⃣ Helper: compute recent form in-memory from doneMatches
         func recentForm(for teamID: UUID) -> [FormItem] {
             let relevant = doneMatches.filter { m in
                 m.$homeTeam.id == teamID || m.$awayTeam.id == teamID
@@ -569,9 +561,7 @@ extension AppController {
                 return d1 > d2
             }
 
-            let recent = Array(sorted.prefix(5))
-
-            return recent.compactMap { match in
+            return Array(sorted.prefix(5)).compactMap { match in
                 guard let matchID = match.id else { return nil }
 
                 let isHome = match.$homeTeam.id == teamID
@@ -599,16 +589,16 @@ extension AppController {
             }
         }
 
-        // 7️⃣ Build table (now with form)
-        var table: [TableItem] = teams.compactMap { team in
+        var rows: [(item: TableItem, sortingPoints: Double)] = teams.compactMap { team in
             guard let tid = team.id else { return nil }
-            let st = stats(for: tid)
-            let pts = st.w * 3 + st.d
 
-            return TableItem(
+            let st = stats(for: tid)
+            let calculatedPoints = st.w * 3 + st.d
+
+            let item = TableItem(
                 image: team.logo,
                 name: team.teamName,
-                points: pts,
+                points: calculatedPoints,
                 id: tid,
                 goals: st.s,
                 ranking: 0,
@@ -618,15 +608,24 @@ extension AppController {
                 scored: st.s,
                 against: st.a,
                 difference: st.s - st.a,
-                form: recentForm(for: tid) // ✅ HERE
+                form: recentForm(for: tid)
+            )
+
+            return (
+                item: item,
+                sortingPoints: team.hiddenpoints ?? Double(calculatedPoints)
             )
         }
 
-        // 8️⃣ Sort + rank (same as webClient)
-        table.sort {
-            if $0.points == $1.points { return $0.difference > $1.difference }
-            return $0.points > $1.points
+        rows.sort {
+            if $0.sortingPoints == $1.sortingPoints {
+                return $0.item.difference > $1.item.difference
+            }
+
+            return $0.sortingPoints > $1.sortingPoints
         }
+
+        var table = rows.map { $0.item }
 
         for i in table.indices {
             table[i].ranking = i + 1
