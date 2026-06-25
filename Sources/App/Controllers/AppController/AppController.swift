@@ -53,7 +53,7 @@ final class AppController: RouteCollection {
         
         setupFollowRoutes(on: route)
         setupVotingRoutes(on: route)
-
+        
     }
 
     func boot(routes: RoutesBuilder) throws {

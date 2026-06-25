@@ -178,7 +178,6 @@ public func configure(_ app: Application) throws {
         allowCredentials: true
     )
         
-    app.middleware.use(ErrorMiddleware.default(environment: app.environment))
     app.middleware.use(corsMiddleware)
 
     let FIREBASE_APIKEY = Environment.get("FIREBASE_APIKEY") ?? ""
@@ -197,9 +196,6 @@ public func configure(_ app: Application) throws {
     app.notificationManager = NotificationManager(client: app.client, logger: app.logger)
     app.firebaseManager = firebaseManager
 
-    
-    let mongoDatabase = try MongoDatabase.connect(mongoConnectionString, on: app.eventLoopGroup.next()).wait()
-    
     app.queues.schedule(UnlockPlayerJob())
         .weekly()
         .on(.tuesday)
@@ -241,17 +237,11 @@ public func configure(_ app: Application) throws {
         .at(6, 0)
 
     
-    // Test JOBS
-    app.queues.schedule(UnlockPlayerJob())
-        .weekly()
-        .on(.wednesday)
-        .at(13, 30)
-    
     // Start the scheduled jobs
     try app.queues.startScheduledJobs()
     
     app.routes.defaultMaxBodySize = "100mb"
     // Register routes
     try routes(app)
+    OpenAPISupport.registerRoutes(on: app)
 }
-

@@ -50,11 +50,6 @@ func routes(_ app: Application) throws {
         try scraperController.scrapeLeagueDetails(req: req)
     }
     
-    do {
-        try routes.forEach { try app.register(collection: $0) }
-    } catch {
-        print("Routes couldn't be initialized!")
-    }
+    try routes.forEach { try app.register(collection: $0) }
 }
-
 

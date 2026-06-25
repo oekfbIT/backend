@@ -12,32 +12,41 @@ import NIO
 let vertragLink = "https://firebasestorage.googleapis.com/v0/b/oekfbbucket.appspot.com/o/adminfiles%2FOEKFB%20Anmelde%20Vertrag.pdf.pdf?alt=media&token=23ab12e2-f360-48f5-b4f9-aa1cb3d64305"
 
 final class EmailController {
+    private var smtpHost: String { Environment.get("SMTP_HOST") ?? "smtp.easyname.com" }
+    private var smtpPort: Int { Int(Environment.get("SMTP_PORT") ?? "587") ?? 587 }
+    private var smtpUser: String { Environment.get("SMTP_USERNAME") ?? "" }
+    private var smtpPass: String { Environment.get("SMTP_PASSWORD") ?? "" }
+    private var fromAddress: String { Environment.get("SMTP_FROM_ADDRESS") ?? "office@oekfb.eu" }
+    private var fromName: String { Environment.get("SMTP_FROM_NAME") ?? "Admin" }
     
-    let baseConfig = BaseTemplate(logoUrl: "",
-                                  title: "",
-                                  description: "",
-                                  buttonText: "",
-                                  buttonUrl: "",
-                                  assurance: "",
-                                  disclaimer: "")
+    private func senderEmail() -> EmailAddress {
+        EmailAddress(address: fromAddress, name: fromName)
+    }
     
-    let smtpConfig = SmtpServerConfiguration(
-        hostname: "smtp.easyname.com",
-        port: 587,
-        signInMethod: .credentials(username: "office@oekfb.eu", password: "oekfb$2024"),
-        secure: .startTls,
-        helloMethod: .ehlo
-    )
+    private func applySMTPConfig(_ req: Request) throws {
+        guard !smtpUser.isEmpty, !smtpPass.isEmpty else {
+            req.logger.error("SMTP credentials are not configured.")
+            throw Abort(.internalServerError, reason: "Email service not configured")
+        }
+        
+        req.application.smtp.configuration = SmtpServerConfiguration(
+            hostname: smtpHost,
+            port: smtpPort,
+            signInMethod: .credentials(username: smtpUser, password: smtpPass),
+            secure: .startTls,
+            helloMethod: .ehlo
+        )
+    }
 
     func sendTestEmail(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         // Apply the SMTP configuration
-        req.application.smtp.configuration = smtpConfig
+        try applySMTPConfig(req)
         
         // Print the SMTP configuration for debugging
-        print("SMTP Configuration: \(req.application.smtp.configuration)")
+        req.logger.debug("SMTP configuration applied")
 
         let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
+            from: senderEmail(),
             to: [EmailAddress(address: "alon.yakoby@gmail.com", name: "Alon Yakoby")],
             subject: "Test Email",
             body: "This is a test email sent from Vapor application."
@@ -48,7 +57,7 @@ final class EmailController {
             case .success:
                 return .ok
             case .failure(let error):
-                print("Email failed to send: \(error)")
+                req.logger.error("Email send failed: \(error)")
                 throw Abort(.internalServerError, reason: "Failed to send email")
             }
         }
@@ -56,10 +65,10 @@ final class EmailController {
     
     func sendEmailWithData(req: Request, recipient: String, email: String, password: String) throws -> EventLoopFuture<HTTPStatus> {
         // Apply the SMTP configuration
-        req.application.smtp.configuration = smtpConfig
+        try applySMTPConfig(req)
         
         // Print the SMTP configuration for debugging
-        print("SMTP Configuration: \(req.application.smtp.configuration)")
+        req.logger.debug("SMTP configuration applied")
 
         // Prepare the email content
         let emailBody = """
@@ -70,7 +79,7 @@ final class EmailController {
         """
 
         let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
+            from: senderEmail(),
             to: [EmailAddress(address: recipient)],
             subject: "Registration Details",
             body: emailBody
@@ -81,7 +90,7 @@ final class EmailController {
             case .success:
                 return .ok
             case .failure(let error):
-                print("Email failed to send: \(error)")
+                req.logger.error("Email send failed: \(error)")
                 throw Abort(.internalServerError, reason: "Failed to send email")
             }
         }
@@ -89,13 +98,13 @@ final class EmailController {
     
     func sendWelcomeMail(req: Request, recipient: String, registration: TeamRegistration?) throws -> EventLoopFuture<HTTPStatus> {
         // Apply the SMTP configuration
-        req.application.smtp.configuration = smtpConfig
+        try applySMTPConfig(req)
         guard let registrationID = registration?.id else {
             throw Abort(.notFound)
         }
 
         // Print the SMTP configuration for debugging
-        print("SMTP Configuration: \(req.application.smtp.configuration)")
+        req.logger.debug("SMTP configuration applied")
 
         let emailBody = """
         <html>
@@ -129,7 +138,7 @@ final class EmailController {
         """
 
         let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
+            from: senderEmail(),
             to: [EmailAddress(address: recipient)],
             subject: "OEKFB Anmeldung - Willkommen",
             body: emailBody,
@@ -141,7 +150,7 @@ final class EmailController {
             case .success:
                 return .ok
             case .failure(let error):
-                print("Email failed to send: \(error)")
+                req.logger.error("Email send failed: \(error)")
                 throw Abort(.internalServerError, reason: "Failed to send email")
             }
         }
@@ -149,7 +158,7 @@ final class EmailController {
 
     func sendPaymentMail(req: Request, recipient: String, registration: TeamRegistration?) throws -> EventLoopFuture<HTTPStatus> {
         // Apply the SMTP configuration
-        req.application.smtp.configuration = smtpConfig
+        try applySMTPConfig(req)
         
         // Ensure registration and registration ID exist
         guard let registration = registration, let registrationID = registration.id else {
@@ -168,7 +177,7 @@ final class EmailController {
         let year = Calendar.current.component(.year, from: Date.viennaNow) + 3
 
         // Debugging: Print the SMTP configuration
-        print("SMTP Configuration: \(req.application.smtp.configuration)")
+        req.logger.debug("SMTP configuration applied")
 
         // Email content
         let emailBody = """
@@ -208,7 +217,7 @@ final class EmailController {
 
         // Creating the email object
         let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
+            from: senderEmail(),
             to: [EmailAddress(address: recipient)],
             subject: "OEKFB Anmeldung - Zahlungsanforderung",
             body: emailBody,
@@ -221,7 +230,7 @@ final class EmailController {
             case .success:
                 return .ok
             case .failure(let error):
-                print("Email failed to send: \(error.localizedDescription)")
+                req.logger.error("Email send failed: \(error.localizedDescription)")
                 throw Abort(.internalServerError, reason: "Failed to send email: \(error.localizedDescription)")
             }
         }
@@ -229,10 +238,10 @@ final class EmailController {
 
     func sendPaymentInstruction(req: Request, recipient: String, due: Double) throws -> EventLoopFuture<HTTPStatus> {
         // Apply the SMTP configuration
-        req.application.smtp.configuration = smtpConfig
+        try applySMTPConfig(req)
 
         // Print the SMTP configuration for debugging
-        print("SMTP Configuration: \(req.application.smtp.configuration)")
+        req.logger.debug("SMTP configuration applied")
 
         // Prepare the email content in German
         let emailBody = """
@@ -253,7 +262,7 @@ final class EmailController {
         """
 
         let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
+            from: senderEmail(),
             to: [EmailAddress(address: recipient)],
             subject: "OEKFB Anmeldung - Willkommen",
             body: emailBody
@@ -264,7 +273,7 @@ final class EmailController {
             case .success:
                 return .ok
             case .failure(let error):
-                print("Email failed to send: \(error)")
+                req.logger.error("Email send failed: \(error)")
                 throw Abort(.internalServerError, reason: "Failed to send email")
             }
         }
@@ -273,10 +282,10 @@ final class EmailController {
     
     func sendRefLogin(req: Request, recipient: String, email: String, password: String) throws -> EventLoopFuture<HTTPStatus> {
         // Apply the SMTP configuration
-        req.application.smtp.configuration = smtpConfig
+        try applySMTPConfig(req)
 
         // Print the SMTP configuration for debugging
-        print("SMTP Configuration: \(req.application.smtp.configuration)")
+        req.logger.debug("SMTP configuration applied")
 
         // Prepare the email content in German
         let emailBody = """
@@ -295,7 +304,7 @@ final class EmailController {
         """
 
         let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
+            from: senderEmail(),
             to: [EmailAddress(address: recipient)],
             subject: "OEKFB Anmeldung - Willkommen",
             body: emailBody
@@ -306,7 +315,7 @@ final class EmailController {
             case .success:
                 return .ok
             case .failure(let error):
-                print("Email failed to send: \(error)")
+                req.logger.error("Email send failed: \(error)")
                 throw Abort(.internalServerError, reason: "Failed to send email")
             }
         }
@@ -314,10 +323,10 @@ final class EmailController {
 
     func sendTeamLogin(req: Request, recipient: String, email: String, password: String) throws -> EventLoopFuture<HTTPStatus> {
         // Apply the SMTP configuration
-        req.application.smtp.configuration = smtpConfig
+        try applySMTPConfig(req)
 
         // Print the SMTP configuration for debugging
-        print("SMTP Configuration: \(req.application.smtp.configuration)")
+        req.logger.debug("SMTP configuration applied")
 
         // Prepare the email content in German
         let emailBody = """
@@ -336,7 +345,7 @@ final class EmailController {
         """
 
         let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
+            from: senderEmail(),
             to: [EmailAddress(address: recipient)],
             subject: "OEKFB Anmeldung - Mannschaft Login Daten",
             body: emailBody
@@ -347,7 +356,7 @@ final class EmailController {
             case .success:
                 return .ok
             case .failure(let error):
-                print("Email failed to send: \(error)")
+                req.logger.error("Email send failed: \(error)")
                 throw Abort(.internalServerError, reason: "Failed to send email")
             }
         }
@@ -355,10 +364,10 @@ final class EmailController {
 
     func sendUpdatePlayerData(req: Request, recipient: String, player: Player) throws -> EventLoopFuture<HTTPStatus> {
         // Apply the SMTP configuration
-        req.application.smtp.configuration = smtpConfig
+        try applySMTPConfig(req)
 
         // Print the SMTP configuration for debugging
-        print("SMTP Configuration: \(req.application.smtp.configuration)")
+        req.logger.debug("SMTP configuration applied")
 
         // Prepare the email content in German with HTML formatting and styling
         let emailBody = """
@@ -422,7 +431,7 @@ final class EmailController {
         """
 
         let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
+            from: senderEmail(),
             to: [EmailAddress(address: recipient)],
             subject: "OEKFB Spieleranmeldung: \(player.sid)",
             body: emailBody,
@@ -434,7 +443,7 @@ final class EmailController {
             case .success:
                 return .ok
             case .failure(let error):
-                print("Email failed to send: \(error)")
+                req.logger.error("Email send failed: \(error)")
                 throw Abort(.internalServerError, reason: "Failed to send email")
             }
         }
@@ -444,10 +453,10 @@ final class EmailController {
     
     func sendTransferRequest(req: Request, recipient: String, transfer: Transfer) throws -> EventLoopFuture<HTTPStatus> {
         // Apply the SMTP configuration
-        req.application.smtp.configuration = smtpConfig
+        try applySMTPConfig(req)
 
         // Print the SMTP configuration for debugging
-        print("SMTP Configuration: \(req.application.smtp.configuration)")
+        req.logger.debug("SMTP configuration applied")
 
         // Prepare the email content in German with a button
         let emailBody = """
@@ -471,7 +480,7 @@ final class EmailController {
         """
 
         let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
+            from: senderEmail(),
             to: [EmailAddress(address: recipient)],
             subject: "OEKFB Anmeldung - Transfer Anfrage",
             body: emailBody,
@@ -483,7 +492,7 @@ final class EmailController {
             case .success:
                 return .ok
             case .failure(let error):
-                print("Email failed to send: \(error)")
+                req.logger.error("Email send failed: \(error)")
                 throw Abort(.internalServerError, reason: "Failed to send email")
             }
         }
@@ -503,7 +512,7 @@ extension EmailController {
     }
 
     func sendCancellationNotification(req: Request, recipient: String, match: Match) throws -> EventLoopFuture<HTTPStatus> {
-        req.application.smtp.configuration = smtpConfig
+        try applySMTPConfig(req)
         
         let matchDateString = formatDate(match.details.date)
         
@@ -524,9 +533,9 @@ extension EmailController {
         """
         
         let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
+            from: senderEmail(),
             to: [EmailAddress(address: recipient)],
-            bcc: [EmailAddress(address: "baha@oekfb.eu", name: "Admin"), EmailAddress(address: "office@oekfb.eu", name: "Admin")],
+            bcc: [EmailAddress(address: "baha@oekfb.eu", name: "Admin"), senderEmail()],
             subject: "OEKFB Absage - Absagen Benachrichtigung",
             body: emailBody,
             isBodyHtml: true
@@ -543,7 +552,7 @@ extension EmailController {
     }
 
     func sendPostPone(req: Request, postpone: PostponeRequest, cancellerName: String, recipient: String, match: Match) throws -> EventLoopFuture<HTTPStatus> {
-        req.application.smtp.configuration = smtpConfig
+        try applySMTPConfig(req)
         
         let matchDateString = formatDate(match.details.date)
         
@@ -568,9 +577,9 @@ extension EmailController {
         """
 
         let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
+            from: senderEmail(),
             to: [EmailAddress(address: recipient)],
-            bcc: [EmailAddress(address: "office@oekfb.eu", name: "Admin")],
+            bcc: [senderEmail()],
             subject: "OEKFB Spielverlegung Anfrage",
             body: emailBody,
             isBodyHtml: true
@@ -587,7 +596,7 @@ extension EmailController {
     }
 
     func approve(req: Request, approverName: String, recipient: String, match: Match) throws -> EventLoopFuture<HTTPStatus> {
-        req.application.smtp.configuration = smtpConfig
+        try applySMTPConfig(req)
         
         let matchDateString = formatDate(match.details.date)
         
@@ -601,15 +610,15 @@ extension EmailController {
         """
         
         let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
+            from: senderEmail(),
             to: [EmailAddress(address: recipient)],
-            bcc: [EmailAddress(address: "office@oekfb.eu", name: "Admin")],
+            bcc: [senderEmail()],
             subject: "OEKFB Spielverlegung Anfrage - Zusagt",
             body: emailBody,
             isBodyHtml: true
         )
         
-        print("sendingto: \(recipient)")
+        req.logger.info("Sending email to: (recipient)")
         return req.smtp.send(email).flatMapThrowing { result in
             switch result {
             case .success:
@@ -621,7 +630,7 @@ extension EmailController {
     }
 
     func deny(req: Request, denierName: String, recipient: String, match: Match) throws -> EventLoopFuture<HTTPStatus> {
-        req.application.smtp.configuration = smtpConfig
+        try applySMTPConfig(req)
         
         let matchDateString = formatDate(match.details.date)
         
@@ -635,9 +644,9 @@ extension EmailController {
         """
         
         let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
+            from: senderEmail(),
             to: [EmailAddress(address: recipient)],
-            bcc: [EmailAddress(address: "office@oekfb.eu", name: "Admin")],
+            bcc: [senderEmail()],
             subject: "OEKFB Spielverlegung Anfrage - Abgelehnt",
             body: emailBody,
             isBodyHtml: true
@@ -654,7 +663,7 @@ extension EmailController {
     }
 
     func informRefereeCancellation(req: Request, email: String, name: String, match: Match) throws -> EventLoopFuture<HTTPStatus> {
-        req.application.smtp.configuration = smtpConfig
+        try applySMTPConfig(req)
         
         let matchDateString = formatDate(match.details.date)
 
@@ -668,7 +677,7 @@ extension EmailController {
         """
 
         let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
+            from: senderEmail(),
             to: [EmailAddress(address: email)],
             subject: "OEKFB Spielabsage - \(matchDateString)",
             body: emailBody,
@@ -698,11 +707,11 @@ extension EmailController {
     ) throws -> EventLoopFuture<HTTPStatus> {
 
         // Apply the SMTP configuration
-        req.application.smtp.configuration = smtpConfig
+        try applySMTPConfig(req)
 
-        print("SMTP Configuration: \(req.application.smtp.configuration)")
-        print("Sending verification link to: \(recipient)")
-        print("Verification URL: \(verificationUrl)")
+        req.logger.debug("SMTP configuration applied")
+        req.logger.info("Sending verification link to: \(recipient)")
+        req.logger.debug("Verification URL generated")
 
         let subject = "OEKFB E-Mail bestätigen"
 
@@ -759,7 +768,7 @@ extension EmailController {
         """
 
         let email = try Email(
-            from: EmailAddress(address: "office@oekfb.eu", name: "Admin"),
+            from: senderEmail(),
             to: [EmailAddress(address: recipient)],
             subject: subject,
             body: emailBody,
@@ -771,10 +780,9 @@ extension EmailController {
             case .success:
                 return .ok
             case .failure(let error):
-                print("Email failed to send: \(error.localizedDescription)")
+                req.logger.error("Email send failed: \(error.localizedDescription)")
                 throw Abort(.internalServerError, reason: "Failed to send email: \(error.localizedDescription)")
             }
         }
     }
 }
-

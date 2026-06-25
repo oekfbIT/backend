@@ -76,7 +76,7 @@ final class UserController: RouteCollection {
     func signup(req: Request) throws -> EventLoopFuture<NewSession> {
         let userSignup = try req.content.decode(UserSignup.self)
         let user = try User.create(from: userSignup)
-        var token: Token!
+        var token: Token?
 
         return checkIfUserExists(userSignup.email, req: req).flatMap { exists in
             guard !exists else {
@@ -87,9 +87,9 @@ final class UserController: RouteCollection {
                     return req.eventLoop.future(error: Abort(.internalServerError))
                 }
                 token = newToken
-                return token.save(on: req.db)
+                return newToken.save(on: req.db)
             }.flatMap { _ -> EventLoopFuture<Void> in
-                let verificationToken = UserVerificationToken(userID: user.id!)
+                let verificationToken = UserVerificationToken(userID: try user.requireID())
                 return verificationToken.save(on: req.db).flatMap { _ in
                     // Send email asynchronously
                     return req.eventLoop.submit {
@@ -100,6 +100,9 @@ final class UserController: RouteCollection {
                 }
             }
         }.flatMapThrowing {
+            guard let token = token else {
+                throw Abort(.internalServerError, reason: "Token creation failed")
+            }
             return try NewSession(token: token.value, user: user.asPublic())
         }
     }
@@ -110,7 +113,7 @@ final class UserController: RouteCollection {
         // Map each user signup to an EventLoopFuture<NewSession>
         let signupFutures = try userSignups.map { userSignup -> EventLoopFuture<NewSession> in
             let user = try User.create(from: userSignup)
-            var token: Token!
+            var token: Token?
             
             // Check if user already exists
             return checkIfUserExists(userSignup.email, req: req).flatMap { exists in
@@ -125,11 +128,10 @@ final class UserController: RouteCollection {
                         return req.eventLoop.future(error: Abort(.internalServerError))
                     }
                     token = newToken
-                    
                     // Save token to database
-                    return token.save(on: req.db)
+                    return newToken.save(on: req.db)
                 }.flatMap { _ -> EventLoopFuture<Void> in
-                    let verificationToken = UserVerificationToken(userID: user.id!)
+                    let verificationToken = UserVerificationToken(userID: try user.requireID())
                     
                     // Save verification token to database
                     return verificationToken.save(on: req.db).flatMap { _ in
@@ -143,6 +145,9 @@ final class UserController: RouteCollection {
                     }
                 }.flatMapThrowing {
                     // Return NewSession with token and user details
+                    guard let token = token else {
+                        throw Abort(.internalServerError, reason: "Token creation failed")
+                    }
                     return try NewSession(token: token.value, user: user.asPublic())
                 }
             }
@@ -155,7 +160,6 @@ final class UserController: RouteCollection {
     func login(req: Request) throws -> EventLoopFuture<NewSession> {
         let user = try req.auth.require(User.self)
         let token = try user.createToken(source: .login)
-        print(req)
         return token.save(on: req.db).flatMapThrowing {
             NewSession(token: token.value, user: try user.asPublic())
         }
@@ -219,5 +223,3 @@ extension User: Mergeable {
         return merged
     }
 }
-
-

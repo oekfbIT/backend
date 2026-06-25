@@ -151,13 +151,13 @@ extension AppController {
                     .whenComplete { result in
                         switch result {
                         case .success:
-                            print("[applyTeamApplication] welcome email sent to \(recipient)")
+                            req.logger.info("Welcome email sent to \(recipient, privacy: .private)")
                         case .failure(let error):
-                            print("[applyTeamApplication] welcome email FAILED: \(error)")
+                            req.logger.error("Welcome email FAILED for \(recipient, privacy: .private): \(error)")
                         }
                     }
             } catch {
-                print("[applyTeamApplication] welcome email start FAILED: \(error)")
+                req.logger.error("Welcome email start FAILED for \(recipient, privacy: .private): \(error)")
             }
         }
 
@@ -445,7 +445,6 @@ extension AppController {
         try await registration.save(on: req.db)
         return registration
     }
-
 
 }
 struct TeamAppRegistrationRequest: Content {
