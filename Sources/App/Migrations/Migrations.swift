@@ -27,7 +27,9 @@ let app_migrations: [Migration] = [
     SponsorMigration(),
     VerificationCodeMigration(),
     CreateFollowSubscription(),
-    VoteItemMigration()
+    VoteItemMigration(),
+    LegalSectionMigration(),
+    SponsorDisplayFieldsMigration()
 ]
 
 struct UserMigration { }

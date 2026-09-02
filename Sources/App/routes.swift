@@ -34,6 +34,7 @@ func routes(_ app: Application) throws {
         SponsorController(path: "sponsor"),
         AppController(path: "app"),
         AdminController(path: "admin"),
+        LegalDocumentController(path: "legal"),
         PeopleEventController(path: "people-events")
 ]
     

@@ -10,45 +10,74 @@ import Vapor
 import Fluent
 
 final class SponsorController: RouteCollection {
-    let repository: StandardControllerRepository<Sponsor>
+    let path: String
 
     init(path: String) {
-        self.repository = StandardControllerRepository<Sponsor>(path: path)
-    }
-
-    func setupRoutes(on app: RoutesBuilder) throws {
-        let route = app.grouped(PathComponent(stringLiteral: repository.path))
-        
-        route.post(use: repository.create)
-        route.post("batch", use: repository.createBatch)
-
-        route.get(use: repository.index)
-        route.get(":id", use: repository.getbyID)
-        route.delete(":id", use: repository.deleteID)
-
-        route.patch(":id", use: repository.updateID)
-        route.patch("batch", use: repository.updateBatch)
-        
-        route.get("sponsors", use: getAllSponsors)
-        route.get("partners", use: getAllPartners)
-
+        self.path = path
     }
 
     func boot(routes: RoutesBuilder) throws {
-        try setupRoutes(on: routes)
-    }
-    
-    func getAllSponsors(req: Request) throws -> EventLoopFuture<[Sponsor]> {
-        return Sponsor.query(on: req.db)
-            .filter(\Sponsor.$type == .sponsor)
-            .all()
+        let sponsor = routes.grouped(PathComponent(stringLiteral: path))
+        sponsor.get(use: getAll)
+        sponsor.get("sponsors", use: getSponsors)
+        sponsor.get("partners", use: getPartners)
     }
 
-    func getAllPartners(req: Request) throws -> EventLoopFuture<[Sponsor]> {
-        return Sponsor.query(on: req.db)
-            .filter(\Sponsor.$type == .partner)
-            .all()
+    func getAll(req: Request) async throws -> [Sponsor] {
+        try await SponsorSupport.all(on: req.db)
     }
 
+    func getSponsors(req: Request) async throws -> [Sponsor] {
+        try await SponsorSupport.all(type: .sponsor, on: req.db)
+    }
+
+    func getPartners(req: Request) async throws -> [Sponsor] {
+        try await SponsorSupport.all(type: .partner, on: req.db)
+    }
 }
 
+enum SponsorSupport {
+    static func all(on database: Database) async throws -> [Sponsor] {
+        try await Sponsor.query(on: database)
+            .sort(\.$position, .ascending)
+            .sort(\.$created, .ascending)
+            .all()
+    }
+
+    static func all(type: SponsorType, on database: Database) async throws -> [Sponsor] {
+        try await Sponsor.query(on: database)
+            .filter(\.$type == type)
+            .sort(\.$position, .ascending)
+            .sort(\.$created, .ascending)
+            .all()
+    }
+
+    static func normalizedName(_ value: String) throws -> String {
+        let name = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else {
+            throw Abort(.badRequest, reason: "Name must not be empty.")
+        }
+        return name
+    }
+
+    static func validatedURL(_ value: String, field: String) throws -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed),
+              let scheme = url.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              url.host != nil else {
+            throw Abort(.badRequest, reason: "\(field) must be a valid HTTP or HTTPS URL.")
+        }
+        return trimmed
+    }
+
+    static func persistCanonicalOrder(_ items: [Sponsor], on database: Database) async throws {
+        for (index, item) in items.enumerated() {
+            let expected = index + 1
+            if item.position != expected {
+                item.position = expected
+                try await item.update(on: database)
+            }
+        }
+    }
+}

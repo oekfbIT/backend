@@ -9,7 +9,7 @@ import Fluent
 import Vapor
 
 
-enum SponsorType: String, Codable {
+enum SponsorType: String, Codable, CaseIterable {
     case sponsor
     case partner
 }
@@ -36,8 +36,14 @@ final class Sponsor: Model, Content, Codable {
     @OptionalEnum(key: FieldKeys.type)
     var type: SponsorType?
 
+    @OptionalField(key: FieldKeys.position)
+    var position: Int?
+
     @Timestamp(key: FieldKeys.created, on: .create)
     var created: Date?
+
+    @Timestamp(key: FieldKeys.updated, on: .update)
+    var updated: Date?
 
     struct FieldKeys {
         static var id: FieldKey { "id" }
@@ -46,7 +52,9 @@ final class Sponsor: Model, Content, Codable {
         static var logo: FieldKey { "logo" }
         static var description: FieldKey { "description" }
         static var type: FieldKey { "type" }
+        static var position: FieldKey { "position" }
         static var created: FieldKey { "created" }
+        static var updated: FieldKey { "updated" }
     }
 
     init() {}
@@ -58,6 +66,7 @@ final class Sponsor: Model, Content, Codable {
         logo: String?,
         description: String? = nil,
         type: SponsorType? = nil,
+        position: Int? = nil,
         created: Date? = nil
     ) {
         self.id = id
@@ -66,6 +75,7 @@ final class Sponsor: Model, Content, Codable {
         self.logo = logo
         self.description = description
         self.type = type
+        self.position = position
         self.created = created
     }
 }
@@ -79,8 +89,25 @@ extension Sponsor: Mergeable {
         merged.logo = other.logo ?? self.logo
         merged.description = other.description ?? self.description
         merged.type = other.type ?? self.type
+        merged.position = other.position ?? self.position
         merged.created = other.created ?? self.created
         return merged
+    }
+}
+
+struct SponsorDisplayFieldsMigration: Migration {
+    func prepare(on database: Database) -> EventLoopFuture<Void> {
+        database.schema(Sponsor.schema)
+            .field(Sponsor.FieldKeys.position, .int)
+            .field(Sponsor.FieldKeys.updated, .datetime)
+            .update()
+    }
+
+    func revert(on database: Database) -> EventLoopFuture<Void> {
+        database.schema(Sponsor.schema)
+            .deleteField(Sponsor.FieldKeys.position)
+            .deleteField(Sponsor.FieldKeys.updated)
+            .update()
     }
 }
 

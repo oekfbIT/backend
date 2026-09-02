@@ -34,6 +34,8 @@ final class AdminController: RouteCollection {
         setupStadiumRoutes(on: admin)
         setupUserRoutes(on: admin)
         setupRegistrationRoutes(on: admin)
+        setupLegalRoutes(on: admin)
+        setupSponsorRoutes(on: admin)
 
     }
 
