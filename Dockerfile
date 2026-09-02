@@ -12,12 +12,29 @@ RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true \
 # Set up a build area
 WORKDIR /build
 
+# SwiftPM can open many concurrent HTTP/2 Git connections while resolving the
+# Vapor dependency graph. Some hosted builders intermittently reject those
+# connections with "expected flush after ref listing". Use HTTP/1.1 and let the
+# resolver fetch repositories sequentially instead.
+RUN git config --global http.version HTTP/1.1
+
 # First just resolve dependencies.
 # This creates a cached layer that can be reused
 # as long as your Package.swift/Package.resolved
 # files do not change.
 COPY ./Package.* ./
-RUN swift package resolve
+RUN set -eu; \
+    attempt=1; \
+    while ! swift package resolve --disable-prefetching --jobs 2; do \
+        if [ "$attempt" -ge 4 ]; then \
+            echo "Swift package resolution failed after $attempt attempts." >&2; \
+            exit 1; \
+        fi; \
+        echo "Swift package resolution attempt $attempt failed; retrying." >&2; \
+        rm -rf .build/repositories /root/.cache/org.swift.swiftpm/repositories; \
+        attempt=$((attempt + 1)); \
+        sleep $((attempt * 5)); \
+    done
 
 # Copy entire repo into container
 COPY . .

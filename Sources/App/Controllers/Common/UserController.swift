@@ -89,7 +89,10 @@ final class UserController: RouteCollection {
                 token = newToken
                 return newToken.save(on: req.db)
             }.flatMap { _ -> EventLoopFuture<Void> in
-                let verificationToken = UserVerificationToken(userID: try user.requireID())
+                guard let userID = try? user.requireID() else {
+                    return req.eventLoop.makeFailedFuture(Abort(.internalServerError))
+                }
+                let verificationToken = UserVerificationToken(userID: userID)
                 return verificationToken.save(on: req.db).flatMap { _ in
                     // Send email asynchronously
                     return req.eventLoop.submit {
@@ -131,7 +134,10 @@ final class UserController: RouteCollection {
                     // Save token to database
                     return newToken.save(on: req.db)
                 }.flatMap { _ -> EventLoopFuture<Void> in
-                    let verificationToken = UserVerificationToken(userID: try user.requireID())
+                    guard let userID = try? user.requireID() else {
+                        return req.eventLoop.makeFailedFuture(Abort(.internalServerError))
+                    }
+                    let verificationToken = UserVerificationToken(userID: userID)
                     
                     // Save verification token to database
                     return verificationToken.save(on: req.db).flatMap { _ in

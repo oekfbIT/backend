@@ -151,13 +151,13 @@ extension AppController {
                     .whenComplete { result in
                         switch result {
                         case .success:
-                            req.logger.info("Welcome email sent to \(recipient, privacy: .private)")
+                            req.logger.info("Welcome email sent")
                         case .failure(let error):
-                            req.logger.error("Welcome email FAILED for \(recipient, privacy: .private): \(error)")
+                            req.logger.error("Welcome email FAILED: \(error)")
                         }
                     }
             } catch {
-                req.logger.error("Welcome email start FAILED for \(recipient, privacy: .private): \(error)")
+                req.logger.error("Welcome email start FAILED: \(error)")
             }
         }
 

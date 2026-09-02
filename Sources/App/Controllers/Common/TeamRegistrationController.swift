@@ -79,7 +79,7 @@ final class TeamRegistrationController: RouteCollection {
     func register(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let registrationRequest = try req.content.decode(TeamRegistrationRequest.self)
 
-        req.logger.debug("Creating team registration for user email \(registrationRequest.primaryContact.email, privacy: .private)")
+        req.logger.debug("Creating team registration")
         
         let newRegistration = TeamRegistration()
         newRegistration.primary = registrationRequest.primaryContact
@@ -121,13 +121,13 @@ final class TeamRegistrationController: RouteCollection {
                     .whenComplete { result in
                         switch result {
                         case .success:
-                            req.logger.debug("Welcome email sent successfully to \(recipient, privacy: .private)")
+                            req.logger.debug("Welcome email sent successfully")
                         case .failure(let error):
-                            req.logger.error("Welcome email failed for \(recipient, privacy: .private): \(error)")
+                            req.logger.error("Welcome email failed: \(error)")
                         }
                     }
             } catch {
-                req.logger.error("Failed to queue welcome email for \(recipient, privacy: .private): \(error)")
+                req.logger.error("Failed to queue welcome email: \(error)")
             }
         }
     }
@@ -140,13 +140,13 @@ final class TeamRegistrationController: RouteCollection {
                     .whenComplete { result in
                         switch result {
                         case .success:
-                            req.logger.debug("Team login email sent successfully to \(recipient, privacy: .private)")
+                            req.logger.debug("Team login email sent successfully")
                         case .failure(let error):
-                            req.logger.error("Team login email failed for \(recipient, privacy: .private): \(error)")
+                            req.logger.error("Team login email failed: \(error)")
                         }
                     }
             } catch {
-                req.logger.error("Failed to queue team login email for \(recipient, privacy: .private): \(error)")
+                req.logger.error("Failed to queue team login email: \(error)")
             }
         }
     }
@@ -263,7 +263,7 @@ final class TeamRegistrationController: RouteCollection {
                         // Always recalculate from scratch
                         registration.paidAmount = -(topayAmount + (registration.kaution ?? 0.0))
 
-                        req.logger.debug("Assign league calculation for registration \(registration.id?.uuidString ?? \"missing-id\")")
+                        req.logger.debug("Assign league calculation for registration \(registration.id?.uuidString ?? "missing-id")")
                         req.logger.debug("teamCount: \(teamCount)")
                         req.logger.debug("teamPrice: \(teamPrice)")
                         req.logger.debug("topayAmount: \(topayAmount)")
@@ -290,13 +290,13 @@ final class TeamRegistrationController: RouteCollection {
                     .whenComplete { result in
                         switch result {
                         case .success:
-                            req.logger.debug("Payment instructions email sent successfully to \(recipient, privacy: .private)")
+                            req.logger.debug("Payment instructions email sent successfully")
                         case .failure(let error):
-                            req.logger.error("Payment instructions email failed for \(recipient, privacy: .private): \(error)")
+                            req.logger.error("Payment instructions email failed: \(error)")
                         }
                     }
             } catch {
-                req.logger.error("Failed to queue payment instructions for \(recipient, privacy: .private): \(error)")
+                req.logger.error("Failed to queue payment instructions: \(error)")
             }
         }
     }
@@ -355,7 +355,7 @@ final class TeamRegistrationController: RouteCollection {
 
                 return registration.save(on: req.db).flatMap {
                     return team.save(on: req.db).map {
-                        req.logger.info("Team created for user \(userID, privacy: .private)")
+                        req.logger.info("Team created for user \(userID)")
                         return HTTPStatus.ok
                     }
                 }
