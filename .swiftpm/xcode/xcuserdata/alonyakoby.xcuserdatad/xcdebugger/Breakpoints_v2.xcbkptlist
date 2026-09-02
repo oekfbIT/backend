@@ -30,9 +30,9 @@
             filePath = "Sources/App/Models/Team/Team.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "115"
-            endingLineNumber = "115"
-            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:coverimg:logo:teamName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
+            startingLineNumber = "123"
+            endingLineNumber = "123"
+            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:hiddenpoints:coverimg:logo:teamName:shortName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -46,9 +46,9 @@
             filePath = "Sources/App/Models/Team/Team.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "114"
-            endingLineNumber = "114"
-            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:coverimg:logo:teamName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
+            startingLineNumber = "122"
+            endingLineNumber = "122"
+            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:hiddenpoints:coverimg:logo:teamName:shortName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -62,9 +62,9 @@
             filePath = "Sources/App/Models/Team/Team.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "116"
-            endingLineNumber = "116"
-            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:coverimg:logo:teamName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
+            startingLineNumber = "124"
+            endingLineNumber = "124"
+            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:hiddenpoints:coverimg:logo:teamName:shortName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -78,9 +78,9 @@
             filePath = "Sources/App/Models/Team/Team.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "118"
-            endingLineNumber = "118"
-            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:coverimg:logo:teamName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
+            startingLineNumber = "126"
+            endingLineNumber = "126"
+            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:hiddenpoints:coverimg:logo:teamName:shortName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -94,25 +94,9 @@
             filePath = "Sources/App/Models/Team/Team.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "117"
-            endingLineNumber = "117"
-            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:coverimg:logo:teamName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
-            landmarkType = "7">
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            uuid = "FBB6BEA5-617F-4DF9-8563-9CDA5A62BC7E"
-            shouldBeEnabled = "No"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "Sources/App/Models/Team/Team.swift"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "120"
-            endingLineNumber = "120"
-            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:coverimg:logo:teamName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
+            startingLineNumber = "125"
+            endingLineNumber = "125"
+            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:hiddenpoints:coverimg:logo:teamName:shortName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -126,9 +110,9 @@
             filePath = "Sources/App/Models/Team/Team.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "119"
-            endingLineNumber = "119"
-            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:coverimg:logo:teamName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
+            startingLineNumber = "127"
+            endingLineNumber = "127"
+            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:hiddenpoints:coverimg:logo:teamName:shortName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -142,9 +126,9 @@
             filePath = "Sources/App/Models/Team/Team.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "121"
-            endingLineNumber = "121"
-            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:coverimg:logo:teamName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
+            startingLineNumber = "130"
+            endingLineNumber = "130"
+            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:hiddenpoints:coverimg:logo:teamName:shortName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -158,9 +142,9 @@
             filePath = "Sources/App/Models/Team/Team.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "122"
-            endingLineNumber = "122"
-            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:coverimg:logo:teamName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
+            startingLineNumber = "131"
+            endingLineNumber = "131"
+            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:hiddenpoints:coverimg:logo:teamName:shortName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -174,9 +158,9 @@
             filePath = "Sources/App/Models/Team/Team.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "124"
-            endingLineNumber = "124"
-            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:coverimg:logo:teamName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
+            startingLineNumber = "134"
+            endingLineNumber = "134"
+            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:hiddenpoints:coverimg:logo:teamName:shortName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -190,9 +174,9 @@
             filePath = "Sources/App/Models/Team/Team.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "123"
-            endingLineNumber = "123"
-            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:coverimg:logo:teamName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
+            startingLineNumber = "133"
+            endingLineNumber = "133"
+            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:hiddenpoints:coverimg:logo:teamName:shortName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -206,9 +190,9 @@
             filePath = "Sources/App/Models/Team/Team.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "127"
-            endingLineNumber = "127"
-            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:coverimg:logo:teamName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
+            startingLineNumber = "137"
+            endingLineNumber = "137"
+            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:hiddenpoints:coverimg:logo:teamName:shortName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -222,9 +206,9 @@
             filePath = "Sources/App/Models/Team/Team.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "128"
-            endingLineNumber = "128"
-            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:coverimg:logo:teamName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
+            startingLineNumber = "138"
+            endingLineNumber = "138"
+            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:hiddenpoints:coverimg:logo:teamName:shortName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -238,9 +222,9 @@
             filePath = "Sources/App/Models/Team/Team.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "129"
-            endingLineNumber = "129"
-            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:coverimg:logo:teamName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
+            startingLineNumber = "139"
+            endingLineNumber = "139"
+            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:hiddenpoints:coverimg:logo:teamName:shortName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -254,9 +238,9 @@
             filePath = "Sources/App/Models/Team/Team.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "139"
-            endingLineNumber = "139"
-            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:coverimg:logo:teamName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
+            startingLineNumber = "149"
+            endingLineNumber = "149"
+            landmarkName = "init(id:sid:userId:leagueId:leagueCode:points:hiddenpoints:coverimg:logo:teamName:shortName:foundationYear:membershipSince:averageAge:coach:altCoach:captain:trikot:balance:referCode:overdraft:cancelled:postponed:overdraftDate:usremail:usrpass:usrtel:kaution:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -318,10 +302,10 @@
             filePath = "Sources/App/Controllers/MatchController.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "783"
-            endingLineNumber = "783"
-            landmarkName = "noShowGame(req:)"
-            landmarkType = "7">
+            startingLineNumber = "958"
+            endingLineNumber = "958"
+            landmarkName = "NoShowRequest"
+            landmarkType = "14">
          </BreakpointContent>
       </BreakpointProxy>
       <BreakpointProxy
@@ -350,8 +334,8 @@
             filePath = "Sources/App/Controllers/LeagueController.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "201"
-            endingLineNumber = "201"
+            startingLineNumber = "235"
+            endingLineNumber = "235"
             landmarkName = "addMatchesToSeason(req:)"
             landmarkType = "7">
          </BreakpointContent>
@@ -366,9 +350,9 @@
             filePath = "Sources/App/Models/User/UserSignup.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "22"
-            endingLineNumber = "22"
-            landmarkName = "init(id:firstName:lastName:email:password:type:)"
+            startingLineNumber = "23"
+            endingLineNumber = "23"
+            landmarkName = "init(id:firstName:lastName:email:password:type:tel:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>

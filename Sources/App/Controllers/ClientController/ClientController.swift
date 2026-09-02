@@ -30,6 +30,7 @@ final class ClientController: RouteCollection {
         // First, define a route that fetches a single match by its ID and includes the events:
         route.get("match", "detail", ":id", use: fetchMatch)
         route.get("player", "detail", ":id", use: fetchPlayer)
+        route.get("search", use: search)
         
         route.get("leaderboard", ":id", "goal", use: getGoalLeaderBoardSeason)
         route.get("leaderboard", ":id", "redCard", use: getRedCardLeaderBoardSeason)

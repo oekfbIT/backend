@@ -263,7 +263,8 @@ final class TeamRegistrationController: RouteCollection {
                         // Always recalculate from scratch
                         registration.paidAmount = -(topayAmount + (registration.kaution ?? 0.0))
 
-                        req.logger.debug("Assign league calculation for registration \(registration.id?.uuidString ?? "missing-id")")
+                        let registrationID = registration.id?.uuidString ?? "missing-id"
+                        req.logger.debug("Assign league calculation for registration \(registrationID)")
                         req.logger.debug("teamCount: \(teamCount)")
                         req.logger.debug("teamPrice: \(teamPrice)")
                         req.logger.debug("topayAmount: \(topayAmount)")

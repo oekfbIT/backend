@@ -52,7 +52,6 @@ public func configure(_ app: Application) throws {
     app.views.use(.leaf)
     
     // MARK: - Middleware Configuration
-    app.middleware.use(ErrorMiddleware.default(environment: app.environment))
     app.passwords.use(.bcrypt)
     
     // MARK: - MongoKitten Configuration
@@ -179,6 +178,9 @@ public func configure(_ app: Application) throws {
     )
         
     app.middleware.use(corsMiddleware)
+    // Keep error handling inside CORS so allowed browser origins receive
+    // headers on 4xx and 5xx responses too.
+    app.middleware.use(ErrorMiddleware.default(environment: app.environment))
 
     let FIREBASE_APIKEY = Environment.get("FIREBASE_APIKEY") ?? ""
     let FIREBASE_EMAIL = Environment.get("FIREBASE_EMAIL") ?? ""
