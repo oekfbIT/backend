@@ -40,13 +40,14 @@ extension AdminController {
         async let refereesFuture = Referee.query(on: req.db).mongoRegex("name", pattern).limit(limit).all()
         async let teamsFuture = Team.query(on: req.db).mongoRegex("teamName", pattern).limit(limit).all()
         async let leaguesFuture = League.query(on: req.db).mongoRegex("name", pattern).limit(limit).all()
+        async let seasonsFuture = Season.query(on: req.db).mongoRegex("name", pattern).limit(limit).all()
         async let stadiumsFuture = Stadium.query(on: req.db).mongoRegex("name", pattern).limit(limit).all()
         async let usersByFirstNameFuture = User.query(on: req.db).mongoRegex("firstName", pattern).limit(limit).all()
         async let usersByLastNameFuture = User.query(on: req.db).mongoRegex("lastName", pattern).limit(limit).all()
         async let usersByEmailFuture = User.query(on: req.db).mongoRegex("email", pattern).limit(limit).all()
 
-        let (players, referees, teams, leagues, stadiums, usersByFirstName, usersByLastName, usersByEmail) = try await (
-            playersFuture, refereesFuture, teamsFuture, leaguesFuture, stadiumsFuture,
+        let (players, referees, teams, leagues, seasons, stadiums, usersByFirstName, usersByLastName, usersByEmail) = try await (
+            playersFuture, refereesFuture, teamsFuture, leaguesFuture, seasonsFuture, stadiumsFuture,
             usersByFirstNameFuture, usersByLastNameFuture, usersByEmailFuture
         )
 
@@ -68,6 +69,10 @@ extension AdminController {
         items += try leagues.map {
             SearchItem(id: try $0.requireID(), type: "league", title: $0.name,
                        subtitle: $0.code, url: "/admin/league_detail/\(try $0.requireID())", image: nil)
+        }
+        items += try seasons.map {
+            SearchItem(id: try $0.requireID(), type: "season", title: $0.name,
+                       subtitle: "Saison", url: "/admin/season_detail/\(try $0.requireID())", image: nil)
         }
         items += try stadiums.map {
             SearchItem(id: try $0.requireID(), type: "stadium", title: $0.name,
