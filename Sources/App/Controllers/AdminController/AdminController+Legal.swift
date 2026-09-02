@@ -2,10 +2,15 @@ import Fluent
 import Vapor
 
 extension AdminController {
-    func setupLegalRoutes(on root: RoutesBuilder) {
+    func setupLegalReadRoutes(on root: RoutesBuilder) {
         let legal = root.grouped("legal")
 
         legal.get(":document", use: getLegalDocument)
+    }
+
+    func setupLegalWriteRoutes(on root: RoutesBuilder) {
+        let legal = root.grouped("legal")
+
         legal.post(":document", use: createLegalSection)
         legal.patch(":document", ":id", use: updateLegalSection)
         legal.delete(":document", ":id", use: deleteLegalSection)

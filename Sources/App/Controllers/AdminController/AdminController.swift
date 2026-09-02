@@ -15,6 +15,7 @@ final class AdminController: RouteCollection {
         let route = app.grouped(PathComponent(stringLiteral: path))
         // Public admin auth (no Token.authenticator() here)
         setupAuthRoutes(on: route)
+        setupLegalReadRoutes(on: route)
 
         let authed = route.grouped(
             Token.authenticator(),
@@ -34,7 +35,7 @@ final class AdminController: RouteCollection {
         setupStadiumRoutes(on: admin)
         setupUserRoutes(on: admin)
         setupRegistrationRoutes(on: admin)
-        setupLegalRoutes(on: admin)
+        setupLegalWriteRoutes(on: admin)
         setupSponsorRoutes(on: admin)
 
     }
