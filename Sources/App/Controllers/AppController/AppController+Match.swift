@@ -285,6 +285,7 @@ extension AppController {
         }
         event.$match.id = mid
         try await event.save(on: req.db)
+        try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
 
         return .created
     }
@@ -324,6 +325,12 @@ extension AppController {
 
         _ = try await addCardEvent(req: req, cardType: .yellowCard)
 
+        let matchID = try req.parameters.require("matchID", as: UUID.self)
+        guard let match = try await Match.find(matchID, on: req.db),
+              let seasonID = match.$season.id else {
+            throw Abort(.notFound, reason: "Match season not found")
+        }
+
         let calendar = Calendar.current
         let currentDate = Date.viennaNow
         guard let futureDate = calendar.date(byAdding: .day, value: 8, to: currentDate) else {
@@ -338,8 +345,7 @@ extension AppController {
 
         let yellowCardCount = try await MatchEvent.query(on: req.db)
             .join(Match.self, on: \MatchEvent.$match.$id == \Match.$id)
-            .join(Season.self, on: \Match.$season.$id == \Season.$id)
-            .filter(Season.self, \.$primary == true)
+            .filter(Match.self, \.$season.$id == seasonID)
             .filter(\.$player.$id == cardRequest.playerId)
             .filter(\.$type == .yellowCard)
             .count()
@@ -361,6 +367,7 @@ extension AppController {
     // POST /app/match/:matchID/yellowRedCard
     func addYellowRedCard(req: Request) async throws -> HTTPStatus {
         let cardRequest = try req.content.decode(CardRequest.self)
+        let matchID = try req.parameters.require("matchID", as: UUID.self)
 
         _ = try await addCardEvent(req: req, cardType: .yellowRedCard)
 
@@ -386,11 +393,16 @@ extension AppController {
 
         if let lastYellow = try await MatchEvent.query(on: req.db)
             .filter(\.$player.$id == (player.id ?? UUID()))
+            .filter(\.$match.$id == matchID)
             .filter(\.$type == .yellowCard)
             .sort(\._$id, .descending)
             .first()
         {
             try await lastYellow.delete(on: req.db)
+        }
+
+        if let match = try await Match.find(matchID, on: req.db) {
+            try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
         }
 
         return .ok
@@ -453,6 +465,7 @@ extension AppController {
         }
 
         try await match.save(on: req.db)
+        try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
         return .ok
     }
 
@@ -512,6 +525,7 @@ extension AppController {
         }
 
         try await match.save(on: req.db)
+        try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
         return .ok
     }
 
@@ -534,6 +548,7 @@ extension AppController {
 
         match.homeBlanket?.players.remove(at: index)
         try await match.save(on: req.db)
+        try await StatsCacheManager.invalidatePlayerStats(for: [playerId], on: req.db).get()
         return .ok
     }
 
@@ -556,6 +571,7 @@ extension AppController {
 
         match.awayBlanket?.players.remove(at: index)
         try await match.save(on: req.db)
+        try await StatsCacheManager.invalidatePlayerStats(for: [playerId], on: req.db).get()
         return .ok
     }
 
@@ -568,6 +584,7 @@ extension AppController {
         match.status = .first
         match.firstHalfStartDate = Date.viennaNow
         try await match.save(on: req.db)
+        try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
         return .ok
     }
 
@@ -578,6 +595,7 @@ extension AppController {
         match.status = .halftime
         match.firstHalfEndDate = Date.viennaNow
         try await match.save(on: req.db)
+        try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
         return .ok
     }
 
@@ -588,6 +606,7 @@ extension AppController {
         match.status = .second
         match.secondHalfStartDate = Date.viennaNow
         try await match.save(on: req.db)
+        try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
         return .ok
     }
 
@@ -598,6 +617,7 @@ extension AppController {
         match.status = .completed
         match.secondHalfEndDate = Date.viennaNow
         try await match.save(on: req.db)
+        try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
         return .ok
     }
 
@@ -658,6 +678,7 @@ extension AppController {
 
         match.status = .cancelled
         try await match.save(on: req.db)
+        try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
 
         guard let team = try await Team.find(winningTeamId, on: req.db) else {
             throw Abort(.notFound, reason: "Winning team not found")
@@ -705,6 +726,7 @@ extension AppController {
 
         match.status = .cancelled
         try await match.save(on: req.db)
+        try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
 
         guard let winningTeam = try await Team.find(winningTeamId, on: req.db) else {
             throw Abort(.notFound, reason: "Winning team not found")
@@ -777,6 +799,7 @@ extension AppController {
         guard let match = try await Match.find(matchId, on: req.db) else { throw Abort(.notFound) }
         match.status = .abbgebrochen
         try await match.save(on: req.db)
+        try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
         return .ok
     }
 
@@ -805,6 +828,7 @@ extension AppController {
 
         match.status = .done
         try await match.save(on: req.db)
+        try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
 
         return .ok
     }
@@ -844,6 +868,7 @@ extension AppController {
             .delete()
 
         try await match.save(on: req.db)
+        try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
         return .ok
     }
 
@@ -857,6 +882,7 @@ extension AppController {
         match.secondHalfEndDate = nil
 
         try await match.save(on: req.db)
+        try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
         return .ok
     }
 
@@ -911,9 +937,12 @@ extension AppController {
             throw Abort(.notFound, reason: "Match not found")
         }
 
+        let assignment: MatchAssignment
         if cardRequest.teamId == match.$homeTeam.id {
+            assignment = .home
             updatePlayerCardStatus(in: &match.homeBlanket, playerId: cardRequest.playerId, cardType: cardType)
         } else if cardRequest.teamId == match.$awayTeam.id {
+            assignment = .away
             updatePlayerCardStatus(in: &match.awayBlanket, playerId: cardRequest.playerId, cardType: cardType)
         } else {
             throw Abort(.badRequest, reason: "Team ID does not match home or away team.")
@@ -928,7 +957,8 @@ extension AppController {
             minute: cardRequest.minute,
             name: cardRequest.name,
             image: cardRequest.image,
-            number: cardRequest.number
+            number: cardRequest.number,
+            assign: assignment
         )
 
         guard let mid = match.id else {
@@ -937,6 +967,7 @@ extension AppController {
         event.$match.id = mid
 
         try await event.save(on: req.db)
+        try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
         return .ok
     }
 
@@ -960,6 +991,7 @@ extension AppController {
 
         try await match.save(on: req.db)
         try await ref.save(on: req.db)
+        try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
 
         return .ok
     }
@@ -1395,4 +1427,3 @@ private func uniqueDateStrings(from matches: [Match], utcCal: Calendar) -> [Stri
 
     return set.sorted()
 }
-

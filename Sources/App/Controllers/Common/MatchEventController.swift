@@ -11,14 +11,14 @@ final class MatchEventController: RouteCollection {
     func setupRoutes(on app: RoutesBuilder) throws {
         let route = app.grouped(PathComponent(stringLiteral: repository.path))
 
-        route.post(use: repository.create)
-        route.post("batch", use: repository.createBatch)
+        route.post(use: createEvent)
+        route.post("batch", use: createEvents)
 
         route.get(use: repository.index)
         route.get(":id", use: repository.getbyID)
         route.delete(":id", use: deleteEvent)
 
-        route.patch(":id", use: repository.updateID)
+        route.patch(":id", use: updateEvent)
         route.patch("batch", use: repository.updateBatch)
         route.get("player", ":playerId", use: getPlayerEventsSummary) // New route for player events
         route.get("detail", "player", ":playerId", use: getPlayerEvents) 
@@ -38,42 +38,51 @@ final class MatchEventController: RouteCollection {
         let totalMatches: Int
     }
 
-    func getPlayerEventsSummary(req: Request) throws -> EventLoopFuture<MatchEventSummary> {
-        // Extract the player's UUID from the request parameters
-        let playerId = try req.parameters.require("playerId", as: UUID.self)
+    func createEvent(req: Request) throws -> EventLoopFuture<MatchEvent> {
+        try repository.create(req: req).flatMap { event in
+            self.invalidateStats(for: [event], req: req).transform(to: event)
+        }
+    }
 
-        // Query the database to find all events associated with the player
-        return MatchEvent.query(on: req.db)
-            .filter(\.$player.$id == playerId)
+    func createEvents(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+        let events = try req.content.decode([MatchEvent].self)
+        return events.create(on: req.db)
+            .flatMap { self.invalidateStats(for: events, req: req) }
+            .transform(to: .created)
+    }
+
+    func updateEvent(req: Request) throws -> EventLoopFuture<MatchEvent> {
+        try repository.updateID(req: req).flatMap { event in
+            self.invalidateStats(for: [event], req: req).transform(to: event)
+        }
+    }
+
+    private func invalidateStats(for events: [MatchEvent], req: Request) -> EventLoopFuture<Void> {
+        let matchIDs = Array(Set(events.map { $0.$match.id }))
+        return Match.query(on: req.db)
+            .filter(\.$id ~~ matchIDs)
             .all()
-            .flatMap { events in
-                // Extract unique match IDs from the events
-                let matchIds = events.map { $0.$match.id }.compactMap { $0 }
-                
-                // Query the database to find all matches for the player
-                return Match.query(on: req.db)
-                    .filter(\.$id ~~ matchIds)
-                    .all()
-                    .map { matches in
-                        // Count events by type
-                        let goalCount = events.filter { $0.type == .goal }.count
-                        let redCardCount = events.filter { $0.type == .redCard }.count
-                        let yellowCardCount = events.filter { $0.type == .yellowCard }.count
-                        let yellowRedCardCount = events.filter { $0.type == .yellowRedCard }.count
+            .flatMap { matches in
+                EventLoopFuture.andAllSucceed(
+                    matches.map { StatsCacheManager.invalidateStats(for: $0, on: req.db) },
+                    on: req.eventLoop
+                )
+            }
+    }
 
-                        // Total appearances and matches
-                        let totalAppearances = events.count
-                        let totalMatches = matches.count
-
-                        return MatchEventSummary(
-                            goalCount: goalCount,
-                            redCardCount: redCardCount,
-                            yellowCardCount: yellowCardCount,
-                            yellowRedCardCount: yellowRedCardCount,
-                            totalAppearances: totalAppearances,
-                            totalMatches: totalMatches
-                        )
-                    }
+    func getPlayerEventsSummary(req: Request) throws -> EventLoopFuture<MatchEventSummary> {
+        let playerId = try req.parameters.require("playerId", as: UUID.self)
+        return PlayerStatisticsService.calculate(playerID: playerId, on: req.db)
+            .map { pair in
+                let stats = pair.all
+                return MatchEventSummary(
+                    goalCount: stats.goalsScored,
+                    redCardCount: stats.redCards,
+                    yellowCardCount: stats.yellowCards,
+                    yellowRedCardCount: stats.yellowRedCrd,
+                    totalAppearances: stats.matchesPlayed,
+                    totalMatches: stats.matchesPlayed
+                )
             }
     }
     
@@ -105,18 +114,30 @@ final class MatchEventController: RouteCollection {
                             return self.updateScoreForGoalRemoval(event: event, match: match, req: req)
                                 .flatMap {
                                     // Delete the event after updating the score
-                                    return event.delete(on: req.db).transform(to: .ok)
+                                    event.delete(on: req.db)
                                 }
+                                .flatMap {
+                                    StatsCacheManager.invalidateStats(for: match, on: req.db)
+                                }
+                                .transform(to: .ok)
                         case .yellowCard, .redCard, .yellowRedCard:
                             // If the event is a card, adjust the card status and delete the event
                             return self.revertCardEvent(event: event, match: match, req: req)
                                 .flatMap {
                                     // Delete the event after reverting the card
-                                    return event.delete(on: req.db).transform(to: .ok)
+                                    event.delete(on: req.db)
                                 }
+                                .flatMap {
+                                    StatsCacheManager.invalidateStats(for: match, on: req.db)
+                                }
+                                .transform(to: .ok)
                         default:
                             // For other event types, just delete the event
-                            return event.delete(on: req.db).transform(to: .ok)
+                            return event.delete(on: req.db)
+                                .flatMap {
+                                    StatsCacheManager.invalidateStats(for: match, on: req.db)
+                                }
+                                .transform(to: .ok)
                         }
                     }
             }

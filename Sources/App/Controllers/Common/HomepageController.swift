@@ -466,91 +466,30 @@ final class HomepageController: RouteCollection {
             return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league ID"))
         }
 
-        return Team.query(on: req.db)
-            .filter(\.$league.$id == leagueID)
-            .with(\.$players)
-            .all()
-            .flatMap { teams in
-                let playerIDs = teams.flatMap { $0.players.compactMap { $0.id } }
-
-                return MatchEvent.query(on: req.db)
-                    .filter(\.$player.$id ~~ playerIDs)
-                    .filter(\.$type == eventType)
-                    .all()
-                    .map { events in
-                        self.mapEventsToLeaderBoard(events)
-                    }
-            }
+        return LeaderboardService.fetch(
+            leagueID: leagueID,
+            eventType: eventType,
+            primaryOnly: true,
+            on: req.db
+        )
     }
 
     func getPlayerStatsBundle(playerID: UUID, db: Database) -> EventLoopFuture<PlayerStatsPair> {
-        MatchEvent.query(on: db)
-            .filter(\.$player.$id == playerID)
-            .with(\.$match) { $0.with(\.$season) } // eager-load Season
-            .all()
-            .map { events in
-                var allStats = PlayerStats(matchesPlayed: 0, goalsScored: 0, redCards: 0, yellowCards: 0, yellowRedCrd: 0)
-                var seasonStats = PlayerStats(matchesPlayed: 0, goalsScored: 0, redCards: 0, yellowCards: 0, yellowRedCrd: 0)
-
-                var allMatchSet = Set<UUID>()
-                var seasonMatchSet = Set<UUID>()
-
-                for event in events {
-                    // ALL
-                    allMatchSet.insert(event.$match.id)
-                    switch event.type {
-                    case .goal:          allStats.goalsScored += 1
-                    case .redCard:       allStats.redCards += 1
-                    case .yellowCard:    allStats.yellowCards += 1
-                    case .yellowRedCard: allStats.yellowRedCrd += 1
-                    default: break
-                    }
-
-                    // CURRENT PRIMARY SEASON ONLY
-                    if event.match.season?.primary == true {
-                        seasonMatchSet.insert(event.$match.id)
-                        switch event.type {
-                        case .goal:          seasonStats.goalsScored += 1
-                        case .redCard:       seasonStats.redCards += 1
-                        case .yellowCard:    seasonStats.yellowCards += 1
-                        case .yellowRedCard: seasonStats.yellowRedCrd += 1
-                        default: break
-                        }
-                    }
-                }
-
-                allStats.matchesPlayed = allMatchSet.count
-                seasonStats.matchesPlayed = seasonMatchSet.count
-                return PlayerStatsPair(all: allStats, season: seasonStats)
+        Player.query(on: db)
+            .filter(\.$id == playerID)
+            .with(\.$team)
+            .first()
+            .flatMap { player in
+                PlayerStatisticsService.calculate(
+                    playerID: playerID,
+                    activeLeagueID: player?.team?.$league.id,
+                    on: db
+                )
             }
     }
 
     func getPlayerStats(playerID: UUID, db: Database) -> EventLoopFuture<PlayerStats> {
-        return MatchEvent.query(on: db)
-            .filter(\.$player.$id == playerID)
-            .all()
-            .map { events in
-                var stats = PlayerStats(matchesPlayed: 0, goalsScored: 0, redCards: 0, yellowCards: 0, yellowRedCrd: 0)
-                var matchSet = Set<UUID>()
-
-                for event in events {
-                    matchSet.insert(event.$match.id)
-                    switch event.type {
-                    case .goal:
-                        stats.goalsScored += 1
-                    case .redCard:
-                        stats.redCards += 1
-                    case .yellowCard:
-                        stats.yellowCards += 1
-                    case .yellowRedCard:
-                        stats.yellowRedCrd += 1
-                    default:
-                        break
-                    }
-                }
-                stats.matchesPlayed = matchSet.count
-                return stats
-            }
+        PlayerStatisticsService.calculate(playerID: playerID, on: db).map(\.all)
     }
 
     func getTeamStats(teamID: UUID, db: Database) -> EventLoopFuture<TeamStats> {

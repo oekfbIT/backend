@@ -259,45 +259,18 @@ extension Match: Mergeable {
 }
 
 extension Player {
-    /// Returns stats for the *current primary season only* (fast DB query).
+    /// Returns stats for the primary season of the player's current league.
     func getSeasonStats(on db: Database) -> EventLoopFuture<PlayerStats> {
-        // 1. Find all primary season IDs
-        Season.query(on: db)
-            .filter(\.$primary == true)
-            .all()
-            .flatMap { primarySeasons in
-                let seasonIDs = primarySeasons.compactMap(\.id)
-                guard !seasonIDs.isEmpty, let playerID = self.id else {
-                    return db.eventLoop.makeSucceededFuture(
-                        PlayerStats(matchesPlayed: 0, goalsScored: 0, redCards: 0, yellowCards: 0, yellowRedCrd: 0)
-                    )
-                }
+        guard let playerID = id else {
+            return db.eventLoop.makeSucceededFuture(PlayerStatisticsService.emptyStats())
+        }
 
-                // 2. Query MatchEvents for this player in those seasons only
-                return MatchEvent.query(on: db)
-                    .filter(\.$player.$id == playerID)
-                    .join(parent: \MatchEvent.$match)
-                    .filter(Match.self, \.$season.$id ~~ seasonIDs)
-                    .all()
-                    .map { events in
-                        // 3. Aggregate efficiently
-                        var stats = PlayerStats(matchesPlayed: 0, goalsScored: 0, redCards: 0, yellowCards: 0, yellowRedCrd: 0)
-                        var matchSet = Set<UUID>()
-
-                        for e in events {
-                            matchSet.insert(e.$match.id)
-                            switch e.type {
-                            case .goal: stats.goalsScored += 1
-                            case .redCard: stats.redCards += 1
-                            case .yellowCard: stats.yellowCards += 1
-                            case .yellowRedCard: stats.yellowRedCrd += 1
-                            default: break
-                            }
-                        }
-
-                        stats.matchesPlayed = matchSet.count
-                        return stats
-                    }
-            }
+        return $team.get(on: db).flatMap { team in
+            PlayerStatisticsService.calculate(
+                playerID: playerID,
+                activeLeagueID: team?.$league.id,
+                on: db
+            ).map(\.season)
+        }
     }
 }

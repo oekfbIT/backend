@@ -50,6 +50,10 @@ final class AppTests: XCTestCase {
             XCTAssertTrue(body.contains("'/status':"))
             XCTAssertTrue(body.contains("'/admin/auth/login':"))
             XCTAssertTrue(body.contains("'/app/auth/login':"))
+            XCTAssertTrue(body.contains("'/app/player/{playerID}':"))
+            XCTAssertTrue(body.contains("'/app/player/{playerID}/email':"))
+            XCTAssertTrue(body.contains("'/app/leaderboard/league/{id}/primary/goals':"))
+            XCTAssertTrue(body.contains("'/events/player/{playerId}':"))
             XCTAssertTrue(body.contains("'/people-events/{id}/guests/{guestID}':"))
             XCTAssertTrue(body.contains("name: 'Admin / Auth'"))
             XCTAssertTrue(body.contains("name: 'Mobile App / Auth'"))
@@ -69,5 +73,42 @@ final class AppTests: XCTestCase {
             XCTAssertTrue(res.body.string.contains("SwaggerUIBundle"))
             XCTAssertTrue(res.body.string.contains("/openapi.yaml"))
         })
+    }
+
+    func testPlayerAppearanceRulesUseTeamSheetsAndPlayedStatuses() throws {
+        let playerID = UUID()
+        let homeTeamID = UUID()
+        let awayTeamID = UUID()
+        let player = PlayerOverview(
+            id: playerID,
+            sid: "123",
+            name: "Test Player",
+            number: 7,
+            image: nil,
+            yellowCard: 0,
+            redYellowCard: 0,
+            redCard: 0
+        )
+        let match = Match(
+            details: MatchDetails(gameday: 1, date: nil, stadium: nil, location: nil),
+            homeTeamId: homeTeamID,
+            awayTeamId: awayTeamID,
+            homeBlanket: Blankett(name: "Home", dress: nil, logo: nil, players: [player]),
+            awayBlanket: nil,
+            score: Score(home: 0, away: 0),
+            status: .pending
+        )
+
+        XCTAssertTrue(PlayerStatisticsService.contains(playerID, in: match))
+        XCTAssertFalse(PlayerStatisticsService.countsAsAppearance(match))
+
+        match.status = .first
+        XCTAssertTrue(PlayerStatisticsService.countsAsAppearance(match))
+
+        match.status = .cancelled
+        XCTAssertFalse(PlayerStatisticsService.countsAsAppearance(match))
+
+        match.status = .done
+        XCTAssertTrue(PlayerStatisticsService.countsAsAppearance(match))
     }
 }

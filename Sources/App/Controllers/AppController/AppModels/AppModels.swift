@@ -118,6 +118,8 @@ struct AppModels {
         let balance: Double
         let events: [AppMatchEvent]
         let stats: PlayerStats?
+        let seasonStats: PlayerStats?
+        let matches: [PublicSeasonMatches]?
         let nextMatch: [NextMatch]
         let position: String
         let birthDate: String

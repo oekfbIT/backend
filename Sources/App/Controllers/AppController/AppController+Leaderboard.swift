@@ -80,88 +80,12 @@ extension AppController {
         guard let leagueID = req.parameters.get("id", as: UUID.self) else {
             throw Abort(.badRequest, reason: "Invalid league ID")
         }
-
-        // Resolve primary season if needed
-        let primarySeasonID: UUID? = {
-            guard scope == .primary else { return nil }
-            return try? Season.query(on: req.db)
-                .filter(\.$league.$id == leagueID)
-                .filter(\.$primary == true)
-                .first()
-                .unwrap(or: Abort(.notFound, reason: "No primary season"))
-                .wait()
-                .id
-        }()
-
-        // Teams + players
-        let teams = try await Team.query(on: req.db)
-            .filter(\.$league.$id == leagueID)
-            .with(\.$players)
-            .all()
-
-        // Build player → team lookup
-        var playerTeam: [UUID: (String?, String?, String?)] = [:]
-        for team in teams {
-            let teamID = team.id?.uuidString
-            for player in team.players {
-                if let pid = player.id {
-                    playerTeam[pid] = (team.logo, team.teamName, teamID)
-                }
-            }
-        }
-
-        let playerIDs = Array(playerTeam.keys)
-        if playerIDs.isEmpty { return [] }
-
-        // Events
-        var query = MatchEvent.query(on: req.db)
-            .filter(\.$player.$id ~~ playerIDs)
-            .filter(\.$type == type)
-
-        if let seasonID = primarySeasonID {
-            query = query
-                .join(parent: \MatchEvent.$match)
-                .filter(Match.self, \.$season.$id == seasonID)
-        }
-
-        let events = try await query.all()
-        return mapToLeaderboard(events, playerTeam: playerTeam)
-    }
-
-    // MARK: Mapper
-
-    private func mapToLeaderboard(
-        _ events: [MatchEvent],
-        playerTeam: [UUID: (String?, String?, String?)]
-    ) -> [LeaderBoard] {
-
-        var counts: [UUID: (String?, String?, String?, Int)] = [:]
-
-        for event in events {
-            guard let pid = event.$player.id else { continue }
-
-            if let existing = counts[pid] {
-                counts[pid] = (existing.0, existing.1, existing.2, existing.3 + 1)
-            } else {
-                counts[pid] = (event.name, event.image, event.number, 1)
-            }
-        }
-
-        return counts
-            .map { pid, data in
-                let (teamImg, teamName, teamId) = playerTeam[pid] ?? (nil, nil, nil)
-                return LeaderBoard(
-                    name: data.0,
-                    image: data.1,
-                    number: data.2,
-                    count: Double(data.3),
-                    playerid: pid,
-                    teamimg: teamImg,
-                    teamName: teamName,
-                    teamId: teamId
-                )
-            }
-            .sorted { ($0.count ?? 0) > ($1.count ?? 0) }
+        return try await LeaderboardService.fetch(
+            leagueID: leagueID,
+            eventType: type,
+            primaryOnly: scope == .primary,
+            on: req.db
+        ).get()
     }
     
     
@@ -177,21 +101,24 @@ extension AppController {
 
         guard !primarySeasonIDs.isEmpty else { return [] }
 
-        // 2) Get goal counts per player for matches in those primary seasons.
-        // We do this in SQL-ish style: fetch the relevant goal events, then count per player.
-        // (Fluent doesn't have a perfect portable GROUP BY API, so we keep it simple and fast:
-        // filter early by seasons and type, then aggregate in memory *on a much smaller dataset*.)
+        let primaryMatches = try await Match.query(on: req.db)
+            .filter(\.$season.$id ~~ primarySeasonIDs)
+            .all()
+            .filter(PlayerStatisticsService.countsAsAppearance)
+        let primaryMatchIDs = primaryMatches.compactMap(\.id)
+        guard !primaryMatchIDs.isEmpty else { return [] }
+
+        // 2) Get personal goal counts for played matches in those primary seasons.
         let goalEvents = try await MatchEvent.query(on: req.db)
             .filter(\.$type == .goal)
-            .join(parent: \MatchEvent.$match)
-            .filter(Match.self, \.$season.$id ~~ primarySeasonIDs)
+            .filter(\.$match.$id ~~ primaryMatchIDs)
             .all()
 
         // Count goals per player id
         var counts: [UUID: Int] = [:]
         counts.reserveCapacity(1024)
 
-        for e in goalEvents {
+        for e in goalEvents where e.ownGoal != true {
             guard let pid = e.$player.id else { continue }
             counts[pid, default: 0] += 1
         }

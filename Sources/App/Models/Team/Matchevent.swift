@@ -215,6 +215,8 @@ let error_app_player = AppModels.AppPlayer(
     balance: 0.0,
     events: [],
     stats: nil,
+    seasonStats: nil,
+    matches: nil,
     nextMatch: [],
     position: "ERROR",
     birthDate: "ERROR"
@@ -238,4 +240,3 @@ let error_player = Player(
     identification: "ERROR",
     status: true
 )
-

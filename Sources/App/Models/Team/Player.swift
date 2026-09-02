@@ -196,11 +196,12 @@ extension Player: Mergeable {
 }
 
 extension Player { 
-    /// Asynchronously computes stats from the database.
+    /// Asynchronously computes complete appearance/event stats from the database.
     func getStats(on db: Database) -> EventLoopFuture<PlayerStats> {
-        return self.$events.query(on: db).all().map { events in
-            Self.computeStats(from: events)
+        guard let playerID = id else {
+            return db.eventLoop.makeSucceededFuture(PlayerStatisticsService.emptyStats())
         }
+        return PlayerStatisticsService.calculate(playerID: playerID, on: db).map(\.all)
     }
 
     /// Computes stats directly from an already-loaded `events` array (no DB hit).
@@ -208,7 +209,8 @@ extension Player {
         return Self.computeStats(from: self.events)
     }
 
-    /// Internal reusable logic for both cases
+    /// Event-only fallback for callers that deliberately avoid a database query.
+    /// A team-sheet-only appearance cannot be inferred from this method.
     private static func computeStats(from events: [MatchEvent]) -> PlayerStats {
         var stats = PlayerStats(
             matchesPlayed: 0,
@@ -224,7 +226,7 @@ extension Player {
             matchSet.insert(event.$match.id)
 
             switch event.type {
-            case .goal:
+            case .goal where event.ownGoal != true:
                 stats.goalsScored += 1
             case .redCard:
                 stats.redCards += 1
@@ -238,6 +240,9 @@ extension Player {
         }
 
         stats.matchesPlayed = matchSet.count
+        stats.goalsAverage = stats.matchesPlayed > 0
+            ? Double(stats.goalsScored) / Double(stats.matchesPlayed)
+            : nil
         return stats
     }
 }
@@ -249,13 +254,20 @@ extension Player {
         team: AppModels.AppTeamOverview,
         events: [AppModels.AppMatchEvent] = [],
         nextMatches: [AppModels.NextMatch] = [],
+        stats suppliedStats: PlayerStats? = nil,
+        seasonStats: PlayerStats? = nil,
+        matches: [PublicSeasonMatches]? = nil,
         req: Request
     ) async throws -> AppModels.AppPlayer {
 
-        // Use cached stats
-        let stats = try await StatsCacheManager
-            .getPlayerStats(for: try self.id ?? UUID(), on: req.db)
-            .get()
+        let stats: PlayerStats
+        if let suppliedStats {
+            stats = suppliedStats
+        } else {
+            stats = try await StatsCacheManager
+                .getPlayerStats(for: try requireID(), on: req.db)
+                .get()
+        }
 
         return AppModels.AppPlayer(
             id: try requireID(),
@@ -271,6 +283,8 @@ extension Player {
             balance: balance ?? 0,
             events: events,
             stats: stats,
+            seasonStats: seasonStats,
+            matches: matches,
             nextMatch: nextMatches,
             position: position,
             birthDate: birthday
@@ -312,4 +326,3 @@ extension Player {
         )
     }
 }
-

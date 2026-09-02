@@ -55,32 +55,52 @@ extension Team {
 
 extension Player {
     static func computePlayerStats(for playerID: UUID, on db: Database) -> EventLoopFuture<PlayerStats> {
-        MatchEvent.query(on: db)
-            .filter(\.$player.$id == playerID)
-            .all()
-            .map { events in
-                var stats = PlayerStats(matchesPlayed: 0, goalsScored: 0, redCards: 0, yellowCards: 0, yellowRedCrd: 0, goalsAverage: nil)
-                var matchIDs = Set<UUID>()
-
-                for e in events {
-                    matchIDs.insert(e.$match.id)
-                    switch e.type {
-                    case .goal: stats.goalsScored += 1
-                    case .yellowCard: stats.yellowCards += 1
-                    case .redCard: stats.redCards += 1
-                    case .yellowRedCard: stats.yellowRedCrd += 1
-                    default: break
-                    }
-                }
-
-                stats.matchesPlayed = matchIDs.count
-                stats.goalsAverage = stats.matchesPlayed > 0 ? Double(stats.goalsScored) / Double(stats.matchesPlayed) : nil
-                return stats
-            }
+        PlayerStatisticsService.calculate(playerID: playerID, on: db).map(\.all)
     }
 }
 
 enum StatsCacheManager {
+    static func invalidatePlayerStats(for playerIDs: [UUID], on db: Database) -> EventLoopFuture<Void> {
+        let uniqueIDs = Array(Set(playerIDs))
+        guard !uniqueIDs.isEmpty else {
+            return db.eventLoop.makeSucceededFuture(())
+        }
+        Caches.seasons.clear()
+        return PlayerStatsCache.query(on: db)
+            .filter(\.$player.$id ~~ uniqueIDs)
+            .delete()
+    }
+
+    static func invalidateStats(for match: Match, on db: Database) -> EventLoopFuture<Void> {
+        Caches.seasons.clear()
+
+        let deleteTeamCache = TeamStatsCache.query(on: db)
+            .group(.or) { group in
+                group.filter(\.$team.$id == match.$homeTeam.id)
+                group.filter(\.$team.$id == match.$awayTeam.id)
+            }
+            .delete()
+
+        guard let matchID = match.id else {
+            return deleteTeamCache
+        }
+
+        let blanketPlayerIDs = (match.homeBlanket?.players.map(\.id) ?? [])
+            + (match.awayBlanket?.players.map(\.id) ?? [])
+        let deletePlayerCache = MatchEvent.query(on: db)
+            .filter(\.$match.$id == matchID)
+            .all()
+            .flatMap { events in
+                let eventPlayerIDs = events.compactMap { $0.$player.id }
+                return invalidatePlayerStats(
+                    for: blanketPlayerIDs + eventPlayerIDs,
+                    on: db
+                )
+            }
+
+        return deleteTeamCache.and(deletePlayerCache).transform(to: ())
+    }
+
     static func getTeamStats(
         for teamID: UUID,
         on db: Database,
@@ -268,26 +288,6 @@ extension Team {
 // MARK: - Stats Cache Invalidation Helper
 extension MatchController {
     func invalidateStats(for match: Match, on db: Database) -> EventLoopFuture<Void> {
-        let deleteTeamCache = TeamStatsCache.query(on: db)
-            .group(.or) { group in
-                group.filter(\.$team.$id == match.$homeTeam.id)
-                group.filter(\.$team.$id == match.$awayTeam.id)
-            }
-            .delete()
-
-        let deletePlayerCache = MatchEvent.query(on: db)
-            .filter(\.$match.$id == match.id!)
-            .all()
-            .flatMap { events in
-                let playerIDs = events.compactMap { $0.$player.id }
-                guard !playerIDs.isEmpty else {
-                    return db.eventLoop.makeSucceededFuture(())
-                }
-                return PlayerStatsCache.query(on: db)
-                    .filter(\.$player.$id ~~ playerIDs)
-                    .delete()
-            }
-
-        return deleteTeamCache.and(deletePlayerCache).transform(to: ())
+        StatsCacheManager.invalidateStats(for: match, on: db)
     }
 }

@@ -118,7 +118,9 @@ final class MatchController: RouteCollection {
                 .unwrap(or: Abort(.notFound, reason: "Match not found."))
                 .flatMap { existingMatch in
                     let mergedMatch = existingMatch.merge(from: updatedItem)
-                    return mergedMatch.update(on: req.db).map { mergedMatch }
+                    return mergedMatch.update(on: req.db)
+                        .flatMap { StatsCacheManager.invalidateStats(for: mergedMatch, on: req.db) }
+                        .transform(to: mergedMatch)
                 }
                 .flatMapErrorThrowing { error in
                     print("Error updating match: \(error)")
@@ -420,32 +422,36 @@ final class MatchController: RouteCollection {
         }
 
         let cardRequest = try req.content.decode(CardRequest.self)
+        let matchID = try req.parameters.require("id", as: UUID.self)
 
         return addCardEvent(req: req, cardType: .yellowCard)
             .flatMap { _ in
-                MatchEvent.query(on: req.db)
-                    // JOIN matches
-                    .join(Match.self, on: \MatchEvent.$match.$id == \Match.$id)
-                    // JOIN seasons via match.season (optional parent is fine here)
-                    .join(Season.self, on: \Match.$season.$id == \Season.$id)
-                    // filter only primary seasons
-                    .filter(Season.self, \.$primary == true)
-                    // filter player + event type
-                    .filter(\.$player.$id == cardRequest.playerId)
-                    .filter(\.$type == .yellowCard)
-                    .count()
-                    .flatMap { yellowCardCount in
-                        let isFourthCard = (yellowCardCount % 4) == 0
-                        guard isFourthCard else {
-                            return req.eventLoop.makeSucceededFuture(.ok)
+                Match.find(matchID, on: req.db)
+                    .unwrap(or: Abort(.notFound, reason: "Match not found"))
+                    .flatMap { match in
+                        guard let seasonID = match.$season.id else {
+                            return req.eventLoop.makeFailedFuture(
+                                Abort(.notFound, reason: "Match season not found")
+                            )
                         }
+                        return MatchEvent.query(on: req.db)
+                            .join(Match.self, on: \MatchEvent.$match.$id == \Match.$id)
+                            .filter(Match.self, \.$season.$id == seasonID)
+                            .filter(\.$player.$id == cardRequest.playerId)
+                            .filter(\.$type == .yellowCard)
+                            .count()
+                            .flatMap { yellowCardCount in
+                                guard yellowCardCount % 4 == 0 else {
+                                    return req.eventLoop.makeSucceededFuture(.ok)
+                                }
 
-                        return Player.find(cardRequest.playerId, on: req.db)
-                            .unwrap(or: Abort(.notFound, reason: "Player not found"))
-                            .flatMap { player in
-                                player.blockdate = blockDate
-                                player.eligibility = .Gesperrt
-                                return player.save(on: req.db).transform(to: .ok)
+                                return Player.find(cardRequest.playerId, on: req.db)
+                                    .unwrap(or: Abort(.notFound, reason: "Player not found"))
+                                    .flatMap { player in
+                                        player.blockdate = blockDate
+                                        player.eligibility = .Gesperrt
+                                        return player.save(on: req.db).transform(to: .ok)
+                                    }
                             }
                     }
             }
@@ -473,6 +479,7 @@ final class MatchController: RouteCollection {
 
         // Decode request first
         let cardRequest = try req.content.decode(CardRequest.self)
+        let matchID = try req.parameters.require("id", as: UUID.self)
 
         return addCardEvent(req: req, cardType: .yellowRedCard)
             .flatMap { _ in
@@ -484,6 +491,7 @@ final class MatchController: RouteCollection {
                         return player.save(on: req.db).flatMap {
                             MatchEvent.query(on: req.db)
                                 .filter(\.$player.$id == player.id ?? UUID())
+                                .filter(\.$match.$id == matchID)
                                 .filter(\.$type == .yellowCard)
                                 .sort(\._$id, .descending) // Or sort by a timestamp field if available
                                 .first()
@@ -492,6 +500,12 @@ final class MatchController: RouteCollection {
                                         return req.eventLoop.makeSucceededFuture(())
                                     }
                                     return card.delete(on: req.db)
+                                }
+                                .flatMap {
+                                    StatsCacheManager.invalidatePlayerStats(
+                                        for: [cardRequest.playerId],
+                                        on: req.db
+                                    )
                                 }
                         }
                     }
@@ -538,7 +552,8 @@ final class MatchController: RouteCollection {
                             minute: cardRequest.minute,
                             name: cardRequest.name,
                             image: cardRequest.image,
-                            number: cardRequest.number
+                            number: cardRequest.number,
+                            assign: side == "home" ? .home : .away
                         )
 
                         guard let mid = match.id else {
@@ -548,7 +563,11 @@ final class MatchController: RouteCollection {
                         }
                         event.$match.id = mid
 
-                        return event.create(on: req.db).map {
+                        return event.create(on: req.db)
+                            .flatMap {
+                                StatsCacheManager.invalidateStats(for: match, on: req.db)
+                            }
+                            .map {
                             // 🔥 PUSH
                             let pushEvent: MatchPushNotifier.Event? = {
                                 switch cardType {
@@ -569,8 +588,8 @@ final class MatchController: RouteCollection {
                                 ])
                             }
 
-                            return HTTPStatus.ok
-                        }
+                                return HTTPStatus.ok
+                            }
                     }
                 }
 
@@ -651,7 +670,9 @@ final class MatchController: RouteCollection {
                             ))
                         }
                         // Save the updated match to the database
-                        return match.save(on: req.db).transform(to: .ok)
+                        return match.save(on: req.db)
+                            .flatMap { StatsCacheManager.invalidateStats(for: match, on: req.db) }
+                            .transform(to: .ok)
                     }
             }
     }
@@ -723,7 +744,9 @@ final class MatchController: RouteCollection {
                         }
                         
                         // Save the updated match to the database
-                        return match.save(on: req.db).transform(to: .ok)
+                        return match.save(on: req.db)
+                            .flatMap { StatsCacheManager.invalidateStats(for: match, on: req.db) }
+                            .transform(to: .ok)
                     }
             }
     }
@@ -747,7 +770,9 @@ final class MatchController: RouteCollection {
                     return req.eventLoop.future(error: Abort(.badRequest, reason: "Player not found in home blanket"))
                 }
 
-                return match.save(on: req.db).transform(to: .ok)
+                return match.save(on: req.db)
+                    .flatMap { StatsCacheManager.invalidatePlayerStats(for: [playerId], on: req.db) }
+                    .transform(to: .ok)
             }
     }
 
@@ -770,7 +795,9 @@ final class MatchController: RouteCollection {
                     return req.eventLoop.future(error: Abort(.badRequest, reason: "Player not found in away blanket"))
                 }
 
-                return match.save(on: req.db).transform(to: .ok)
+                return match.save(on: req.db)
+                    .flatMap { StatsCacheManager.invalidatePlayerStats(for: [playerId], on: req.db) }
+                    .transform(to: .ok)
             }
     }
 
@@ -785,7 +812,9 @@ final class MatchController: RouteCollection {
             .flatMap { match in
                 match.status = .first
                 match.firstHalfStartDate = Date.viennaNow
-                return match.save(on: req.db).map {
+                return match.save(on: req.db)
+                    .flatMap { StatsCacheManager.invalidateStats(for: match, on: req.db) }
+                    .map {
                     _ = MatchPushNotifier.fire(.gameStarted, match: match, req: req)
                     return .ok
                 }
@@ -803,7 +832,9 @@ final class MatchController: RouteCollection {
             .flatMap { match in
                 match.status = .halftime
                 match.firstHalfEndDate = Date.viennaNow
-                return match.save(on: req.db).map {
+                return match.save(on: req.db)
+                    .flatMap { StatsCacheManager.invalidateStats(for: match, on: req.db) }
+                    .map {
                     _ = MatchPushNotifier.fire(.halftime, match: match, req: req)
                     return .ok
                 }
@@ -821,7 +852,9 @@ final class MatchController: RouteCollection {
             .flatMap { match in
                 match.status = .second
                 match.secondHalfStartDate = Date.viennaNow
-                return match.save(on: req.db).map {
+                return match.save(on: req.db)
+                    .flatMap { StatsCacheManager.invalidateStats(for: match, on: req.db) }
+                    .map {
                     _ = MatchPushNotifier.fire(.secondHalfStarted, match: match, req: req)
                     return .ok
                 }
@@ -839,7 +872,9 @@ final class MatchController: RouteCollection {
             .flatMap { match in
                 match.status = .completed
                 match.secondHalfEndDate = Date.viennaNow
-                return match.save(on: req.db).map {
+                return match.save(on: req.db)
+                    .flatMap { StatsCacheManager.invalidateStats(for: match, on: req.db) }
+                    .map {
                     _ = MatchPushNotifier.fire(.gameEnded, match: match, req: req)
                     return .ok
                 }
@@ -913,7 +948,9 @@ final class MatchController: RouteCollection {
                         let saveMatch = match.save(on: req.db)
                         let saveReferee = referee.save(on: req.db)
 
-                        return saveMatch.and(saveReferee).transform(to: .ok)
+                        return saveMatch.and(saveReferee)
+                            .flatMap { _ in StatsCacheManager.invalidateStats(for: match, on: req.db) }
+                            .transform(to: .ok)
                     }
             }
     }
@@ -946,6 +983,7 @@ final class MatchController: RouteCollection {
                 match.status = .cancelled
                 
                 return match.save(on: req.db)
+                    .flatMap { StatsCacheManager.invalidateStats(for: match, on: req.db) }
                     .flatMap {
                         return Team.find(winningTeamId, on: req.db)
                             .unwrap(or: Abort(.notFound))
@@ -1001,7 +1039,9 @@ final class MatchController: RouteCollection {
 
                 match.status = .cancelled
 
-                return match.save(on: req.db).flatMap {
+                return match.save(on: req.db)
+                    .flatMap { StatsCacheManager.invalidateStats(for: match, on: req.db) }
+                    .flatMap {
                     Team.find(winningTeamId, on: req.db)
                         .unwrap(or: Abort(.notFound, reason: "Winning team not found"))
                         .and(Team.find(losingTeamId, on: req.db)
@@ -1080,7 +1120,9 @@ final class MatchController: RouteCollection {
             .unwrap(or: Abort(.notFound))
             .flatMap { match in
                 match.status = .abbgebrochen
-                return match.save(on: req.db).transform(to: .ok)
+                return match.save(on: req.db)
+                    .flatMap { StatsCacheManager.invalidateStats(for: match, on: req.db) }
+                    .transform(to: .ok)
             }
     }
     
@@ -1117,7 +1159,9 @@ final class MatchController: RouteCollection {
                     return saveHomeTeam.and(saveAwayTeam).flatMap {_ in 
                         // Update match status to 'done'
                         match.status = .done
-                        return match.save(on: req.db).transform(to: .ok)
+                        return match.save(on: req.db)
+                            .flatMap { StatsCacheManager.invalidateStats(for: match, on: req.db) }
+                            .transform(to: .ok)
                     }
                 }
             }
@@ -1163,7 +1207,9 @@ final class MatchController: RouteCollection {
                     .delete()
                     .flatMap {
                         // Save the updated match
-                        return match.save(on: req.db).transform(to: .ok)
+                        return match.save(on: req.db)
+                            .flatMap { StatsCacheManager.invalidateStats(for: match, on: req.db) }
+                            .transform(to: .ok)
                     }
             }
     }
@@ -1178,7 +1224,9 @@ final class MatchController: RouteCollection {
                 match.secondHalfStartDate = nil
                 match.secondHalfEndDate = nil
                 
-                return match.save(on: req.db).transform(to: .ok)
+                return match.save(on: req.db)
+                    .flatMap { StatsCacheManager.invalidateStats(for: match, on: req.db) }
+                    .transform(to: .ok)
             }
     }
     
@@ -1293,4 +1341,3 @@ struct AddPlayersRequest: Content {
         self.playerIds = playerIds
     }
 }
-

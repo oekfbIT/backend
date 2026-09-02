@@ -746,18 +746,11 @@ private func _date(_ match: Match) -> Date {
 }
 
 private func _containsPlayer(_ playerID: UUID, in match: Match) -> Bool {
-    let homePlayerIDs = match.homeBlanket?.players.map(\.id) ?? []
-    let awayPlayerIDs = match.awayBlanket?.players.map(\.id) ?? []
-    return homePlayerIDs.contains(playerID) || awayPlayerIDs.contains(playerID)
+    PlayerStatisticsService.contains(playerID, in: match)
 }
 
 private func _countsAsAppearance(_ match: Match) -> Bool {
-    switch match.status {
-    case .pending, .cancelled:
-        return false
-    default:
-        return true
-    }
+    PlayerStatisticsService.countsAsAppearance(match)
 }
 
 private func _countsAsAppearance(_ match: PublicMatchShort) -> Bool {
@@ -772,7 +765,7 @@ private func _countsAsAppearance(_ match: PublicMatchShort) -> Bool {
 
 extension ClientController {
     // Build (and cache) the seasons+matches view for a given player within a league
-    private func seasonsForPlayerFast(
+    func seasonsForPlayerFast(
         player: Player,
         league: League,
         req: Request
@@ -941,58 +934,14 @@ extension ClientController {
     func getPlayerStatsBundle(
         playerID: UUID,
         activeLeagueID: UUID?,
-        seasons: [PublicSeasonMatches],
+        seasons _: [PublicSeasonMatches],
         db: Database
     ) -> EventLoopFuture<PlayerStatsPair> {
-        MatchEvent.query(on: db)
-            .filter(\.$player.$id == playerID)
-            .with(\.$match) { $0.with(\.$season) } // eager-load Season
-            .all()
-            .map { events in
-                var allStats = PlayerStats(matchesPlayed: 0, goalsScored: 0, redCards: 0, yellowCards: 0, yellowRedCrd: 0)
-                var seasonStats = PlayerStats(matchesPlayed: 0, goalsScored: 0, redCards: 0, yellowCards: 0, yellowRedCrd: 0)
-
-                func isInActiveSeason(_ match: Match) -> Bool {
-                    guard match.season?.primary == true else { return false }
-                    guard let activeLeagueID = activeLeagueID else { return true }
-                    return match.season?.$league.id == activeLeagueID
-                }
-
-                for event in events {
-                    // ALL
-                    switch event.type {
-                    case .goal where event.ownGoal != true:
-                        allStats.goalsScored += 1
-                    case .redCard:       allStats.redCards += 1
-                    case .yellowCard:    allStats.yellowCards += 1
-                    case .yellowRedCard: allStats.yellowRedCrd += 1
-                    default: break
-                    }
-
-                    // CURRENT PRIMARY SEASON ONLY
-                    if isInActiveSeason(event.match) {
-                        switch event.type {
-                        case .goal where event.ownGoal != true:
-                            seasonStats.goalsScored += 1
-                        case .redCard:       seasonStats.redCards += 1
-                        case .yellowCard:    seasonStats.yellowCards += 1
-                        case .yellowRedCard: seasonStats.yellowRedCrd += 1
-                        default: break
-                        }
-                    }
-                }
-
-                allStats.matchesPlayed = seasons
-                    .flatMap(\.matches)
-                    .filter(_countsAsAppearance)
-                    .count
-                seasonStats.matchesPlayed = seasons
-                    .filter(\.primary)
-                    .flatMap(\.matches)
-                    .filter(_countsAsAppearance)
-                    .count
-                return PlayerStatsPair(all: allStats, season: seasonStats)
-            }
+        PlayerStatisticsService.calculate(
+            playerID: playerID,
+            activeLeagueID: activeLeagueID,
+            on: db
+        )
     }
 
 }
@@ -1021,32 +970,12 @@ extension ClientController {
         guard let leagueID = req.parameters.get("id", as: UUID.self) else {
             return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league ID"))
         }
-
-        return Team.query(on: req.db)
-            .filter(\.$league.$id == leagueID)
-            .with(\.$players)
-            .all()
-            .flatMap { teams in
-                // Build PlayerID -> (teamLogo, teamName, teamId)
-                var playerTeamDict: [UUID: (String?, String?, String?)] = [:]
-                for team in teams {
-                    let tIDString = team.id?.uuidString
-                    for player in team.players {
-                        if let pid = player.id {
-                            playerTeamDict[pid] = (team.logo, team.teamName, tIDString)
-                        }
-                    }
-                }
-                
-                let playerIDs = playerTeamDict.keys.map { $0 }
-                return MatchEvent.query(on: req.db)
-                    .filter(\.$player.$id ~~ playerIDs)
-                    .filter(\.$type == eventType)
-                    .all()
-                    .map { events in
-                        self.mapEventsToLeaderBoard(events, playerTeamDict: playerTeamDict)
-                    }
-            }
+        return LeaderboardService.fetch(
+            leagueID: leagueID,
+            eventType: eventType,
+            primaryOnly: false,
+            on: req.db
+        )
     }
 
     // 3) Supply the team info
@@ -1124,48 +1053,12 @@ extension ClientController {
             return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league ID"))
         }
 
-        // 1) Resolve the league's primary season
-        return Season.query(on: req.db)
-            .filter(\.$league.$id == leagueID)
-            .filter(\.$primary == true)
-            .first()
-            .unwrap(or: Abort(.notFound, reason: "No primary season found for this league"))
-            .flatMap { primarySeason in
-                // 2) Gather teams + players for this league (same as original)
-                return Team.query(on: req.db)
-                    .filter(\.$league.$id == leagueID)
-                    .with(\.$players)
-                    .all()
-                    .flatMap { teams in
-                        // Build PlayerID -> (teamLogo, teamName, teamId)
-                        var playerTeamDict: [UUID: (String?, String?, String?)] = [:]
-                        for team in teams {
-                            let tIDString = team.id?.uuidString
-                            for player in team.players {
-                                if let pid = player.id {
-                                    playerTeamDict[pid] = (team.logo, team.teamName, tIDString)
-                                }
-                            }
-                        }
-
-                        let playerIDs = Array(playerTeamDict.keys)
-                        if playerIDs.isEmpty {
-                            return req.eventLoop.makeSucceededFuture([])
-                        }
-
-                        // 3) Query events for those players & event type, restricted to the primary season
-                        return MatchEvent.query(on: req.db)
-                            .filter(\.$player.$id ~~ playerIDs)
-                            .filter(\.$type == eventType)
-                            // join to Match and filter by season id
-                            .join(parent: \MatchEvent.$match)
-                            .filter(Match.self, \.$season.$id == primarySeason.id!)
-                            .all()
-                            .map { events in
-                                self.mapEventsToLeaderBoard(events, playerTeamDict: playerTeamDict)
-                            }
-                    }
-            }
+        return LeaderboardService.fetch(
+            leagueID: leagueID,
+            eventType: eventType,
+            primaryOnly: true,
+            on: req.db
+        )
     }
 }
 

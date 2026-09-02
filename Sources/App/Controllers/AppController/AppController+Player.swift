@@ -22,9 +22,9 @@ extension AppController {
 
         player.get(":playerID", use: getPlayerByID)
         player.get("sid", ":sid", use: getPlayerBySID)
+        player.put(":playerID", "email", use: updatePlayerEmailAddress)
 
-        // Keep your existing path shape: PUT /app/:playerID/email
-        // If you prefer, you can move this to player.put(":playerID","email",use:)
+        // Backwards-compatible alias used by older app versions.
         root.put(":playerID", "email", use: updatePlayerEmailAddress)
 
         // Team registration via app
@@ -50,8 +50,9 @@ extension AppController {
         guard let teamModel = player.team else {
             throw Abort(.notFound, reason: "Team not found for this player.")
         }
-
-        let limitedEvents = player.events.prefix(100)
+        guard let league = teamModel.league else {
+            throw Abort(.notFound, reason: "League not found for this player.")
+        }
 
         // events → AppMatchEvent
         var appEvents: [AppModels.AppMatchEvent] = []
@@ -60,8 +61,7 @@ extension AppController {
             appEvents.append(appEvent)
         }
 
-        let leagueOverview = try teamModel.league?.toAppLeagueOverview()
-            ?? AppModels.AppLeagueOverview(id: UUID(), name: "Unknown", code: "", state: .wien)
+        let leagueOverview = try league.toAppLeagueOverview()
 
         let teamOverview = try await teamModel
             .toAppTeamOverview(league: leagueOverview, req: req)
@@ -69,11 +69,22 @@ extension AppController {
 
         // 0 or 1 next match, as array
         let nextMatches = try await teamModel.fetchNextAppNextMatches(on: req)
+        let seasons = try await ClientController(path: "webClient")
+            .seasonsForPlayerFast(player: player, league: league, req: req)
+            .get()
+        let stats = try await PlayerStatisticsService.calculate(
+            playerID: playerID,
+            activeLeagueID: league.id,
+            on: req.db
+        ).get()
 
         return try await player.toAppPlayer(
             team: teamOverview,
             events: appEvents,
             nextMatches: nextMatches,
+            stats: stats.all,
+            seasonStats: stats.season,
+            matches: seasons,
             req: req
         )
     }
@@ -97,8 +108,9 @@ extension AppController {
         guard let teamModel = player.team else {
             throw Abort(.notFound, reason: "Team not found for this player.")
         }
-
-        let limitedEvents = player.events.prefix(100)
+        guard let league = teamModel.league else {
+            throw Abort(.notFound, reason: "League not found for this player.")
+        }
 
         var appEvents: [AppModels.AppMatchEvent] = []
         for event in player.events {
@@ -106,19 +118,30 @@ extension AppController {
             appEvents.append(appEvent)
         }
 
-        let leagueOverview = try teamModel.league?.toAppLeagueOverview()
-            ?? AppModels.AppLeagueOverview(id: UUID(), name: "Unknown", code: "", state: .wien)
+        let leagueOverview = try league.toAppLeagueOverview()
 
         let teamOverview = try await teamModel
             .toAppTeamOverview(league: leagueOverview, req: req)
             .get()
 
         let nextMatches = try await teamModel.fetchNextAppNextMatches(on: req)
+        let playerID = try player.requireID()
+        let seasons = try await ClientController(path: "webClient")
+            .seasonsForPlayerFast(player: player, league: league, req: req)
+            .get()
+        let stats = try await PlayerStatisticsService.calculate(
+            playerID: playerID,
+            activeLeagueID: league.id,
+            on: req.db
+        ).get()
 
         return try await player.toAppPlayer(
             team: teamOverview,
             events: appEvents,
             nextMatches: nextMatches,
+            stats: stats.all,
+            seasonStats: stats.season,
+            matches: seasons,
             req: req
         )
     }
