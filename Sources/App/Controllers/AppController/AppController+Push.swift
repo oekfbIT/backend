@@ -151,6 +151,7 @@ extension AppController {
     route.post("notifications", "sendToTokens", use: sendToTokens)
     route.post("notifications", "broadcast", use: broadcastNotification)
     setupDirectTokenPushRoute(on: route)
+    setupPushManagerRoutes(on: route)
 
   }
 
@@ -413,4 +414,3 @@ private extension Array {
     return res
   }
 }
-

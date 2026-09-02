@@ -745,6 +745,31 @@ private func _date(_ match: Match) -> Date {
     match.details.date ?? .distantFuture
 }
 
+private func _containsPlayer(_ playerID: UUID, in match: Match) -> Bool {
+    let homePlayerIDs = match.homeBlanket?.players.map(\.id) ?? []
+    let awayPlayerIDs = match.awayBlanket?.players.map(\.id) ?? []
+    return homePlayerIDs.contains(playerID) || awayPlayerIDs.contains(playerID)
+}
+
+private func _countsAsAppearance(_ match: Match) -> Bool {
+    switch match.status {
+    case .pending, .cancelled:
+        return false
+    default:
+        return true
+    }
+}
+
+private func _countsAsAppearance(_ match: PublicMatchShort) -> Bool {
+    guard let status = match.status else { return false }
+    switch status {
+    case .pending, .cancelled:
+        return false
+    default:
+        return true
+    }
+}
+
 extension ClientController {
     // Build (and cache) the seasons+matches view for a given player within a league
     private func seasonsForPlayerFast(
@@ -761,65 +786,87 @@ extension ClientController {
             return req.eventLoop.makeSucceededFuture(cached)
         }
 
-        return Season.query(on: req.db)
-            .filter(\.$league.$id == leagueID)
+        let matchesF = Match.query(on: req.db)
+            .with(\.$season) { season in
+                season.with(\.$league)
+            }
             .all()
-            .flatMap { seasons in
-                let seasonIDs = seasons.compactMap(\.id)
-                guard !seasonIDs.isEmpty else {
-                    return req.eventLoop.makeSucceededFuture([])
-                }
 
-                let q = Match.query(on: req.db)
-                    .filter(\.$season.$id ~~ seasonIDs)
+        // An event is also evidence that the player appeared. Keeping this
+        // union makes old/incomplete match blankets visible instead of silently
+        // dropping matches which already contain a goal or card for the player.
+        let eventMatchIDsF = MatchEvent.query(on: req.db)
+            .filter(\.$player.$id == playerID)
+            .all()
+            .map { Set($0.map { $0.$match.id }) }
 
-                // narrow by player's current team if known (reduces scanned rows)
-                if let teamID = player.$team.id {
-                    q.group(.or) { or in
-                        or.filter(\.$homeTeam.$id == teamID)
-                          .filter(\.$awayTeam.$id == teamID)
-                    }
-                }
+        // Preserve the current league's active season even before the player has
+        // an appearance in it, so the UI can show accurate zero season stats.
+        let activeSeasonsF = Season.query(on: req.db)
+            .filter(\.$league.$id == leagueID)
+            .filter(\.$primary == true)
+            .with(\.$league)
+            .all()
 
-                return q.all().map { matches in
-                    // keep only matches where blankets include this player
-                    let relevant = matches.filter { m in
-                        let homeIDs = m.homeBlanket?.players.map(\.id) ?? []
-                        let awayIDs = m.awayBlanket?.players.map(\.id) ?? []
-                        return homeIDs.contains(playerID) || awayIDs.contains(playerID)
-                    }
+        return matchesF.and(eventMatchIDsF).and(activeSeasonsF).map { result, activeSeasons in
+            let (matches, eventMatchIDs) = result
+            let relevant = matches.filter { match in
+                _containsPlayer(playerID, in: match) ||
+                    match.id.map(eventMatchIDs.contains) == true
+            }
 
-                    // group by season id
-                    let bySeason = Dictionary(grouping: relevant, by: { $0.$season.id ?? UUID() })
+            var matchesBySeason: [UUID: [Match]] = [:]
+            var seasonsByID: [UUID: Season] = [:]
 
-                    // primary season first
-                    let orderedSeasons = seasons.sorted { ($0.primary ?? false) && !($1.primary ?? false) }
-
-                    let payload: [PublicSeasonMatches] = orderedSeasons.compactMap { s in
-                        guard let sid = s.id else { return nil }
-                        let ms = (bySeason[sid] ?? [])
-                            .sorted {
-                                let d0 = $0.details.date ?? .distantFuture
-                                let d1 = $1.details.date ?? .distantFuture
-                                if d0 != d1 { return d0 < d1 }
-                                return ($0.id?.uuidString ?? "") < ($1.id?.uuidString ?? "")
-                            }
-                            .map(self.toPublicShort)
-
-                        return PublicSeasonMatches(
-                            leagueName: league.name,
-                            leagueID: leagueID,
-                            seasonID: sid,
-                            seasonName: s.name,
-                            primary: s.primary ?? false,
-                            matches: ms
-                        )
-                    }
-
-                    Caches.seasons.set(cacheKey, payload)
-                    return payload
+            for match in relevant {
+                guard let season = match.season, let seasonID = season.id else { continue }
+                matchesBySeason[seasonID, default: []].append(match)
+                seasonsByID[seasonID] = season
+            }
+            for season in activeSeasons {
+                if let seasonID = season.id {
+                    seasonsByID[seasonID] = season
                 }
             }
+
+            let orderedSeasons = seasonsByID.values.sorted { lhs, rhs in
+                let lhsPrimary = lhs.primary ?? false
+                let rhsPrimary = rhs.primary ?? false
+                if lhsPrimary != rhsPrimary { return lhsPrimary && !rhsPrimary }
+                if lhs.details != rhs.details { return lhs.details > rhs.details }
+                return (lhs.id?.uuidString ?? "") < (rhs.id?.uuidString ?? "")
+            }
+
+            let payload: [PublicSeasonMatches] = orderedSeasons.compactMap { season in
+                guard
+                    let seasonID = season.id,
+                    let seasonLeagueID = season.$league.id
+                else { return nil }
+
+                let seasonLeagueName = season.league?.name ??
+                    (seasonLeagueID == leagueID ? league.name : "Unbekannte Liga")
+                let publicMatches = (matchesBySeason[seasonID] ?? [])
+                    .sorted {
+                        let d0 = $0.details.date ?? .distantFuture
+                        let d1 = $1.details.date ?? .distantFuture
+                        if d0 != d1 { return d0 < d1 }
+                        return ($0.id?.uuidString ?? "") < ($1.id?.uuidString ?? "")
+                    }
+                    .map(self.toPublicShort)
+
+                return PublicSeasonMatches(
+                    leagueName: seasonLeagueName,
+                    leagueID: seasonLeagueID,
+                    seasonID: seasonID,
+                    seasonName: season.name,
+                    primary: (season.primary ?? false) && seasonLeagueID == leagueID,
+                    matches: publicMatches
+                )
+            }
+
+            Caches.seasons.set(cacheKey, payload)
+            return payload
+        }
     }
 
     // MARK: Player Detail (season-grouped + cached)
@@ -841,13 +888,20 @@ extension ClientController {
             return self.fetchLeagueForTeam(team, db: req.db)
         }
 
-        // stats
-        let statsF: EventLoopFuture<PlayerStatsPair> = self.getPlayerStatsBundle(playerID: playerID, db: req.db)
-
         // seasons + matches (uses cache)
         let seasonsF: EventLoopFuture<[PublicSeasonMatches]> = playerF.and(leagueF).flatMap { (player, league) in
             guard let league = league else { return req.eventLoop.makeSucceededFuture([]) }
             return self.seasonsForPlayerFast(player: player, league: league, req: req)
+        }
+
+        // Stats use the exact same appearance list returned to the frontend.
+        let statsF: EventLoopFuture<PlayerStatsPair> = seasonsF.and(leagueF).flatMap { seasons, league in
+            self.getPlayerStatsBundle(
+                playerID: playerID,
+                activeLeagueID: league?.id,
+                seasons: seasons,
+                db: req.db
+            )
         }
 
         return playerF.and(seasonsF).and(statsF).map { (playerAndSeasons, stats) in
@@ -884,7 +938,12 @@ extension ClientController {
 
 extension ClientController {
     
-    func getPlayerStatsBundle(playerID: UUID, db: Database) -> EventLoopFuture<PlayerStatsPair> {
+    func getPlayerStatsBundle(
+        playerID: UUID,
+        activeLeagueID: UUID?,
+        seasons: [PublicSeasonMatches],
+        db: Database
+    ) -> EventLoopFuture<PlayerStatsPair> {
         MatchEvent.query(on: db)
             .filter(\.$player.$id == playerID)
             .with(\.$match) { $0.with(\.$season) } // eager-load Season
@@ -893,14 +952,17 @@ extension ClientController {
                 var allStats = PlayerStats(matchesPlayed: 0, goalsScored: 0, redCards: 0, yellowCards: 0, yellowRedCrd: 0)
                 var seasonStats = PlayerStats(matchesPlayed: 0, goalsScored: 0, redCards: 0, yellowCards: 0, yellowRedCrd: 0)
 
-                var allMatchSet = Set<UUID>()
-                var seasonMatchSet = Set<UUID>()
+                func isInActiveSeason(_ match: Match) -> Bool {
+                    guard match.season?.primary == true else { return false }
+                    guard let activeLeagueID = activeLeagueID else { return true }
+                    return match.season?.$league.id == activeLeagueID
+                }
 
                 for event in events {
                     // ALL
-                    allMatchSet.insert(event.$match.id)
                     switch event.type {
-                    case .goal:          allStats.goalsScored += 1
+                    case .goal where event.ownGoal != true:
+                        allStats.goalsScored += 1
                     case .redCard:       allStats.redCards += 1
                     case .yellowCard:    allStats.yellowCards += 1
                     case .yellowRedCard: allStats.yellowRedCrd += 1
@@ -908,10 +970,10 @@ extension ClientController {
                     }
 
                     // CURRENT PRIMARY SEASON ONLY
-                    if event.match.season?.primary == true {
-                        seasonMatchSet.insert(event.$match.id)
+                    if isInActiveSeason(event.match) {
                         switch event.type {
-                        case .goal:          seasonStats.goalsScored += 1
+                        case .goal where event.ownGoal != true:
+                            seasonStats.goalsScored += 1
                         case .redCard:       seasonStats.redCards += 1
                         case .yellowCard:    seasonStats.yellowCards += 1
                         case .yellowRedCard: seasonStats.yellowRedCrd += 1
@@ -920,8 +982,15 @@ extension ClientController {
                     }
                 }
 
-                allStats.matchesPlayed = allMatchSet.count
-                seasonStats.matchesPlayed = seasonMatchSet.count
+                allStats.matchesPlayed = seasons
+                    .flatMap(\.matches)
+                    .filter(_countsAsAppearance)
+                    .count
+                seasonStats.matchesPlayed = seasons
+                    .filter(\.primary)
+                    .flatMap(\.matches)
+                    .filter(_countsAsAppearance)
+                    .count
                 return PlayerStatsPair(all: allStats, season: seasonStats)
             }
     }
