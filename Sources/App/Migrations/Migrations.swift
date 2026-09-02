@@ -31,6 +31,7 @@ let app_migrations: [Migration] = [
     CreateFollowSubscription(),
     VoteItemMigration(),
     LegalSectionMigration(),
+    StaticPageContentSeedMigration(),
     SponsorDisplayFieldsMigration(),
     SeasonTeamMigration()
 ]

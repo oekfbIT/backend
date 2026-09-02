@@ -45,6 +45,10 @@ extension AdminController {
         let body = try req.content.decode(CreateLegalSectionRequest.self)
         var sections = try await LegalDocumentSupport.sections(for: document, on: req.db)
 
+        if document.isSinglePage && !sections.isEmpty {
+            throw Abort(.conflict, reason: "This page already exists and should be edited instead.")
+        }
+
         let section = LegalSection(
             documentType: document,
             heading: try LegalDocumentSupport.normalizedHeading(body.heading),

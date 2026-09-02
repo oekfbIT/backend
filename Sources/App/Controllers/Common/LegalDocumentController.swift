@@ -42,7 +42,7 @@ enum LegalDocumentSupport {
         guard let document = LegalDocumentType(rawValue: rawValue) else {
             throw Abort(
                 .badRequest,
-                reason: "Unknown document. Use regeln, ligaordnung, or bund."
+                reason: "Unknown document. Use regeln, ligaordnung, bund, kontakt, impressum, or privacy."
             )
         }
         return document
