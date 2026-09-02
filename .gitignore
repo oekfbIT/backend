@@ -66,4 +66,5 @@ coverage
 # Mac system files
 .DS_Store
 
-.build/checkouts/
+# Swift Package Manager build products and dependency repositories
+/.build/

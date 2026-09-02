@@ -13,9 +13,8 @@ final class AdminController: RouteCollection {
 
     func setupRoutes(on app: RoutesBuilder) throws {
         let route = app.grouped(PathComponent(stringLiteral: path))
-        // Public admin auth (no Token.authenticator() here)
+        // Login is the only public route in the admin namespace.
         setupAuthRoutes(on: route)
-        setupLegalReadRoutes(on: route)
 
         let authed = route.grouped(
             Token.authenticator(),
@@ -35,8 +34,10 @@ final class AdminController: RouteCollection {
         setupStadiumRoutes(on: admin)
         setupUserRoutes(on: admin)
         setupRegistrationRoutes(on: admin)
+        setupLegalReadRoutes(on: admin)
         setupLegalWriteRoutes(on: admin)
         setupSponsorRoutes(on: admin)
+        setupSearchRoutes(on: admin)
 
     }
 
