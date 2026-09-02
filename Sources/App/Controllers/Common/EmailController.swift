@@ -95,6 +95,49 @@ final class EmailController {
             }
         }
     }
+
+    func sendPlayerEligibilityDecision(
+        req: Request,
+        recipient: String,
+        player: Player,
+        approved: Bool,
+        rejectionReason: String?
+    ) throws -> EventLoopFuture<HTTPStatus> {
+        try applySMTPConfig(req)
+
+        let decisionText = approved
+            ? "Ihr Antrag wurde genehmigt. Der Spieler ist ab sofort spielberechtigt."
+            : "Ihr Antrag wurde abgelehnt. Grund: \(rejectionReason ?? "Die Voraussetzungen für die Freigabe wurden nicht erfüllt.")"
+        let emailBody = """
+        <html>
+        <body style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #333;">
+            <p>Guten Tag,</p>
+            <p>die Anmeldung von <strong>\(player.name)</strong> (SID: <strong>\(player.sid)</strong>) wurde geprüft.</p>
+            <p>\(decisionText)</p>
+            <p>Dies ist eine automatisch generierte E-Mail.</p>
+            <p>Sportliche Grüße,<br>Ihr ÖKFB Team</p>
+        </body>
+        </html>
+        """
+
+        let email = try Email(
+            from: senderEmail(),
+            to: [EmailAddress(address: recipient)],
+            subject: approved ? "OEKFB Spieleranmeldung genehmigt" : "OEKFB Spieleranmeldung abgelehnt",
+            body: emailBody,
+            isBodyHtml: true
+        )
+
+        return req.smtp.send(email).flatMapThrowing { result in
+            switch result {
+            case .success:
+                return .ok
+            case .failure(let error):
+                req.logger.error("Player eligibility email failed: \(error)")
+                throw Abort(.internalServerError, reason: "Failed to send eligibility email")
+            }
+        }
+    }
     
     func sendWelcomeMail(req: Request, recipient: String, registration: TeamRegistration?) throws -> EventLoopFuture<HTTPStatus> {
         // Apply the SMTP configuration

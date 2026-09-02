@@ -31,7 +31,9 @@ final class PlayerController: RouteCollection {
 
         route.get("internal", ":id", use: getPlayerWithIdentification)
         route.get("reject", ":id", use: sendUpdatePlayerEmail)
-        route.get("pending", use: getPlayersWithEmail)
+        route.get("pending", use: getPendingPlayers)
+        route.post(":id", "eligibility", "approve", use: approveEligibility)
+        route.post(":id", "eligibility", "reject", use: rejectEligibility)
     
         route.post("copy", use: copyPlayer)
     }
@@ -186,6 +188,55 @@ final class PlayerController: RouteCollection {
             }
     }
 
+    func approveEligibility(req: Request) -> EventLoopFuture<Player.Public> {
+        decideEligibility(req: req, eligibility: .Spielberechtigt, rejectionReason: nil)
+    }
+
+    func rejectEligibility(req: Request) throws -> EventLoopFuture<Player.Public> {
+        let payload = try req.content.decode(PlayerEligibilityRejectionRequest.self)
+        guard let reason = PlayerEligibilityRejectionReason(rawValue: payload.reason) else {
+            throw Abort(.badRequest, reason: "Invalid rejection reason")
+        }
+        return decideEligibility(req: req, eligibility: .Abgelehnt, rejectionReason: reason.message)
+    }
+
+    private func decideEligibility(
+        req: Request,
+        eligibility: PlayerEligibility,
+        rejectionReason: String?
+    ) -> EventLoopFuture<Player.Public> {
+        guard let playerID = req.parameters.get("id", as: UUID.self) else {
+            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing player ID"))
+        }
+
+        return Player.find(playerID, on: req.db)
+            .unwrap(or: Abort(.notFound, reason: "Player not found"))
+            .flatMap { player in
+                player.eligibility = eligibility
+                return player.save(on: req.db).flatMap {
+                    let recipient = (player.email ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !recipient.isEmpty else {
+                        req.logger.info("Player \(playerID) has no email; eligibility notification skipped")
+                        return req.eventLoop.makeSucceededFuture(player.asPublic())
+                    }
+
+                    do {
+                        return try self.emailController
+                            .sendPlayerEligibilityDecision(
+                                req: req,
+                                recipient: recipient,
+                                player: player,
+                                approved: eligibility == .Spielberechtigt,
+                                rejectionReason: rejectionReason
+                            )
+                            .map { _ in player.asPublic() }
+                    } catch {
+                        return req.eventLoop.makeFailedFuture(error)
+                    }
+                }
+            }
+    }
+
 
     func updatePlayerNumber(req: Request) -> EventLoopFuture<Player.Public> {
         guard let playerID = req.parameters.get("id", as: UUID.self),
@@ -270,17 +321,39 @@ final class PlayerController: RouteCollection {
             }
     }
     
-    func getPlayersWithEmail(req: Request) throws -> EventLoopFuture<[Player.Public]> {
+    func getPendingPlayers(req: Request) throws -> EventLoopFuture<[Player.PendingEligibilityPublic]> {
         return Player.query(on: req.db)
-            .filter(\.$email != nil)
-            .filter(\.$email != "")
             .filter(\.$eligibility == .Warten)
             .all()
             .map { players in
-                players.map { $0.asPublic() }
+                players.map { $0.asPendingEligibilityPublic() }
             }
     }
 
+}
+
+private struct PlayerEligibilityRejectionRequest: Content {
+    let reason: String
+}
+
+private enum PlayerEligibilityRejectionReason: String {
+    case missingPhoto
+    case missingIdentification
+    case unreadableIdentification
+    case incorrectData
+
+    var message: String {
+        switch self {
+        case .missingPhoto:
+            return "Das Profilbild fehlt oder entspricht nicht den Anforderungen."
+        case .missingIdentification:
+            return "Der Ausweis fehlt oder ist nicht vollständig sichtbar."
+        case .unreadableIdentification:
+            return "Der hochgeladene Ausweis ist nicht lesbar."
+        case .incorrectData:
+            return "Die angegebenen Spielerdaten stimmen nicht mit dem Ausweis überein."
+        }
+    }
 }
 
 struct CopyPlayerRequest: Content {

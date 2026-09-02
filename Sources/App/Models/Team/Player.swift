@@ -5,6 +5,7 @@ enum PlayerEligibility: String, Codable {
     case Spielberechtigt = "Spielberechtigt"
     case Gesperrt = "Gesperrt"
     case Warten = "Warten"
+    case Abgelehnt = "Abgelehnt"
 }
 
 struct Profile: Codable, Content {
@@ -166,6 +167,28 @@ extension Player {
             isCaptain: self.isCaptain,
             bank: self.bank,
             blockdate: self.blockdate
+        )
+    }
+}
+
+extension Player {
+    struct PendingEligibilityPublic: Content {
+        let id: UUID?
+        let image: String?
+        let name: String
+        let birthday: String
+        let identification: String?
+        let email: String?
+    }
+
+    func asPendingEligibilityPublic() -> PendingEligibilityPublic {
+        PendingEligibilityPublic(
+            id: id,
+            image: image,
+            name: name,
+            birthday: birthday,
+            identification: identification,
+            email: email
         )
     }
 }

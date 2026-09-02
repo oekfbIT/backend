@@ -31,7 +31,8 @@ let app_migrations: [Migration] = [
     CreateFollowSubscription(),
     VoteItemMigration(),
     LegalSectionMigration(),
-    SponsorDisplayFieldsMigration()
+    SponsorDisplayFieldsMigration(),
+    SeasonTeamMigration()
 ]
 
 struct UserMigration { }

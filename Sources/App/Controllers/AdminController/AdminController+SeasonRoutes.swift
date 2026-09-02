@@ -36,6 +36,10 @@ extension AdminController {
 
         // PATCH /admin/seasons/:id/matches/:matchId/location
         seasons.patch(":id", "matches", ":matchId", "location", use: patchMatchLocation)
+
+        // Admin bookkeeping only. These routes never mutate matches or standings.
+        seasons.get(":id", "teams", use: getSeasonTeams)
+        seasons.patch(":id", "teams", ":seasonTeamId", use: patchSeasonTeam)
         
         seasons.post(":id", "gameday", "complete", use: completeGameday)
 
@@ -94,10 +98,128 @@ extension AdminController {
         let stadiumId: UUID?
         let location: String?
     }
+
+    struct PatchSeasonTeamRequest: Content {
+        let hasPaidSeasonFee: Bool?
+        let seasonFee: Double?
+        let clearSeasonFee: Bool?
+    }
+
+    struct AdminSeasonTeamResponse: Content {
+        let id: UUID
+        let team: AdminSeasonTeamOverview
+        let hasPaidSeasonFee: Bool?
+        let seasonFee: Double?
+    }
+
+    struct AdminSeasonTeamOverview: Content {
+        let id: UUID
+        let sid: String?
+        let logo: String
+        let name: String
+        let shortName: String?
+        let leagueCode: String?
+        let averageAge: String
+        let membershipSince: String?
+    }
 }
 
 // MARK: - Handlers
 extension AdminController {
+
+    /// Returns the season's administrative team records. For legacy seasons,
+    /// records are inferred once from match participants (or the league's teams
+    /// when no matches exist). This does not alter matches or competition state.
+    func getSeasonTeams(req: Request) async throws -> [AdminSeasonTeamResponse] {
+        let season = try await requireSeason(req: req, param: "id")
+        let seasonID = try season.requireID()
+
+        var records = try await SeasonTeam.query(on: req.db)
+            .filter(\.$season.$id == seasonID)
+            .with(\.$team)
+            .all()
+
+        if records.isEmpty {
+            let matches = try await Match.query(on: req.db)
+                .filter(\.$season.$id == seasonID)
+                .all()
+
+            var teamIDs = Set(matches.flatMap { [$0.$homeTeam.id, $0.$awayTeam.id] })
+
+            if teamIDs.isEmpty, let leagueID = season.$league.id {
+                let leagueTeams = try await Team.query(on: req.db)
+                    .filter(\.$league.$id == leagueID)
+                    .all()
+                teamIDs = Set(try leagueTeams.map { try $0.requireID() })
+            }
+
+            for teamID in teamIDs {
+                try await SeasonTeam(seasonID: seasonID, teamID: teamID).save(on: req.db)
+            }
+
+            records = try await SeasonTeam.query(on: req.db)
+                .filter(\.$season.$id == seasonID)
+                .with(\.$team)
+                .all()
+        }
+
+        return try records
+            .sorted { $0.team.teamName.localizedCaseInsensitiveCompare($1.team.teamName) == .orderedAscending }
+            .map {
+                AdminSeasonTeamResponse(
+                    id: try $0.requireID(),
+                    team: try adminSeasonTeamOverview($0.team),
+                    hasPaidSeasonFee: $0.hasPaidSeasonFee,
+                    seasonFee: $0.seasonFee
+                )
+            }
+    }
+
+    func patchSeasonTeam(req: Request) async throws -> AdminSeasonTeamResponse {
+        let season = try await requireSeason(req: req, param: "id")
+        let seasonID = try season.requireID()
+        guard let recordID = req.parameters.get("seasonTeamId", as: UUID.self),
+              let record = try await SeasonTeam.find(recordID, on: req.db),
+              record.$season.id == seasonID else {
+            throw Abort(.notFound, reason: "Season team record not found.")
+        }
+
+        let patch = try req.content.decode(PatchSeasonTeamRequest.self)
+        if let fee = patch.seasonFee {
+            guard fee >= 0 else {
+                throw Abort(.badRequest, reason: "Season fee cannot be negative.")
+            }
+            record.seasonFee = fee
+        } else if patch.clearSeasonFee == true {
+            record.seasonFee = nil
+        }
+        if let paid = patch.hasPaidSeasonFee {
+            record.hasPaidSeasonFee = paid
+        }
+
+        try await record.save(on: req.db)
+        try await record.$team.load(on: req.db)
+
+        return AdminSeasonTeamResponse(
+            id: try record.requireID(),
+            team: try adminSeasonTeamOverview(record.team),
+            hasPaidSeasonFee: record.hasPaidSeasonFee,
+            seasonFee: record.seasonFee
+        )
+    }
+
+    private func adminSeasonTeamOverview(_ team: Team) throws -> AdminSeasonTeamOverview {
+        AdminSeasonTeamOverview(
+            id: try team.requireID(),
+            sid: team.sid,
+            logo: team.logo,
+            name: team.teamName,
+            shortName: team.shortName,
+            leagueCode: team.leagueCode,
+            averageAge: team.averageAge,
+            membershipSince: team.membershipSince
+        )
+    }
 
     func getSeasonByID(req: Request) async throws -> Season {
         try await requireSeason(req: req, param: "id")
