@@ -1,0 +1,15 @@
+# pack-refs with: peeled fully-peeled sorted 
+5f37d99de4c55ce0f1687ed4e363b1b71f855f8e refs/heads/dependabot/swift/github.com/apple/swift-nio-2.100.0
+384d80444b2341d2ed12209f20cbbf472d56190f refs/heads/gh-pages
+7c004835b7378a071caf2aa069c5362dd995ba44 refs/heads/main
+def8c62d1d60415aa721362ae4f6c2f0fd21e142 refs/heads/swift_5.1.x
+4124e526ff0cda3639ada1f649b8eac32ce508e1 refs/pull/3/head
+5884900f19c8de29a708b0aab978355bd4c95f49 refs/pull/4/head
+61fdb1ff09f0366e7b0e3b8699ac82ee6f87664c refs/pull/5/head
+a0e244ff3301be7e0574515e607ddf18f2777fbf refs/pull/6/head
+5f37d99de4c55ce0f1687ed4e363b1b71f855f8e refs/pull/7/head
+10edd1efddbcca1842116d7ce1ce2916a8666f19 refs/pull/7/merge
+81924d9df130f465a54da36079a5b4c44a70d03c refs/tags/v1.0.0
+9da99f76b752153036a204b50045d6c56c0faeea refs/tags/v2.0.0
+def8c62d1d60415aa721362ae4f6c2f0fd21e142 refs/tags/v2.0.1
+1f15bb9de727d694af1d003a1a5d7a553752850f refs/tags/v3.0.0

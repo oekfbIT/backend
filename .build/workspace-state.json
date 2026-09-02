@@ -1,0 +1,591 @@
+{
+  "object" : {
+    "artifacts" : [
+
+    ],
+    "dependencies" : [
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "async-http-client",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/swift-server/async-http-client.git",
+          "name" : "async-http-client"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "16f7e62c08c6969899ce6cc277041e868364e5cf",
+            "version" : "1.19.0"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "async-http-client"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "async-kit",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/vapor/async-kit.git",
+          "name" : "async-kit"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "eab9edff78e8ace20bd7cb6e792ab46d54f59ab9",
+            "version" : "1.18.0"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "async-kit"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "bson",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/orlandos-nl/BSON.git",
+          "name" : "BSON"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "c29936981d39667429d4e0ec03aa8d6a722ea36a",
+            "version" : "7.0.31"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "BSON"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "console-kit",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/vapor/console-kit.git",
+          "name" : "console-kit"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "a31f44ebfbd15a2cc0fda705279676773ac16355",
+            "version" : "4.14.1"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "console-kit"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "dnsclient",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/orlandos-nl/DNSClient.git",
+          "name" : "DNSClient"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "8a7b1be0208e6e9d1d9e0a07713e0c0ebd7a2010",
+            "version" : "2.3.0"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "DNSClient"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "dotenv",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/swiftpackages/DotEnv.git",
+          "name" : "DotEnv"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "1f15bb9de727d694af1d003a1a5d7a553752850f",
+            "version" : "3.0.0"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "DotEnv"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "fluent",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/vapor/fluent.git",
+          "name" : "fluent"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "4b4d8bf15a06fd60137e9c543e5503c4b842654e",
+            "version" : "4.8.0"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "fluent"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "fluent-kit",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/vapor/fluent-kit.git",
+          "name" : "fluent-kit"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "ccea9820fe31076f994f7c1c1d584009cad6bdb2",
+            "version" : "1.44.1"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "fluent-kit"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "fluent-mongo-driver",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/vapor/fluent-mongo-driver.git",
+          "name" : "fluent-mongo-driver"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "a4237b99720d2a728178bc9f4c4a0d11d309031e",
+            "version" : "1.3.1"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "fluent-mongo-driver"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "leaf",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/vapor/leaf.git",
+          "name" : "leaf"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "6fe0e843c6599f5189e45c7b08739ebc5c410c3b",
+            "version" : "4.2.4"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "leaf"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "leaf-kit",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/vapor/leaf-kit.git",
+          "name" : "leaf-kit"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "13f2fc4c8479113cd23876d9a434ef4573e368bb",
+            "version" : "1.10.2"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "leaf-kit"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "mongokitten",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/OpenKitten/MongoKitten.git",
+          "name" : "MongoKitten"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "64a84e1a00c64e1646b9b1449766ce6472cf12ee",
+            "version" : "6.7.15"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "MongoKitten"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "multipart-kit",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/vapor/multipart-kit.git",
+          "name" : "multipart-kit"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "1adfd69df2da08f7931d4281b257475e32c96734",
+            "version" : "4.5.4"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "multipart-kit"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "queues",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/vapor/queues.git",
+          "name" : "queues"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "3dc80954c672effa188d01a15f56bf358c34beac",
+            "version" : "1.13.0"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "queues"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "queues-mongo-driver",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/vapor-community/queues-mongo-driver.git",
+          "name" : "queues-mongo-driver"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "4f3686eae98c569f50e0317c389f83b7472f6e4d",
+            "version" : "1.0.3"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "queues-mongo-driver"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "routing-kit",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/vapor/routing-kit.git",
+          "name" : "routing-kit"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "2a92a7eac411a82fb3a03731be5e76773ebe1b3e",
+            "version" : "4.9.0"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "routing-kit"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "smtp",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/Mikroservices/Smtp.git",
+          "name" : "Smtp"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "4846bf61ffbd9b0d9e00b8371f7d101d991ada3c",
+            "version" : "3.0.5"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "Smtp"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "sql-kit",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/vapor/sql-kit.git",
+          "name" : "sql-kit"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "b2f128cb62a3abfbb1e3b2893ff3ee69e70f4f0f",
+            "version" : "3.28.0"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "sql-kit"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "swift-algorithms",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/apple/swift-algorithms.git",
+          "name" : "swift-algorithms"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "b14b7f4c528c942f121c8b860b9410b2bf57825e",
+            "version" : "1.0.0"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "swift-algorithms"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "swift-atomics",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/apple/swift-atomics.git",
+          "name" : "swift-atomics"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "6c89474e62719ddcc1e9614989fff2f68208fe10",
+            "version" : "1.1.0"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "swift-atomics"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "swift-collections",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/apple/swift-collections.git",
+          "name" : "swift-collections"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "937e904258d22af6e447a0b72c0bc67583ef64a2",
+            "version" : "1.0.4"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "swift-collections"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "swift-crypto",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/apple/swift-crypto.git",
+          "name" : "swift-crypto"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "60f13f60c4d093691934dc6cfdf5f508ada1f894",
+            "version" : "2.6.0"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "swift-crypto"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "swift-log",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/apple/swift-log.git",
+          "name" : "swift-log"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "532d8b529501fb73a2455b179e0bbb6d49b652ed",
+            "version" : "1.5.3"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "swift-log"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "swift-metrics",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/apple/swift-metrics.git",
+          "name" : "swift-metrics"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "971ba26378ab69c43737ee7ba967a896cb74c0d1",
+            "version" : "2.4.1"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "swift-metrics"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "swift-nio",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/apple/swift-nio.git",
+          "name" : "swift-nio"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "359c461e5561d22c6334828806cc25d759ca7aa6",
+            "version" : "2.65.0"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "swift-nio"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "swift-nio-extras",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/apple/swift-nio-extras.git",
+          "name" : "swift-nio-extras"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "0e0d0aab665ff1a0659ce75ac003081f2b1c8997",
+            "version" : "1.19.0"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "swift-nio-extras"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "swift-nio-http2",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/apple/swift-nio-http2.git",
+          "name" : "swift-nio-http2"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "c6afe04165c865faaa687b42c32ed76dfcc91076",
+            "version" : "1.31.0"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "swift-nio-http2"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "swift-nio-ssl",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/apple/swift-nio-ssl.git",
+          "name" : "swift-nio-ssl"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "320bd978cceb8e88c125dcbb774943a92f6286e9",
+            "version" : "2.25.0"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "swift-nio-ssl"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "swift-nio-transport-services",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/apple/swift-nio-transport-services.git",
+          "name" : "swift-nio-transport-services"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "e7403c35ca6bb539a7ca353b91cc2d8ec0362d58",
+            "version" : "1.19.0"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "swift-nio-transport-services"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "swift-numerics",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/apple/swift-numerics",
+          "name" : "swift-numerics"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "0a5bc04095a675662cf24757cc0640aa2204253b",
+            "version" : "1.0.2"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "swift-numerics"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "swift-system",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/apple/swift-system.git",
+          "name" : "swift-system"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "025bcb1165deab2e20d4eaba79967ce73013f496",
+            "version" : "1.2.1"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "swift-system"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "swiftsoup",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/scinfu/SwiftSoup.git",
+          "name" : "SwiftSoup"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "028487d4a8a291b2fe1b4392b5425b6172056148",
+            "version" : "2.7.2"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "SwiftSoup"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "vapor",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/vapor/vapor.git",
+          "name" : "vapor"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "e5cb0abdadff95ef996fafd6268f2f5f8cba6325",
+            "version" : "4.94.1"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "vapor"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "websocket-kit",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/vapor/websocket-kit.git",
+          "name" : "websocket-kit"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "53fe0639a98903858d0196b699720decb42aee7b",
+            "version" : "2.14.0"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "websocket-kit"
+      }
+    ],
+    "prebuilts" : [
+
+    ]
+  },
+  "version" : 7
+}

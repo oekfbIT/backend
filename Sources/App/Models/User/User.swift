@@ -127,8 +127,15 @@ extension User: Authenticatable {
     func createToken(source: SessionSource) throws -> Token {
         let calendar = Calendar(identifier: .gregorian)
         let expiryDate = calendar.date(byAdding: .year, value: 1, to: Date.viennaNow)
+        // Keep session tokens safe in cookies and Authorization headers. Standard
+        // Base64 uses "+", "/" and "=" padding; some of our web clients parse a
+        // cookie by splitting on "=", which used to truncate every padded token.
+        let tokenValue = [UInt8].random(count: 32).base64
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
         return try Token(userId: requireID(),
-                         token: [UInt8].random(count: 16).base64,
+                         token: tokenValue,
                          source: source,
                          expiresAt: expiryDate)
     }
@@ -151,11 +158,6 @@ extension User: ModelAuthenticatable {
     static let passwordHashKey = \User.$passwordHash
     
     func verify(password: String) throws -> Bool {
-        print("Input password: \(password)")
-        print("Hashed password: \(self.passwordHash)")
-        let result = try Bcrypt.verify(password, created: self.passwordHash)
-        print("Password verification result: \(result)")
-        return result
+        try Bcrypt.verify(password, created: passwordHash)
     }
 }
-

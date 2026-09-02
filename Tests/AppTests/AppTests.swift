@@ -2,6 +2,39 @@
 import XCTVapor
 
 final class AppTests: XCTestCase {
+    func testCreatedTokensAreCookieAndBearerSafe() throws {
+        let id = UUID()
+        let user = User(
+            id: id,
+            userID: id.uuidString,
+            type: .admin,
+            firstName: "Admin",
+            lastName: "User",
+            email: "admin@example.com",
+            passwordHash: "unused"
+        )
+
+        let token = try user.createToken(source: .login)
+
+        XCTAssertEqual(token.$user.id, id)
+        XCTAssertFalse(token.value.isEmpty)
+        XCTAssertNil(token.value.range(of: "[^A-Za-z0-9_-]", options: .regularExpression))
+        XCTAssertFalse(token.value.contains("="))
+        XCTAssertTrue(token.isValid)
+    }
+
+    func testAdminRoutesRequireAuthentication() async throws {
+        let app = Application(.testing)
+        defer { app.shutdown() }
+        try routes(app)
+
+        for path in ["admin/sponsors", "admin/legal/privacy"] {
+            try app.test(.GET, path, afterResponse: { res in
+                XCTAssertEqual(res.status, .unauthorized, "Expected /\(path) to require an admin bearer token")
+            })
+        }
+    }
+
     func testOpenAPIDocumentIncludesRegisteredRoutes() async throws {
         let app = Application(.testing)
         defer { app.shutdown() }
