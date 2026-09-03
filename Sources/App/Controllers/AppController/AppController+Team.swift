@@ -80,8 +80,13 @@ extension AppController {
 
         let teamOverview = try await team.toAppTeamOverview(league: leagueOverview, req: req).get()
 
-        let playerOverviews = try await team.players.asyncMap {
-            try await $0.toAppPlayer(team: teamOverview, req: req)
+        let playerStats = try await StatsCacheManager.getPlayerStats(
+            for: team.players.compactMap(\.id),
+            on: req.db
+        ).get()
+        let playerOverviews = try await team.players.asyncMap { player in
+            let stats = player.id.flatMap { playerStats[$0] } ?? PlayerStatisticsService.emptyStats()
+            return try await player.toAppPlayer(team: teamOverview, stats: stats, req: req)
         }
         
         return try await team.toAppTeam(league: leagueOverview, players: playerOverviews, req: req).get()
@@ -124,8 +129,13 @@ extension AppController {
 
         let teamOverview = try await team.toAppTeamOverview(league: leagueOverview, req: req).get()
 
-        let playerOverviews = try await team.players.asyncMap {
-            try await $0.toAppPlayer(team: teamOverview, req: req)
+        let playerStats = try await StatsCacheManager.getPlayerStats(
+            for: team.players.compactMap(\.id),
+            on: req.db
+        ).get()
+        let playerOverviews = try await team.players.asyncMap { player in
+            let stats = player.id.flatMap { playerStats[$0] } ?? PlayerStatisticsService.emptyStats()
+            return try await player.toAppPlayer(team: teamOverview, stats: stats, req: req)
         }
 
         return try await team.toAppTeam(league: leagueOverview, players: playerOverviews, req: req).get()

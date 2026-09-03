@@ -33,7 +33,8 @@ let app_migrations: [Migration] = [
     LegalSectionMigration(),
     StaticPageContentSeedMigration(),
     SponsorDisplayFieldsMigration(),
-    SeasonTeamMigration()
+    SeasonTeamMigration(),
+    StatsQueryIndexesMigration()
 ]
 
 struct UserMigration { }

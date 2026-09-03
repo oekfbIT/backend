@@ -779,7 +779,13 @@ extension ClientController {
             return req.eventLoop.makeSucceededFuture(cached)
         }
 
-        let matchesF = Match.query(on: req.db)
+        let homePlayerPath: [FieldKey] = ["homeBlanket", "players", "id"]
+        let awayPlayerPath: [FieldKey] = ["awayBlanket", "players", "id"]
+        let blanketMatchesF = Match.query(on: req.db)
+            .group(.or) { group in
+                group.filter(homePlayerPath, .equal, playerID)
+                group.filter(awayPlayerPath, .equal, playerID)
+            }
             .with(\.$season) { season in
                 season.with(\.$league)
             }
@@ -788,10 +794,15 @@ extension ClientController {
         // An event is also evidence that the player appeared. Keeping this
         // union makes old/incomplete match blankets visible instead of silently
         // dropping matches which already contain a goal or card for the player.
-        let eventMatchIDsF = MatchEvent.query(on: req.db)
+        let eventMatchesF = MatchEvent.query(on: req.db)
             .filter(\.$player.$id == playerID)
+            .with(\.$match) { match in
+                match.with(\.$season) { season in
+                    season.with(\.$league)
+                }
+            }
             .all()
-            .map { Set($0.map { $0.$match.id }) }
+            .map { $0.map(\.match) }
 
         // Preserve the current league's active season even before the player has
         // an appearance in it, so the UI can show accurate zero season stats.
@@ -801,12 +812,15 @@ extension ClientController {
             .with(\.$league)
             .all()
 
-        return matchesF.and(eventMatchIDsF).and(activeSeasonsF).map { result, activeSeasons in
-            let (matches, eventMatchIDs) = result
-            let relevant = matches.filter { match in
-                _containsPlayer(playerID, in: match) ||
-                    match.id.map(eventMatchIDs.contains) == true
+        return blanketMatchesF.and(eventMatchesF).and(activeSeasonsF).map { result, activeSeasons in
+            let (blanketMatches, eventMatches) = result
+            var matchesByID = [UUID: Match]()
+            for match in blanketMatches + eventMatches {
+                if let matchID = match.id {
+                    matchesByID[matchID] = match
+                }
             }
+            let relevant = Array(matchesByID.values)
 
             var matchesBySeason: [UUID: [Match]] = [:]
             var seasonsByID: [UUID: Season] = [:]
@@ -859,6 +873,11 @@ extension ClientController {
 
             Caches.seasons.set(cacheKey, payload)
             return payload
+        }
+        .flatMapError { _ in
+            // Player history is optional presentation data. A temporary
+            // database problem should leave the profile usable.
+            req.eventLoop.makeSucceededFuture([])
         }
     }
 

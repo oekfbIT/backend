@@ -1110,31 +1110,13 @@ extension AppController {
 
         guard !activeSeasonIDs.isEmpty else { return [] }
 
-        // Prefer DB-side range on JSON date
-        let dbFiltered: [Match] = (try? await Match.query(on: req.db)
+        // Keep filtering in MongoDB. Do not turn a legitimate empty date into
+        // a read of every active-season match.
+        let matchesForThatDate = try await Match.query(on: req.db)
             .filter(\.$season.$id ~~ activeSeasonIDs)
             .filter(Match.FieldKeys.date, .greaterThanOrEqual, startOfDay)
             .filter(Match.FieldKeys.date, .lessThan, startOfNextDay)
             .all()
-        ) ?? []
-
-        let matchesForThatDate: [Match]
-        if !dbFiltered.isEmpty {
-            matchesForThatDate = dbFiltered
-        } else {
-            // Fallback: compare only (year,month,day) in UTC
-            let allActive = try await Match.query(on: req.db)
-                .filter(\.$season.$id ~~ activeSeasonIDs)
-                .all()
-
-            let targetComps = utcCal.dateComponents([.year, .month, .day], from: targetDate)
-
-            matchesForThatDate = allActive.filter { m in
-                guard let d = m.details.date else { return false }
-                let comps = utcCal.dateComponents([.year, .month, .day], from: d)
-                return comps.year == targetComps.year && comps.month == targetComps.month && comps.day == targetComps.day
-            }
-        }
 
         let lookup = try await buildMatchLookup(matches: matchesForThatDate, on: req.db)
 
@@ -1236,23 +1218,13 @@ extension AppController {
             return AvailableDatesResponse(dates: [])
         }
 
-        // Prefer DB-side date range
-        let dbWindowMatches: [Match] = (try? await Match.query(on: req.db)
+        // An empty date range is a valid answer. Keeping the filter in MongoDB
+        // prevents the previous fallback from loading every active match.
+        let windowMatches = try await Match.query(on: req.db)
             .filter(\.$season.$id ~~ activeSeasonIDs)
             .filter(Match.FieldKeys.date, .greaterThanOrEqual, start)
             .filter(Match.FieldKeys.date, .lessThan, endExclusive)
             .all()
-        ) ?? []
-
-        let windowMatches: [Match]
-        if !dbWindowMatches.isEmpty {
-            windowMatches = dbWindowMatches
-        } else {
-            // Fallback (still correct, can be heavier)
-            windowMatches = try await Match.query(on: req.db)
-                .filter(\.$season.$id ~~ activeSeasonIDs)
-                .all()
-        }
 
         let dates = uniqueDateStrings(from: windowMatches, utcCal: utcCal)
         return AvailableDatesResponse(dates: dates)

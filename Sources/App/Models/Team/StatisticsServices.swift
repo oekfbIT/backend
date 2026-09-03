@@ -23,43 +23,81 @@ enum PlayerStatisticsService {
         activeLeagueID: UUID? = nil,
         on db: Database
     ) -> EventLoopFuture<PlayerStatsPair> {
-        let matches = Match.query(on: db)
+        calculate(playerIDs: [playerID], activeLeagueIDs: [playerID: activeLeagueID], on: db)
+            .map { $0[playerID] ?? PlayerStatsPair(all: emptyStats(), season: emptyStats()) }
+    }
+
+    /// Fetches only matches where one of the players appears in a submitted team
+    /// sheet, plus matches that contain one of their recorded events. This avoids
+    /// scanning the entire `matches` collection for every player.
+    static func calculate(
+        playerIDs: [UUID],
+        activeLeagueIDs: [UUID: UUID?] = [:],
+        on db: Database
+    ) -> EventLoopFuture<[UUID: PlayerStatsPair]> {
+        let requestedIDs = Array(Set(playerIDs))
+        guard !requestedIDs.isEmpty else {
+            return db.eventLoop.makeSucceededFuture([:])
+        }
+
+        let homePlayerPath: [FieldKey] = ["homeBlanket", "players", "id"]
+        let awayPlayerPath: [FieldKey] = ["awayBlanket", "players", "id"]
+
+        let blanketMatches = Match.query(on: db)
+            .group(.or) { group in
+                group.filter(homePlayerPath, .subset(inverse: false), requestedIDs)
+                group.filter(awayPlayerPath, .subset(inverse: false), requestedIDs)
+            }
             .with(\.$season)
             .all()
+
         let events = MatchEvent.query(on: db)
-            .filter(\.$player.$id == playerID)
+            .filter(\.$player.$id ~~ requestedIDs)
+            .with(\.$match) { $0.with(\.$season) }
             .all()
 
-        return matches.and(events).map { matches, events in
-            let eventMatchIDs = Set(events.map { $0.$match.id })
-            let relevantMatches = matches.filter {
-                contains(playerID, in: $0) || $0.id.map(eventMatchIDs.contains) == true
+        let emptyResult = Dictionary(uniqueKeysWithValues: requestedIDs.map {
+            ($0, PlayerStatsPair(all: emptyStats(), season: emptyStats()))
+        })
+
+        return blanketMatches.and(events).map { blanketMatches, events in
+            let requested = Set(requestedIDs)
+            var matchesByPlayer = [UUID: [UUID: Match]]()
+            var eventsByPlayer = [UUID: [MatchEvent]]()
+
+            func add(_ match: Match, for playerID: UUID) {
+                guard let matchID = match.id else { return }
+                matchesByPlayer[playerID, default: [:]][matchID] = match
             }
-            let countableMatches = relevantMatches.filter(countsAsAppearance)
-            let countableMatchIDs = Set(countableMatches.compactMap(\.id))
-            let activeMatchIDs = Set(countableMatches.compactMap { match -> UUID? in
-                guard match.season?.primary == true else { return nil }
-                if let activeLeagueID, match.season?.$league.id != activeLeagueID {
-                    return nil
+
+            for match in blanketMatches {
+                let sheetPlayerIDs = (match.homeBlanket?.players.map(\.id) ?? [])
+                    + (match.awayBlanket?.players.map(\.id) ?? [])
+                for playerID in Set(sheetPlayerIDs) where requested.contains(playerID) {
+                    add(match, for: playerID)
                 }
-                return match.id
+            }
+
+            for event in events {
+                guard let playerID = event.$player.id, requested.contains(playerID) else { continue }
+                eventsByPlayer[playerID, default: []].append(event)
+                add(event.match, for: playerID)
+            }
+
+            return Dictionary(uniqueKeysWithValues: requestedIDs.map { playerID in
+                let matches = Array(matchesByPlayer[playerID, default: [:]].values)
+                let eventList = eventsByPlayer[playerID, default: []]
+                return (playerID, makeStats(
+                    matches: matches,
+                    events: eventList,
+                    activeLeagueID: activeLeagueIDs[playerID] ?? nil
+                ))
             })
-
-            var all = emptyStats()
-            var season = emptyStats()
-            all.matchesPlayed = countableMatchIDs.count
-            season.matchesPlayed = activeMatchIDs.count
-
-            for event in events where countableMatchIDs.contains(event.$match.id) {
-                add(event, to: &all)
-                if activeMatchIDs.contains(event.$match.id) {
-                    add(event, to: &season)
-                }
-            }
-
-            all.goalsAverage = average(goals: all.goalsScored, appearances: all.matchesPlayed)
-            season.goalsAverage = average(goals: season.goalsScored, appearances: season.matchesPlayed)
-            return PlayerStatsPair(all: all, season: season)
+        }
+        .flatMapError { _ in
+            // Statistics are supplementary data. A database timeout must not
+            // turn a player or team response into a failed request.
+            db.eventLoop.makeSucceededFuture(emptyResult)
         }
     }
 
@@ -72,6 +110,38 @@ enum PlayerStatisticsService {
             yellowRedCrd: 0,
             goalsAverage: nil
         )
+    }
+
+    private static func makeStats(
+        matches: [Match],
+        events: [MatchEvent],
+        activeLeagueID: UUID?
+    ) -> PlayerStatsPair {
+        let countableMatches = matches.filter(countsAsAppearance)
+        let countableMatchIDs = Set(countableMatches.compactMap(\.id))
+        let activeMatchIDs = Set(countableMatches.compactMap { match -> UUID? in
+            guard match.season?.primary == true else { return nil }
+            if let activeLeagueID, match.season?.$league.id != activeLeagueID {
+                return nil
+            }
+            return match.id
+        })
+
+        var all = emptyStats()
+        var season = emptyStats()
+        all.matchesPlayed = countableMatchIDs.count
+        season.matchesPlayed = activeMatchIDs.count
+
+        for event in events where countableMatchIDs.contains(event.$match.id) {
+            add(event, to: &all)
+            if activeMatchIDs.contains(event.$match.id) {
+                add(event, to: &season)
+            }
+        }
+
+        all.goalsAverage = average(goals: all.goalsScored, appearances: all.matchesPlayed)
+        season.goalsAverage = average(goals: season.goalsScored, appearances: season.matchesPlayed)
+        return PlayerStatsPair(all: all, season: season)
     }
 
     private static func add(_ event: MatchEvent, to stats: inout PlayerStats) {

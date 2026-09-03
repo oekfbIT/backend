@@ -106,28 +106,18 @@ enum StatsCacheManager {
         on db: Database,
         onlyPrimarySeason: Bool = false
     ) -> EventLoopFuture<TeamStats> {
-        TeamStatsCache.query(on: db)
+        return TeamStatsCache.query(on: db)
             .filter(\.$team.$id == teamID)
             .first()
             .flatMap { cache in
                 // Check cache age (15 minutes)
                 if let cache = cache, let updated = cache.updatedAt, updated > Date().addingTimeInterval(-900),
                    !onlyPrimarySeason { // ⚠️ don’t reuse cache if primary season requested
-                    let stats = TeamStats(
-                        wins: cache.wins,
-                        draws: cache.draws,
-                        losses: cache.losses,
-                        totalScored: cache.totalScored,
-                        totalAgainst: cache.totalAgainst,
-                        goalDifference: cache.goalDifference,
-                        totalPoints: cache.totalPoints,
-                        totalYellowCards: cache.totalYellowCards,
-                        totalRedCards: cache.totalRedCards
-                    )
-                    return db.eventLoop.makeSucceededFuture(stats)
+                    return db.eventLoop.makeSucceededFuture(teamStats(from: cache))
                 }
 
                 // Compute and update cache
+                let fallback = cache.map { teamStats(from: $0) } ?? emptyTeamStats()
                 return Team.computeTeamStats(for: teamID, on: db, onlyPrimarySeason: onlyPrimarySeason)
                     .flatMap { stats in
                         // If we’re computing global stats, save to cache
@@ -149,40 +139,135 @@ enum StatsCacheManager {
                             return db.eventLoop.makeSucceededFuture(stats)
                         }
                     }
+                    .flatMapError { _ in
+                        // Prefer an older cached value to failing a response;
+                        // otherwise return neutral statistics.
+                        db.eventLoop.makeSucceededFuture(fallback)
+                    }
             }
+            .flatMapError { _ in db.eventLoop.makeSucceededFuture(emptyTeamStats()) }
     }
 
 
     static func getPlayerStats(for playerID: UUID, on db: Database) -> EventLoopFuture<PlayerStats> {
-        PlayerStatsCache.query(on: db)
-            .filter(\.$player.$id == playerID)
-            .first()
-            .flatMap { cache in
-                if let cache = cache, let updated = cache.updatedAt, updated > Date().addingTimeInterval(-900) {
-                    let stats = PlayerStats(
-                        matchesPlayed: cache.matchesPlayed,
-                        goalsScored: cache.goalsScored,
-                        redCards: cache.redCards,
-                        yellowCards: cache.yellowCards,
-                        yellowRedCrd: cache.yellowRedCards,
-                        goalsAverage: cache.goalsAverage
-                    )
-                    return db.eventLoop.makeSucceededFuture(stats)
+        getPlayerStats(for: [playerID], on: db)
+            .map { $0[playerID] ?? PlayerStatisticsService.emptyStats() }
+    }
+
+    /// Fetches a roster's cached statistics in one query. Cache misses are
+    /// calculated together, so opening a team never triggers one calculation
+    /// per player.
+    static func getPlayerStats(
+        for playerIDs: [UUID],
+        on db: Database
+    ) -> EventLoopFuture<[UUID: PlayerStats]> {
+        let uniqueIDs = Array(Set(playerIDs))
+        guard !uniqueIDs.isEmpty else {
+            return db.eventLoop.makeSucceededFuture([:])
+        }
+
+        let emptyResult = Dictionary(uniqueKeysWithValues: uniqueIDs.map {
+            ($0, PlayerStatisticsService.emptyStats())
+        })
+
+        return PlayerStatsCache.query(on: db)
+            .filter(\.$player.$id ~~ uniqueIDs)
+            .all()
+            .flatMap { caches in
+                let now = Date()
+                var result = [UUID: PlayerStats]()
+                for cache in caches {
+                    guard
+                        let updated = cache.updatedAt,
+                        updated > now.addingTimeInterval(-900)
+                    else { continue }
+                    result[cache.$player.id] = playerStats(from: cache)
                 }
 
-                return Player.computePlayerStats(for: playerID, on: db)
-                    .flatMap { stats in
-                        let cache = cache ?? PlayerStatsCache()
-                        cache.$player.id = playerID
-                        cache.matchesPlayed = stats.matchesPlayed
-                        cache.goalsScored = stats.goalsScored
-                        cache.redCards = stats.redCards
-                        cache.yellowCards = stats.yellowCards
-                        cache.yellowRedCards = stats.yellowRedCrd
-                        cache.goalsAverage = stats.goalsAverage
-                        return cache.save(on: db).transform(to: stats)
+                let missingIDs = uniqueIDs.filter { result[$0] == nil }
+                guard !missingIDs.isEmpty else {
+                    return db.eventLoop.makeSucceededFuture(result)
+                }
+
+                return PlayerStatisticsService.calculate(playerIDs: missingIDs, on: db)
+                    .flatMap { calculated in
+                        for playerID in missingIDs {
+                            result[playerID] = calculated[playerID]?.all ?? PlayerStatisticsService.emptyStats()
+                        }
+
+                        // Old deployments did not enforce a unique cache row.
+                        // Keep the first row rather than crashing on a legacy
+                        // duplicate while the request is being served.
+                        var cachesByPlayer = [UUID: PlayerStatsCache]()
+                        for cache in caches {
+                            let playerID = cache.$player.id
+                            if cachesByPlayer[playerID] == nil {
+                                cachesByPlayer[playerID] = cache
+                            }
+                        }
+                        let saves = missingIDs.map { playerID -> EventLoopFuture<Void> in
+                            let cache = cachesByPlayer[playerID] ?? PlayerStatsCache()
+                            let stats = result[playerID] ?? PlayerStatisticsService.emptyStats()
+                            cache.$player.id = playerID
+                            cache.matchesPlayed = stats.matchesPlayed
+                            cache.goalsScored = stats.goalsScored
+                            cache.yellowCards = stats.yellowCards
+                            cache.redCards = stats.redCards
+                            cache.yellowRedCards = stats.yellowRedCrd
+                            cache.goalsAverage = stats.goalsAverage
+                            return cache.save(on: db)
+                        }
+
+                        // A cache write is an optimization. Never fail a live
+                        // game request because one cache document could not save.
+                        return EventLoopFuture.andAllComplete(saves, on: db.eventLoop)
+                            .transform(to: result)
                     }
             }
+            .flatMapError { _ in
+                // A cache/database failure must not take the API down. Return
+                // neutral stats and allow a later request to refresh the cache.
+                db.eventLoop.makeSucceededFuture(emptyResult)
+            }
+    }
+
+    private static func playerStats(from cache: PlayerStatsCache) -> PlayerStats {
+        PlayerStats(
+            matchesPlayed: cache.matchesPlayed,
+            goalsScored: cache.goalsScored,
+            redCards: cache.redCards,
+            yellowCards: cache.yellowCards,
+            yellowRedCrd: cache.yellowRedCards,
+            goalsAverage: cache.goalsAverage
+        )
+    }
+
+    private static func teamStats(from cache: TeamStatsCache) -> TeamStats {
+        TeamStats(
+            wins: cache.wins,
+            draws: cache.draws,
+            losses: cache.losses,
+            totalScored: cache.totalScored,
+            totalAgainst: cache.totalAgainst,
+            goalDifference: cache.goalDifference,
+            totalPoints: cache.totalPoints,
+            totalYellowCards: cache.totalYellowCards,
+            totalRedCards: cache.totalRedCards
+        )
+    }
+
+    private static func emptyTeamStats() -> TeamStats {
+        TeamStats(
+            wins: 0,
+            draws: 0,
+            losses: 0,
+            totalScored: 0,
+            totalAgainst: 0,
+            goalDifference: 0,
+            totalPoints: 0,
+            totalYellowCards: 0,
+            totalRedCards: 0
+        )
     }
 }
 
