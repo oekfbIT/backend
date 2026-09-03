@@ -26,6 +26,7 @@ final class AdminController: RouteCollection {
 //        try setupAuthRoutes(on: route)
         setupLeagueRoutes(on: admin)
         setupTeamRoutes(on: admin)
+        setupTeamAccountRoutes(on: admin)
         setupSeasonRoutes(on: admin)
         setupMatchRoutes(on: admin)
         setupPlayerRoutes(on: admin)

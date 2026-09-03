@@ -51,6 +51,10 @@ final class TeamController: RouteCollection {
         return Team.find(id, on: req.db)
             .unwrap(or: Abort(.notFound))
             .flatMap { item in
+                // Account changes use the dedicated admin endpoint. A stale detail
+                // form must not restore a deleted owner or a legacy plaintext password.
+                updatedItem.$user.id = item.$user.id
+                updatedItem.usrpass = item.usrpass
                 let merged = item.merge(from: updatedItem)
                 return item.update(on: req.db).flatMap {
                     // After successfully updating the team, update the related matches

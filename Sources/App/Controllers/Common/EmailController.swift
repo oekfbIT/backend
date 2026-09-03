@@ -38,6 +38,22 @@ final class EmailController {
         )
     }
 
+    func sendTeamAccountPassword(req: Request, recipient: String, password: String) throws -> EventLoopFuture<HTTPStatus> {
+        try applySMTPConfig(req)
+        let email = try Email(
+            from: senderEmail(),
+            to: [EmailAddress(address: recipient)],
+            subject: "ÖKFB – Passwort zurückgesetzt",
+            body: "Ihr ÖKFB-Passwort wurde von der Administration zurückgesetzt.\n\nLogin: \(recipient)\nNeues Passwort: \(password)\n\nBitte ändern Sie das Passwort nach der Anmeldung. Es gilt für alle Mannschaften dieses Benutzerkontos."
+        )
+        return req.smtp.send(email).flatMapThrowing { result in
+            switch result {
+            case .success: return .ok
+            case .failure: throw Abort(.badGateway, reason: "Passwort-E-Mail konnte nicht versendet werden.")
+            }
+        }
+    }
+
     func sendTestEmail(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         // Apply the SMTP configuration
         try applySMTPConfig(req)
