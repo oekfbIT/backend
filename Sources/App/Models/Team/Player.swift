@@ -177,6 +177,7 @@ extension Player {
         let image: String?
         let name: String
         let birthday: String
+        let nationality: String
         let identification: String?
         let email: String?
     }
@@ -187,9 +188,18 @@ extension Player {
             image: image,
             name: name,
             birthday: birthday,
+            nationality: nationality,
             identification: identification,
             email: email
         )
+    }
+
+    var hasCompleteEligibilityApplication: Bool {
+        [image, email, identification, birthday, name].allSatisfy { value in
+            guard let value = value else { return false }
+            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return !["", "n/a", "null", "undefined", "-"].contains(normalized)
+        }
     }
 }
 

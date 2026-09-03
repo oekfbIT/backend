@@ -212,6 +212,12 @@ final class PlayerController: RouteCollection {
         return Player.find(playerID, on: req.db)
             .unwrap(or: Abort(.notFound, reason: "Player not found"))
             .flatMap { player in
+                guard eligibility != .Spielberechtigt || player.hasCompleteEligibilityApplication else {
+                    return req.eventLoop.makeFailedFuture(Abort(
+                        .badRequest,
+                        reason: "Freigabe nicht möglich: Bild, E-Mail-Adresse, Ausweis, Geburtsdatum und Name müssen vorhanden sein."
+                    ))
+                }
                 player.eligibility = eligibility
                 return player.save(on: req.db).flatMap {
                     let recipient = (player.email ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
