@@ -14,6 +14,11 @@ struct SeasonTable: Codable, Content {
     var table: [TableItem]
 }
 
+struct CurrentSeasonResponse: Content {
+    let id: UUID?
+    let name: String
+}
+
 final class Season: Model, Content {
     static let schema = "seasons"
 

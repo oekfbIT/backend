@@ -42,6 +42,7 @@ final class ClientController: RouteCollection {
 
         // Current season table at the root (not behind `path` group). If you want it under the same group, change to `route.get(...)`.
         route.get("leagues", ":code", "current", "table", use: getcurrentSeasonTable)
+        route.get("leagues", ":code", "current", "season", use: getCurrentSeason)
         // e.g. in routes.swift
         route.get("matches", "league", ":code", "primary", use: fetchPrimarySeasonMatches)
         route.get("matches", "league", ":code", "index", use: fetchAllSeasonMatches)
@@ -54,6 +55,16 @@ final class ClientController: RouteCollection {
     }
     
     // MARK: Current Season Table (Primary Season)
+    func getCurrentSeason(req: Request) -> EventLoopFuture<CurrentSeasonResponse> {
+        guard let code = req.parameters.get("code", as: String.self) else {
+            return req.eventLoop.future(error: Abort(.badRequest, reason: "Invalid or missing league code"))
+        }
+
+        return fetchLeagueAndCurrentSeason(code, db: req.db).map { _, season in
+            CurrentSeasonResponse(id: season.id, name: season.name)
+        }
+    }
+
     func getcurrentSeasonTable(req: Request) -> EventLoopFuture<[TableItem]> {
         guard let code = req.parameters.get("code", as: String.self) else {
             return req.eventLoop.future(error: Abort(.badRequest, reason: "Invalid or missing league code"))
