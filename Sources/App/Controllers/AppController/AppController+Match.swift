@@ -465,7 +465,11 @@ extension AppController {
         }
 
         try await match.save(on: req.db)
-        try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
+        do {
+            try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
+        } catch {
+            req.logger.warning("Failed to invalidate statistics after adding a player to the home lineup: \(error)")
+        }
         return .ok
     }
 
@@ -525,7 +529,11 @@ extension AppController {
         }
 
         try await match.save(on: req.db)
-        try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
+        do {
+            try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
+        } catch {
+            req.logger.warning("Failed to invalidate statistics after adding a player to the away lineup: \(error)")
+        }
         return .ok
     }
 
