@@ -100,7 +100,7 @@ final class MatchController: RouteCollection {
         try setupRoutes(on: routes)
     }
     
-    func updateID(req: Request) throws -> EventLoopFuture<Match> {
+    func updateID(req: Request) async throws -> Match {
         do {
             guard let id = req.parameters.get("id", as: UUID.self) else {
                 throw Abort(.badRequest, reason: "Invalid or missing ID parameter.")
@@ -114,18 +114,23 @@ final class MatchController: RouteCollection {
                 throw Abort(.badRequest, reason: "Invalid JSON payload.")
             }
 
-            return Match.find(id, on: req.db)
-                .unwrap(or: Abort(.notFound, reason: "Match not found."))
-                .flatMap { existingMatch in
-                    let mergedMatch = existingMatch.merge(from: updatedItem)
-                    return mergedMatch.update(on: req.db)
-                        .flatMap { StatsCacheManager.invalidateStats(for: mergedMatch, on: req.db) }
-                        .transform(to: mergedMatch)
+            guard let existingMatch = try await Match.find(id, on: req.db) else {
+                throw Abort(.notFound, reason: "Match not found.")
+            }
+
+            let previousSeasonID = existingMatch.$season.id
+            let mergedMatch = existingMatch.merge(from: updatedItem)
+            try await mergedMatch.update(on: req.db)
+            try await StatsCacheManager.invalidateStats(for: mergedMatch, on: req.db).get()
+
+            let affectedSeasonIDs = Set([previousSeasonID, mergedMatch.$season.id].compactMap { $0 })
+            for seasonID in affectedSeasonIDs {
+                if let affectedSeason = try await Season.find(seasonID, on: req.db) {
+                    try await affectedSeason.syncDateRange(on: req.db)
                 }
-                .flatMapErrorThrowing { error in
-                    print("Error updating match: \(error)")
-                    throw error
-                }
+            }
+
+            return mergedMatch
         } catch {
             print("Error in updateID: \(error)")
             throw error

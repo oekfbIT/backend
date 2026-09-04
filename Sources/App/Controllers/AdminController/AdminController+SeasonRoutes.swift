@@ -110,6 +110,10 @@ extension AdminController {
         let team: AdminSeasonTeamOverview
         let hasPaidSeasonFee: Bool?
         let seasonFee: Double?
+        let wins: Int
+        let draws: Int
+        let losses: Int
+        let points: Int
     }
 
     struct AdminSeasonTeamOverview: Content {
@@ -163,14 +167,23 @@ extension AdminController {
                 .all()
         }
 
+        let seasonMatches = try await Match.query(on: req.db)
+            .filter(\.$season.$id == seasonID)
+            .all()
+
         return try records
             .sorted { $0.team.teamName.localizedCaseInsensitiveCompare($1.team.teamName) == .orderedAscending }
             .map {
-                AdminSeasonTeamResponse(
+                let stats = adminSeasonStats(teamID: try $0.team.requireID(), matches: seasonMatches)
+                return AdminSeasonTeamResponse(
                     id: try $0.requireID(),
                     team: try adminSeasonTeamOverview($0.team),
                     hasPaidSeasonFee: $0.hasPaidSeasonFee,
-                    seasonFee: $0.seasonFee
+                    seasonFee: $0.seasonFee,
+                    wins: stats.wins,
+                    draws: stats.draws,
+                    losses: stats.losses,
+                    points: stats.wins * 3 + stats.draws
                 )
             }
     }
@@ -199,12 +212,20 @@ extension AdminController {
 
         try await record.save(on: req.db)
         try await record.$team.load(on: req.db)
+        let matches = try await Match.query(on: req.db)
+            .filter(\.$season.$id == seasonID)
+            .all()
+        let stats = adminSeasonStats(teamID: try record.team.requireID(), matches: matches)
 
         return AdminSeasonTeamResponse(
             id: try record.requireID(),
             team: try adminSeasonTeamOverview(record.team),
             hasPaidSeasonFee: record.hasPaidSeasonFee,
-            seasonFee: record.seasonFee
+            seasonFee: record.seasonFee,
+            wins: stats.wins,
+            draws: stats.draws,
+            losses: stats.losses,
+            points: stats.wins * 3 + stats.draws
         )
     }
 
@@ -222,7 +243,9 @@ extension AdminController {
     }
 
     func getSeasonByID(req: Request) async throws -> Season {
-        try await requireSeason(req: req, param: "id")
+        let season = try await requireSeason(req: req, param: "id")
+        try await season.syncDateRange(on: req.db)
+        return season
     }
 
     /// ✅ GET /admin/seasons/:id/bundle
@@ -355,7 +378,7 @@ extension AdminController {
     }
 
     func patchMatchTime(req: Request) async throws -> Match {
-        let (_, match) = try await requireSeasonAndMatch(req: req)
+        let (season, match) = try await requireSeasonAndMatch(req: req)
         let body = try req.content.decode(PatchMatchTimeRequest.self)
 
         var details = match.details
@@ -363,6 +386,7 @@ extension AdminController {
         match.details = details
 
         try await match.save(on: req.db)
+        try await season.syncDateRange(on: req.db)
         return match
     }
 
@@ -417,6 +441,33 @@ extension AdminController {
 
 // MARK: - Helpers
 private extension AdminController {
+
+    func adminSeasonStats(teamID: UUID, matches: [Match]) -> (wins: Int, draws: Int, losses: Int) {
+        var wins = 0
+        var draws = 0
+        var losses = 0
+
+        for match in matches {
+            let homeID = match.$homeTeam.id
+            let awayID = match.$awayTeam.id
+            guard homeID == teamID || awayID == teamID else { continue }
+
+            switch match.status {
+            case .pending, .first, .halftime, .second, .cancelled:
+                continue
+            default:
+                break
+            }
+
+            let ownScore = homeID == teamID ? match.score.home : match.score.away
+            let opponentScore = homeID == teamID ? match.score.away : match.score.home
+            if ownScore > opponentScore { wins += 1 }
+            else if ownScore == opponentScore { draws += 1 }
+            else { losses += 1 }
+        }
+
+        return (wins, draws, losses)
+    }
 
     func requireSeason(req: Request, param: String) async throws -> Season {
         guard let id = req.parameters.get(param, as: UUID.self) else {

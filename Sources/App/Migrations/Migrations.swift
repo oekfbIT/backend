@@ -34,6 +34,7 @@ let app_migrations: [Migration] = [
     StaticPageContentSeedMigration(),
     SponsorDisplayFieldsMigration(),
     SeasonTeamMigration(),
+    SeasonDateRangeMigration(),
     StatsQueryIndexesMigration()
 ]
 

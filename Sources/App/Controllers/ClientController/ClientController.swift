@@ -84,7 +84,7 @@ final class ClientController: RouteCollection {
                             guard homeId == teamID || awayId == teamID else { continue }
 
                             switch m.status {
-                            case .pending, .first, .halftime, .second:
+                            case .pending, .first, .halftime, .second, .cancelled:
                                 continue
                             default:
                                 break

@@ -23,7 +23,7 @@ final class SeasonController: RouteCollection {
         route.post("batch", use: repository.createBatch)
 
         route.get(use: repository.index)
-        route.get(":id", use: repository.getbyID)
+        route.get(":id", use: getSeasonByID)
         route.delete(":id", use: repository.deleteID)
 
         route.patch(":id", use: repository.updateID)
@@ -37,6 +37,15 @@ final class SeasonController: RouteCollection {
 
     func boot(routes: RoutesBuilder) throws {
         try setupRoutes(on: routes)
+    }
+
+    func getSeasonByID(req: Request) async throws -> Season {
+        guard let seasonID = req.parameters.get("id", as: UUID.self),
+              let season = try await Season.find(seasonID, on: req.db) else {
+            throw Abort(.notFound, reason: "Season not found")
+        }
+        try await season.syncDateRange(on: req.db)
+        return season
     }
     
     // MARK: - Toggle Primary
@@ -92,16 +101,20 @@ final class SeasonController: RouteCollection {
             }
     }
     
-    func getSeasonWithMatches(req: Request) throws -> EventLoopFuture<Season> {
+    func getSeasonWithMatches(req: Request) async throws -> Season {
         guard let seasonID = req.parameters.get("id", as: UUID.self) else {
             throw Abort(.badRequest)
         }
-        
-        return Season.query(on: req.db)
+
+        guard let season = try await Season.query(on: req.db)
             .filter(\.$id == seasonID)
             .with(\.$matches)
             .first()
-            .unwrap(or: Abort(.notFound))
+        else {
+            throw Abort(.notFound)
+        }
+        try await season.syncDateRange(on: req.db)
+        return season
     }
 
 }

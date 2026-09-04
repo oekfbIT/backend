@@ -20,7 +20,7 @@
         "18c9f981d06b9ecbbca5dccec0da09193e68bf52fff5faa73b8bf1e729449266",
         "2581be2489b52f7e45a676964e07f5615ce8ec23d056685044e4ae339fe9dace",
         "b5536aba82bf9db8b9852805003b7f4687c5395ff99dbb6f17d7c8c06c07274c",
-        "8186478d8e6a8481c86e38fe8b822be586ce531a91f8b6ac083731872656af5b",
+        "515a429f4cd83631a78e04ca4f0c05f9c4736321ebf5d053eaa44b57f402efe0",
         "6c900423ed376afa38281956126ddc8d7bd74314061967079095c6d5a67135d8",
         "ed32965886733c26f23e54aab8709d16bbcc0bfbc6003b32ca443a267c52c75f",
         "cf24ec1f93ea6127f64622495b3d9d030d8a0bf10e742334491a4d2ebd732b53",
@@ -43,7 +43,7 @@
         "452062c462a59224c8bde25b023a3c3a134441e36b6840e33b4b95fbb03d2086"
       ]
     },
-    "signature" : "17f0e934500f6ea8a81df287497d67c0da20c0c9ac34b93007f93cadff313b9f",
+    "signature" : "18ff7ab0af768d71f274b76d1d73fad7b0110841b5ccdc2c9297fb478d2f9aeb",
     "type" : "workspace"
   },
   {
@@ -37923,6 +37923,14 @@
                 "path" : "AppTests.swift",
                 "sourceTree" : "<group>",
                 "type" : "file"
+              },
+              {
+                "fileType" : "sourcecode.swift",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_2::REF_1",
+                "name" : "TeamAccountTests.swift",
+                "path" : "TeamAccountTests.swift",
+                "sourceTree" : "<group>",
+                "type" : "file"
               }
             ],
             "guid" : "PACKAGE:be::MAINGROUP::REF_2",
@@ -38048,6 +38056,14 @@
               {
                 "fileType" : "sourcecode.swift",
                 "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_14",
+                "name" : "Controllers/AdminController/AdminController+TeamAccount.swift",
+                "path" : "Controllers/AdminController/AdminController+TeamAccount.swift",
+                "sourceTree" : "<group>",
+                "type" : "file"
+              },
+              {
+                "fileType" : "sourcecode.swift",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_15",
                 "name" : "Controllers/AdminController/AdminController+TeamRoutes.swift",
                 "path" : "Controllers/AdminController/AdminController+TeamRoutes.swift",
                 "sourceTree" : "<group>",
@@ -38055,7 +38071,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_15",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_16",
                 "name" : "Controllers/AdminController/AdminController+UserRoutes.swift",
                 "path" : "Controllers/AdminController/AdminController+UserRoutes.swift",
                 "sourceTree" : "<group>",
@@ -38063,7 +38079,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_16",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_17",
                 "name" : "Controllers/AdminController/AdminController+register.swift",
                 "path" : "Controllers/AdminController/AdminController+register.swift",
                 "sourceTree" : "<group>",
@@ -38071,7 +38087,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_17",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_18",
                 "name" : "Controllers/AdminController/AdminController.swift",
                 "path" : "Controllers/AdminController/AdminController.swift",
                 "sourceTree" : "<group>",
@@ -38079,7 +38095,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_18",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_19",
                 "name" : "Controllers/AdminController/AdminOnlyMiddleware.swift.swift",
                 "path" : "Controllers/AdminController/AdminOnlyMiddleware.swift.swift",
                 "sourceTree" : "<group>",
@@ -38087,7 +38103,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_19",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_20",
                 "name" : "Controllers/AppController/AppController+Auth.swift",
                 "path" : "Controllers/AppController/AppController+Auth.swift",
                 "sourceTree" : "<group>",
@@ -38095,7 +38111,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_20",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_21",
                 "name" : "Controllers/AppController/AppController+Chat.swift",
                 "path" : "Controllers/AppController/AppController+Chat.swift",
                 "sourceTree" : "<group>",
@@ -38103,7 +38119,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_21",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_22",
                 "name" : "Controllers/AppController/AppController+ConversationPush.swift",
                 "path" : "Controllers/AppController/AppController+ConversationPush.swift",
                 "sourceTree" : "<group>",
@@ -38111,7 +38127,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_22",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_23",
                 "name" : "Controllers/AppController/AppController+Follow.swift",
                 "path" : "Controllers/AppController/AppController+Follow.swift",
                 "sourceTree" : "<group>",
@@ -38119,7 +38135,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_23",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_24",
                 "name" : "Controllers/AppController/AppController+Leaderboard.swift",
                 "path" : "Controllers/AppController/AppController+Leaderboard.swift",
                 "sourceTree" : "<group>",
@@ -38127,7 +38143,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_24",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_25",
                 "name" : "Controllers/AppController/AppController+League.swift",
                 "path" : "Controllers/AppController/AppController+League.swift",
                 "sourceTree" : "<group>",
@@ -38135,7 +38151,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_25",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_26",
                 "name" : "Controllers/AppController/AppController+Match.swift",
                 "path" : "Controllers/AppController/AppController+Match.swift",
                 "sourceTree" : "<group>",
@@ -38143,7 +38159,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_26",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_27",
                 "name" : "Controllers/AppController/AppController+News.swift",
                 "path" : "Controllers/AppController/AppController+News.swift",
                 "sourceTree" : "<group>",
@@ -38151,7 +38167,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_27",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_28",
                 "name" : "Controllers/AppController/AppController+Player.swift",
                 "path" : "Controllers/AppController/AppController+Player.swift",
                 "sourceTree" : "<group>",
@@ -38159,7 +38175,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_28",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_29",
                 "name" : "Controllers/AppController/AppController+PlayerRegister.swift",
                 "path" : "Controllers/AppController/AppController+PlayerRegister.swift",
                 "sourceTree" : "<group>",
@@ -38167,7 +38183,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_29",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_30",
                 "name" : "Controllers/AppController/AppController+Push.swift",
                 "path" : "Controllers/AppController/AppController+Push.swift",
                 "sourceTree" : "<group>",
@@ -38175,7 +38191,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_30",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_31",
                 "name" : "Controllers/AppController/AppController+PushDirectToken.swift",
                 "path" : "Controllers/AppController/AppController+PushDirectToken.swift",
                 "sourceTree" : "<group>",
@@ -38183,7 +38199,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_31",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_32",
                 "name" : "Controllers/AppController/AppController+PushManager.swift",
                 "path" : "Controllers/AppController/AppController+PushManager.swift",
                 "sourceTree" : "<group>",
@@ -38191,7 +38207,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_32",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_33",
                 "name" : "Controllers/AppController/AppController+Rechnung.swift",
                 "path" : "Controllers/AppController/AppController+Rechnung.swift",
                 "sourceTree" : "<group>",
@@ -38199,7 +38215,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_33",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_34",
                 "name" : "Controllers/AppController/AppController+Search.swift",
                 "path" : "Controllers/AppController/AppController+Search.swift",
                 "sourceTree" : "<group>",
@@ -38207,7 +38223,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_34",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_35",
                 "name" : "Controllers/AppController/AppController+Sponsor.swift",
                 "path" : "Controllers/AppController/AppController+Sponsor.swift",
                 "sourceTree" : "<group>",
@@ -38215,7 +38231,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_35",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_36",
                 "name" : "Controllers/AppController/AppController+Stadium.swift",
                 "path" : "Controllers/AppController/AppController+Stadium.swift",
                 "sourceTree" : "<group>",
@@ -38223,7 +38239,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_36",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_37",
                 "name" : "Controllers/AppController/AppController+Team.swift",
                 "path" : "Controllers/AppController/AppController+Team.swift",
                 "sourceTree" : "<group>",
@@ -38231,7 +38247,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_37",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_38",
                 "name" : "Controllers/AppController/AppController+TeamRegister.swift",
                 "path" : "Controllers/AppController/AppController+TeamRegister.swift",
                 "sourceTree" : "<group>",
@@ -38239,7 +38255,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_38",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_39",
                 "name" : "Controllers/AppController/AppController+Transfer.swift",
                 "path" : "Controllers/AppController/AppController+Transfer.swift",
                 "sourceTree" : "<group>",
@@ -38247,7 +38263,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_39",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_40",
                 "name" : "Controllers/AppController/AppController+TransferSettings.swift",
                 "path" : "Controllers/AppController/AppController+TransferSettings.swift",
                 "sourceTree" : "<group>",
@@ -38255,7 +38271,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_40",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_41",
                 "name" : "Controllers/AppController/AppController+Voting.swift",
                 "path" : "Controllers/AppController/AppController+Voting.swift",
                 "sourceTree" : "<group>",
@@ -38263,7 +38279,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_41",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_42",
                 "name" : "Controllers/AppController/AppController.swift",
                 "path" : "Controllers/AppController/AppController.swift",
                 "sourceTree" : "<group>",
@@ -38271,7 +38287,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_42",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_43",
                 "name" : "Controllers/AppController/AppModels/AppModels.swift",
                 "path" : "Controllers/AppController/AppModels/AppModels.swift",
                 "sourceTree" : "<group>",
@@ -38279,7 +38295,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_43",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_44",
                 "name" : "Controllers/AppController/CreateFollowSubscription.swift",
                 "path" : "Controllers/AppController/CreateFollowSubscription.swift",
                 "sourceTree" : "<group>",
@@ -38287,7 +38303,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_44",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_45",
                 "name" : "Controllers/ClientController/Caching.swift",
                 "path" : "Controllers/ClientController/Caching.swift",
                 "sourceTree" : "<group>",
@@ -38295,7 +38311,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_45",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_46",
                 "name" : "Controllers/ClientController/ClientController+Search.swift",
                 "path" : "Controllers/ClientController/ClientController+Search.swift",
                 "sourceTree" : "<group>",
@@ -38303,7 +38319,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_46",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_47",
                 "name" : "Controllers/ClientController/ClientController.swift",
                 "path" : "Controllers/ClientController/ClientController.swift",
                 "sourceTree" : "<group>",
@@ -38311,7 +38327,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_47",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_48",
                 "name" : "Controllers/ClientController/Helpers/AppHelper.swift",
                 "path" : "Controllers/ClientController/Helpers/AppHelper.swift",
                 "sourceTree" : "<group>",
@@ -38319,7 +38335,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_48",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_49",
                 "name" : "Controllers/ClientController/Helpers/ClientHelpers.swift",
                 "path" : "Controllers/ClientController/Helpers/ClientHelpers.swift",
                 "sourceTree" : "<group>",
@@ -38327,7 +38343,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_49",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_50",
                 "name" : "Controllers/ClientController/Helpers/Utilities.swift",
                 "path" : "Controllers/ClientController/Helpers/Utilities.swift",
                 "sourceTree" : "<group>",
@@ -38335,7 +38351,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_50",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_51",
                 "name" : "Controllers/ClientController/Models/ClubDetailResponse.swift",
                 "path" : "Controllers/ClientController/Models/ClubDetailResponse.swift",
                 "sourceTree" : "<group>",
@@ -38343,7 +38359,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_51",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_52",
                 "name" : "Controllers/ClientController/Models/HomepageResponse.swift",
                 "path" : "Controllers/ClientController/Models/HomepageResponse.swift",
                 "sourceTree" : "<group>",
@@ -38351,7 +38367,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_52",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_53",
                 "name" : "Controllers/ClientController/Models/MatchEventOutput.swift",
                 "path" : "Controllers/ClientController/Models/MatchEventOutput.swift",
                 "sourceTree" : "<group>",
@@ -38359,7 +38375,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_53",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_54",
                 "name" : "Controllers/ClientController/Models/PlayerDetailResponse.swift",
                 "path" : "Controllers/ClientController/Models/PlayerDetailResponse.swift",
                 "sourceTree" : "<group>",
@@ -38367,7 +38383,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_54",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_55",
                 "name" : "Controllers/ClientController/Models/SperrItem.swift",
                 "path" : "Controllers/ClientController/Models/SperrItem.swift",
                 "sourceTree" : "<group>",
@@ -38375,7 +38391,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_55",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_56",
                 "name" : "Controllers/Common/ConversationController.swift",
                 "path" : "Controllers/Common/ConversationController.swift",
                 "sourceTree" : "<group>",
@@ -38383,7 +38399,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_56",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_57",
                 "name" : "Controllers/Common/DocumentController.swift",
                 "path" : "Controllers/Common/DocumentController.swift",
                 "sourceTree" : "<group>",
@@ -38391,7 +38407,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_57",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_58",
                 "name" : "Controllers/Common/EmailController.swift",
                 "path" : "Controllers/Common/EmailController.swift",
                 "sourceTree" : "<group>",
@@ -38399,7 +38415,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_58",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_59",
                 "name" : "Controllers/Common/ExpoPushService.swift.swift",
                 "path" : "Controllers/Common/ExpoPushService.swift.swift",
                 "sourceTree" : "<group>",
@@ -38407,7 +38423,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_59",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_60",
                 "name" : "Controllers/Common/GameDayController.swift",
                 "path" : "Controllers/Common/GameDayController.swift",
                 "sourceTree" : "<group>",
@@ -38415,7 +38431,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_60",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_61",
                 "name" : "Controllers/Common/HomepageController.swift",
                 "path" : "Controllers/Common/HomepageController.swift",
                 "sourceTree" : "<group>",
@@ -38423,7 +38439,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_61",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_62",
                 "name" : "Controllers/Common/LeagueController.swift",
                 "path" : "Controllers/Common/LeagueController.swift",
                 "sourceTree" : "<group>",
@@ -38431,7 +38447,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_62",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_63",
                 "name" : "Controllers/Common/LegalDocumentController.swift",
                 "path" : "Controllers/Common/LegalDocumentController.swift",
                 "sourceTree" : "<group>",
@@ -38439,7 +38455,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_63",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_64",
                 "name" : "Controllers/Common/MatchController.swift",
                 "path" : "Controllers/Common/MatchController.swift",
                 "sourceTree" : "<group>",
@@ -38447,7 +38463,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_64",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_65",
                 "name" : "Controllers/Common/MatchEventController.swift",
                 "path" : "Controllers/Common/MatchEventController.swift",
                 "sourceTree" : "<group>",
@@ -38455,7 +38471,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_65",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_66",
                 "name" : "Controllers/Common/NewsController.swift",
                 "path" : "Controllers/Common/NewsController.swift",
                 "sourceTree" : "<group>",
@@ -38463,7 +38479,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_66",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_67",
                 "name" : "Controllers/Common/PlayerController.swift",
                 "path" : "Controllers/Common/PlayerController.swift",
                 "sourceTree" : "<group>",
@@ -38471,7 +38487,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_67",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_68",
                 "name" : "Controllers/Common/PostponeRequestController.swift",
                 "path" : "Controllers/Common/PostponeRequestController.swift",
                 "sourceTree" : "<group>",
@@ -38479,7 +38495,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_68",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_69",
                 "name" : "Controllers/Common/RechnungsController.swift",
                 "path" : "Controllers/Common/RechnungsController.swift",
                 "sourceTree" : "<group>",
@@ -38487,7 +38503,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_69",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_70",
                 "name" : "Controllers/Common/RefereeController.swift",
                 "path" : "Controllers/Common/RefereeController.swift",
                 "sourceTree" : "<group>",
@@ -38495,7 +38511,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_70",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_71",
                 "name" : "Controllers/Common/SeasonController.swift",
                 "path" : "Controllers/Common/SeasonController.swift",
                 "sourceTree" : "<group>",
@@ -38503,7 +38519,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_71",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_72",
                 "name" : "Controllers/Common/SponsorController.swift",
                 "path" : "Controllers/Common/SponsorController.swift",
                 "sourceTree" : "<group>",
@@ -38511,7 +38527,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_72",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_73",
                 "name" : "Controllers/Common/StadiumController.swift",
                 "path" : "Controllers/Common/StadiumController.swift",
                 "sourceTree" : "<group>",
@@ -38519,7 +38535,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_73",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_74",
                 "name" : "Controllers/Common/StrafsenatController.swift",
                 "path" : "Controllers/Common/StrafsenatController.swift",
                 "sourceTree" : "<group>",
@@ -38527,7 +38543,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_74",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_75",
                 "name" : "Controllers/Common/TeamController.swift",
                 "path" : "Controllers/Common/TeamController.swift",
                 "sourceTree" : "<group>",
@@ -38535,7 +38551,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_75",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_76",
                 "name" : "Controllers/Common/TeamRegistrationController.swift",
                 "path" : "Controllers/Common/TeamRegistrationController.swift",
                 "sourceTree" : "<group>",
@@ -38543,7 +38559,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_76",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_77",
                 "name" : "Controllers/Common/TransferController.swift",
                 "path" : "Controllers/Common/TransferController.swift",
                 "sourceTree" : "<group>",
@@ -38551,7 +38567,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_77",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_78",
                 "name" : "Controllers/Common/TransferSettingsController.swift",
                 "path" : "Controllers/Common/TransferSettingsController.swift",
                 "sourceTree" : "<group>",
@@ -38559,7 +38575,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_78",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_79",
                 "name" : "Controllers/Common/UserController.swift",
                 "path" : "Controllers/Common/UserController.swift",
                 "sourceTree" : "<group>",
@@ -38567,7 +38583,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_79",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_80",
                 "name" : "Controllers/Push/BroadcastNotificationRequest.swift",
                 "path" : "Controllers/Push/BroadcastNotificationRequest.swift",
                 "sourceTree" : "<group>",
@@ -38575,7 +38591,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_80",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_81",
                 "name" : "Controllers/Push/MatchPushNotifier.swift",
                 "path" : "Controllers/Push/MatchPushNotifier.swift",
                 "sourceTree" : "<group>",
@@ -38583,7 +38599,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_81",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_82",
                 "name" : "Controllers/Push/PostponePushNotifier.swift",
                 "path" : "Controllers/Push/PostponePushNotifier.swift",
                 "sourceTree" : "<group>",
@@ -38591,7 +38607,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_82",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_83",
                 "name" : "Controllers/Push/PushDataBuilder.swift",
                 "path" : "Controllers/Push/PushDataBuilder.swift",
                 "sourceTree" : "<group>",
@@ -38599,7 +38615,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_83",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_84",
                 "name" : "Controllers/Push/PushType.swift",
                 "path" : "Controllers/Push/PushType.swift",
                 "sourceTree" : "<group>",
@@ -38607,7 +38623,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_84",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_85",
                 "name" : "CustomCORSMiddleware.swift",
                 "path" : "CustomCORSMiddleware.swift",
                 "sourceTree" : "<group>",
@@ -38615,7 +38631,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_85",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_86",
                 "name" : "Errors/AppError.swift",
                 "path" : "Errors/AppError.swift",
                 "sourceTree" : "<group>",
@@ -38623,7 +38639,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_86",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_87",
                 "name" : "Errors/UserError.swift",
                 "path" : "Errors/UserError.swift",
                 "sourceTree" : "<group>",
@@ -38631,7 +38647,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_87",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_88",
                 "name" : "Extensions/Date+Extensions.swift",
                 "path" : "Extensions/Date+Extensions.swift",
                 "sourceTree" : "<group>",
@@ -38639,7 +38655,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_88",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_89",
                 "name" : "Extensions/String+Extension.swift",
                 "path" : "Extensions/String+Extension.swift",
                 "sourceTree" : "<group>",
@@ -38647,7 +38663,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_89",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_90",
                 "name" : "Firebase/FirebaseManager.swift",
                 "path" : "Firebase/FirebaseManager.swift",
                 "sourceTree" : "<group>",
@@ -38655,7 +38671,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_90",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_91",
                 "name" : "Flows/Registrations/Models/ContactPerson.swift",
                 "path" : "Flows/Registrations/Models/ContactPerson.swift",
                 "sourceTree" : "<group>",
@@ -38663,7 +38679,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_91",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_92",
                 "name" : "Flows/Registrations/Models/TeamRegistrationRequest.swift",
                 "path" : "Flows/Registrations/Models/TeamRegistrationRequest.swift",
                 "sourceTree" : "<group>",
@@ -38671,7 +38687,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_92",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_93",
                 "name" : "Flows/Registrations/RegistrationProtocol.swift",
                 "path" : "Flows/Registrations/RegistrationProtocol.swift",
                 "sourceTree" : "<group>",
@@ -38679,7 +38695,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_93",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_94",
                 "name" : "Helpers/Email Templates/BaseTemplate.swift",
                 "path" : "Helpers/Email Templates/BaseTemplate.swift",
                 "sourceTree" : "<group>",
@@ -38687,7 +38703,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_94",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_95",
                 "name" : "Helpers/Global Functions/Global.swift",
                 "path" : "Helpers/Global Functions/Global.swift",
                 "sourceTree" : "<group>",
@@ -38695,7 +38711,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_95",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_96",
                 "name" : "Helpers/NextMatchHelper.swift",
                 "path" : "Helpers/NextMatchHelper.swift",
                 "sourceTree" : "<group>",
@@ -38703,7 +38719,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_96",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_97",
                 "name" : "Helpers/NotificationManager.swift",
                 "path" : "Helpers/NotificationManager.swift",
                 "sourceTree" : "<group>",
@@ -38711,7 +38727,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_97",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_98",
                 "name" : "Migrations/Migrations.swift",
                 "path" : "Migrations/Migrations.swift",
                 "sourceTree" : "<group>",
@@ -38719,7 +38735,15 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_98",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_99",
+                "name" : "Migrations/StatsQueryIndexesMigration.swift",
+                "path" : "Migrations/StatsQueryIndexesMigration.swift",
+                "sourceTree" : "<group>",
+                "type" : "file"
+              },
+              {
+                "fileType" : "sourcecode.swift",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_100",
                 "name" : "Models/Admin/PostponeRequest.swift",
                 "path" : "Models/Admin/PostponeRequest.swift",
                 "sourceTree" : "<group>",
@@ -38727,7 +38751,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_99",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_101",
                 "name" : "Models/Conversations/Conversation.swift",
                 "path" : "Models/Conversations/Conversation.swift",
                 "sourceTree" : "<group>",
@@ -38735,7 +38759,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_100",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_102",
                 "name" : "Models/Finance/Rechnung.swift",
                 "path" : "Models/Finance/Rechnung.swift",
                 "sourceTree" : "<group>",
@@ -38743,7 +38767,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_101",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_103",
                 "name" : "Models/FollowSubscription.swift",
                 "path" : "Models/FollowSubscription.swift",
                 "sourceTree" : "<group>",
@@ -38751,7 +38775,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_102",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_104",
                 "name" : "Models/Guestlist/PeopleEvent.swift",
                 "path" : "Models/Guestlist/PeopleEvent.swift",
                 "sourceTree" : "<group>",
@@ -38759,7 +38783,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_103",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_105",
                 "name" : "Models/Guestlist/PeopleEventController.swift",
                 "path" : "Models/Guestlist/PeopleEventController.swift",
                 "sourceTree" : "<group>",
@@ -38767,7 +38791,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_104",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_106",
                 "name" : "Models/Guestlist/PeopleEventGuest.swift",
                 "path" : "Models/Guestlist/PeopleEventGuest.swift",
                 "sourceTree" : "<group>",
@@ -38775,7 +38799,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_105",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_107",
                 "name" : "Models/League/GameDay.swift",
                 "path" : "Models/League/GameDay.swift",
                 "sourceTree" : "<group>",
@@ -38783,7 +38807,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_106",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_108",
                 "name" : "Models/League/League.swift",
                 "path" : "Models/League/League.swift",
                 "sourceTree" : "<group>",
@@ -38791,7 +38815,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_107",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_109",
                 "name" : "Models/League/Match.swift",
                 "path" : "Models/League/Match.swift",
                 "sourceTree" : "<group>",
@@ -38799,7 +38823,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_108",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_110",
                 "name" : "Models/League/MatchEventMakePlayerNullableMigration.swift",
                 "path" : "Models/League/MatchEventMakePlayerNullableMigration.swift",
                 "sourceTree" : "<group>",
@@ -38807,7 +38831,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_109",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_111",
                 "name" : "Models/League/Season.swift",
                 "path" : "Models/League/Season.swift",
                 "sourceTree" : "<group>",
@@ -38815,7 +38839,15 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_110",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_112",
+                "name" : "Models/League/SeasonTeam.swift",
+                "path" : "Models/League/SeasonTeam.swift",
+                "sourceTree" : "<group>",
+                "type" : "file"
+              },
+              {
+                "fileType" : "sourcecode.swift",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_113",
                 "name" : "Models/League/Stadium.swift",
                 "path" : "Models/League/Stadium.swift",
                 "sourceTree" : "<group>",
@@ -38823,7 +38855,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_111",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_114",
                 "name" : "Models/Legal/LegalSection.swift",
                 "path" : "Models/Legal/LegalSection.swift",
                 "sourceTree" : "<group>",
@@ -38831,7 +38863,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_112",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_115",
                 "name" : "Models/News/News.swift",
                 "path" : "Models/News/News.swift",
                 "sourceTree" : "<group>",
@@ -38839,7 +38871,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_113",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_116",
                 "name" : "Models/Push/DeviceToken.swift",
                 "path" : "Models/Push/DeviceToken.swift",
                 "sourceTree" : "<group>",
@@ -38847,7 +38879,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_114",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_117",
                 "name" : "Models/Push/PushNotificationLog.swift",
                 "path" : "Models/Push/PushNotificationLog.swift",
                 "sourceTree" : "<group>",
@@ -38855,7 +38887,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_115",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_118",
                 "name" : "Models/Rule.swift",
                 "path" : "Models/Rule.swift",
                 "sourceTree" : "<group>",
@@ -38863,7 +38895,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_116",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_119",
                 "name" : "Models/Sponsor/Sponsor.swift",
                 "path" : "Models/Sponsor/Sponsor.swift",
                 "sourceTree" : "<group>",
@@ -38871,7 +38903,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_117",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_120",
                 "name" : "Models/Strafsenat/Strafsenat.swift",
                 "path" : "Models/Strafsenat/Strafsenat.swift",
                 "sourceTree" : "<group>",
@@ -38879,7 +38911,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_118",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_121",
                 "name" : "Models/TODO/Document.swift",
                 "path" : "Models/TODO/Document.swift",
                 "sourceTree" : "<group>",
@@ -38887,7 +38919,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_119",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_122",
                 "name" : "Models/Team/Achivement.swift",
                 "path" : "Models/Team/Achivement.swift",
                 "sourceTree" : "<group>",
@@ -38895,7 +38927,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_120",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_123",
                 "name" : "Models/Team/Cache.swift",
                 "path" : "Models/Team/Cache.swift",
                 "sourceTree" : "<group>",
@@ -38903,7 +38935,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_121",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_124",
                 "name" : "Models/Team/Enums.swift",
                 "path" : "Models/Team/Enums.swift",
                 "sourceTree" : "<group>",
@@ -38911,7 +38943,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_122",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_125",
                 "name" : "Models/Team/MatchTeam.swift",
                 "path" : "Models/Team/MatchTeam.swift",
                 "sourceTree" : "<group>",
@@ -38919,7 +38951,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_123",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_126",
                 "name" : "Models/Team/Matchevent.swift",
                 "path" : "Models/Team/Matchevent.swift",
                 "sourceTree" : "<group>",
@@ -38927,7 +38959,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_124",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_127",
                 "name" : "Models/Team/Player.swift",
                 "path" : "Models/Team/Player.swift",
                 "sourceTree" : "<group>",
@@ -38935,7 +38967,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_125",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_128",
                 "name" : "Models/Team/Referee.swift",
                 "path" : "Models/Team/Referee.swift",
                 "sourceTree" : "<group>",
@@ -38943,7 +38975,15 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_126",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_129",
+                "name" : "Models/Team/StatisticsServices.swift",
+                "path" : "Models/Team/StatisticsServices.swift",
+                "sourceTree" : "<group>",
+                "type" : "file"
+              },
+              {
+                "fileType" : "sourcecode.swift",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_130",
                 "name" : "Models/Team/Team.swift",
                 "path" : "Models/Team/Team.swift",
                 "sourceTree" : "<group>",
@@ -38951,7 +38991,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_127",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_131",
                 "name" : "Models/TeamRegistration/TeamRegistration.swift",
                 "path" : "Models/TeamRegistration/TeamRegistration.swift",
                 "sourceTree" : "<group>",
@@ -38959,7 +38999,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_128",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_132",
                 "name" : "Models/Transfer/Transfer.swift",
                 "path" : "Models/Transfer/Transfer.swift",
                 "sourceTree" : "<group>",
@@ -38967,7 +39007,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_129",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_133",
                 "name" : "Models/Transfer/TransferSettings.swift",
                 "path" : "Models/Transfer/TransferSettings.swift",
                 "sourceTree" : "<group>",
@@ -38975,7 +39015,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_130",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_134",
                 "name" : "Models/User/Token.swift",
                 "path" : "Models/User/Token.swift",
                 "sourceTree" : "<group>",
@@ -38983,7 +39023,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_131",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_135",
                 "name" : "Models/User/User.swift",
                 "path" : "Models/User/User.swift",
                 "sourceTree" : "<group>",
@@ -38991,7 +39031,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_132",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_136",
                 "name" : "Models/User/UserSignup.swift",
                 "path" : "Models/User/UserSignup.swift",
                 "sourceTree" : "<group>",
@@ -38999,7 +39039,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_133",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_137",
                 "name" : "Models/User/UserVerificationToken.swift",
                 "path" : "Models/User/UserVerificationToken.swift",
                 "sourceTree" : "<group>",
@@ -39007,7 +39047,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_134",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_138",
                 "name" : "Models/Verification Code/VerificationCode.swift",
                 "path" : "Models/Verification Code/VerificationCode.swift",
                 "sourceTree" : "<group>",
@@ -39015,7 +39055,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_135",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_139",
                 "name" : "Models/VoteItem/VoteItem.swift",
                 "path" : "Models/VoteItem/VoteItem.swift",
                 "sourceTree" : "<group>",
@@ -39023,7 +39063,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_136",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_140",
                 "name" : "OpenAPI/OpenAPISupport.swift",
                 "path" : "OpenAPI/OpenAPISupport.swift",
                 "sourceTree" : "<group>",
@@ -39031,7 +39071,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_137",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_141",
                 "name" : "Protocols/BackendRepository.swift",
                 "path" : "Protocols/BackendRepository.swift",
                 "sourceTree" : "<group>",
@@ -39039,7 +39079,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_138",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_142",
                 "name" : "Protocols/ControllerProtocols.swift",
                 "path" : "Protocols/ControllerProtocols.swift",
                 "sourceTree" : "<group>",
@@ -39047,7 +39087,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_139",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_143",
                 "name" : "Protocols/StandardControllerRepository.swift",
                 "path" : "Protocols/StandardControllerRepository.swift",
                 "sourceTree" : "<group>",
@@ -39055,7 +39095,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_140",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_144",
                 "name" : "Services/FCMService.swift",
                 "path" : "Services/FCMService.swift",
                 "sourceTree" : "<group>",
@@ -39063,7 +39103,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_141",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_145",
                 "name" : "Shared/AppState.swift",
                 "path" : "Shared/AppState.swift",
                 "sourceTree" : "<group>",
@@ -39071,7 +39111,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_142",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_146",
                 "name" : "Tokashim/TokashimTestView.swift",
                 "path" : "Tokashim/TokashimTestView.swift",
                 "sourceTree" : "<group>",
@@ -39079,7 +39119,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_143",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_147",
                 "name" : "WebScraping/APIClient.swift",
                 "path" : "WebScraping/APIClient.swift",
                 "sourceTree" : "<group>",
@@ -39087,7 +39127,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_144",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_148",
                 "name" : "WebScraping/ScraperDetailController.swift",
                 "path" : "WebScraping/ScraperDetailController.swift",
                 "sourceTree" : "<group>",
@@ -39095,7 +39135,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_145",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_149",
                 "name" : "WebScraping/ScraperProtocol.swift",
                 "path" : "WebScraping/ScraperProtocol.swift",
                 "sourceTree" : "<group>",
@@ -39103,7 +39143,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_146",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_150",
                 "name" : "configure.swift",
                 "path" : "configure.swift",
                 "sourceTree" : "<group>",
@@ -39111,7 +39151,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_147",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_151",
                 "name" : "entrypoint.swift",
                 "path" : "entrypoint.swift",
                 "sourceTree" : "<group>",
@@ -39119,7 +39159,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_148",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_3::REF_152",
                 "name" : "routes.swift",
                 "path" : "routes.swift",
                 "sourceTree" : "<group>",
@@ -39249,6 +39289,14 @@
               {
                 "fileType" : "sourcecode.swift",
                 "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_14",
+                "name" : "Controllers/AdminController/AdminController+TeamAccount.swift",
+                "path" : "Controllers/AdminController/AdminController+TeamAccount.swift",
+                "sourceTree" : "<group>",
+                "type" : "file"
+              },
+              {
+                "fileType" : "sourcecode.swift",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_15",
                 "name" : "Controllers/AdminController/AdminController+TeamRoutes.swift",
                 "path" : "Controllers/AdminController/AdminController+TeamRoutes.swift",
                 "sourceTree" : "<group>",
@@ -39256,7 +39304,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_15",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_16",
                 "name" : "Controllers/AdminController/AdminController+UserRoutes.swift",
                 "path" : "Controllers/AdminController/AdminController+UserRoutes.swift",
                 "sourceTree" : "<group>",
@@ -39264,7 +39312,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_16",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_17",
                 "name" : "Controllers/AdminController/AdminController+register.swift",
                 "path" : "Controllers/AdminController/AdminController+register.swift",
                 "sourceTree" : "<group>",
@@ -39272,7 +39320,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_17",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_18",
                 "name" : "Controllers/AdminController/AdminController.swift",
                 "path" : "Controllers/AdminController/AdminController.swift",
                 "sourceTree" : "<group>",
@@ -39280,7 +39328,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_18",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_19",
                 "name" : "Controllers/AdminController/AdminOnlyMiddleware.swift.swift",
                 "path" : "Controllers/AdminController/AdminOnlyMiddleware.swift.swift",
                 "sourceTree" : "<group>",
@@ -39288,7 +39336,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_19",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_20",
                 "name" : "Controllers/AppController/AppController+Auth.swift",
                 "path" : "Controllers/AppController/AppController+Auth.swift",
                 "sourceTree" : "<group>",
@@ -39296,7 +39344,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_20",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_21",
                 "name" : "Controllers/AppController/AppController+Chat.swift",
                 "path" : "Controllers/AppController/AppController+Chat.swift",
                 "sourceTree" : "<group>",
@@ -39304,7 +39352,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_21",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_22",
                 "name" : "Controllers/AppController/AppController+ConversationPush.swift",
                 "path" : "Controllers/AppController/AppController+ConversationPush.swift",
                 "sourceTree" : "<group>",
@@ -39312,7 +39360,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_22",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_23",
                 "name" : "Controllers/AppController/AppController+Follow.swift",
                 "path" : "Controllers/AppController/AppController+Follow.swift",
                 "sourceTree" : "<group>",
@@ -39320,7 +39368,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_23",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_24",
                 "name" : "Controllers/AppController/AppController+Leaderboard.swift",
                 "path" : "Controllers/AppController/AppController+Leaderboard.swift",
                 "sourceTree" : "<group>",
@@ -39328,7 +39376,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_24",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_25",
                 "name" : "Controllers/AppController/AppController+League.swift",
                 "path" : "Controllers/AppController/AppController+League.swift",
                 "sourceTree" : "<group>",
@@ -39336,7 +39384,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_25",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_26",
                 "name" : "Controllers/AppController/AppController+Match.swift",
                 "path" : "Controllers/AppController/AppController+Match.swift",
                 "sourceTree" : "<group>",
@@ -39344,7 +39392,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_26",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_27",
                 "name" : "Controllers/AppController/AppController+News.swift",
                 "path" : "Controllers/AppController/AppController+News.swift",
                 "sourceTree" : "<group>",
@@ -39352,7 +39400,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_27",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_28",
                 "name" : "Controllers/AppController/AppController+Player.swift",
                 "path" : "Controllers/AppController/AppController+Player.swift",
                 "sourceTree" : "<group>",
@@ -39360,7 +39408,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_28",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_29",
                 "name" : "Controllers/AppController/AppController+PlayerRegister.swift",
                 "path" : "Controllers/AppController/AppController+PlayerRegister.swift",
                 "sourceTree" : "<group>",
@@ -39368,7 +39416,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_29",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_30",
                 "name" : "Controllers/AppController/AppController+Push.swift",
                 "path" : "Controllers/AppController/AppController+Push.swift",
                 "sourceTree" : "<group>",
@@ -39376,7 +39424,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_30",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_31",
                 "name" : "Controllers/AppController/AppController+PushDirectToken.swift",
                 "path" : "Controllers/AppController/AppController+PushDirectToken.swift",
                 "sourceTree" : "<group>",
@@ -39384,7 +39432,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_31",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_32",
                 "name" : "Controllers/AppController/AppController+PushManager.swift",
                 "path" : "Controllers/AppController/AppController+PushManager.swift",
                 "sourceTree" : "<group>",
@@ -39392,7 +39440,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_32",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_33",
                 "name" : "Controllers/AppController/AppController+Rechnung.swift",
                 "path" : "Controllers/AppController/AppController+Rechnung.swift",
                 "sourceTree" : "<group>",
@@ -39400,7 +39448,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_33",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_34",
                 "name" : "Controllers/AppController/AppController+Search.swift",
                 "path" : "Controllers/AppController/AppController+Search.swift",
                 "sourceTree" : "<group>",
@@ -39408,7 +39456,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_34",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_35",
                 "name" : "Controllers/AppController/AppController+Sponsor.swift",
                 "path" : "Controllers/AppController/AppController+Sponsor.swift",
                 "sourceTree" : "<group>",
@@ -39416,7 +39464,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_35",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_36",
                 "name" : "Controllers/AppController/AppController+Stadium.swift",
                 "path" : "Controllers/AppController/AppController+Stadium.swift",
                 "sourceTree" : "<group>",
@@ -39424,7 +39472,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_36",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_37",
                 "name" : "Controllers/AppController/AppController+Team.swift",
                 "path" : "Controllers/AppController/AppController+Team.swift",
                 "sourceTree" : "<group>",
@@ -39432,7 +39480,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_37",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_38",
                 "name" : "Controllers/AppController/AppController+TeamRegister.swift",
                 "path" : "Controllers/AppController/AppController+TeamRegister.swift",
                 "sourceTree" : "<group>",
@@ -39440,7 +39488,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_38",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_39",
                 "name" : "Controllers/AppController/AppController+Transfer.swift",
                 "path" : "Controllers/AppController/AppController+Transfer.swift",
                 "sourceTree" : "<group>",
@@ -39448,7 +39496,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_39",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_40",
                 "name" : "Controllers/AppController/AppController+TransferSettings.swift",
                 "path" : "Controllers/AppController/AppController+TransferSettings.swift",
                 "sourceTree" : "<group>",
@@ -39456,7 +39504,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_40",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_41",
                 "name" : "Controllers/AppController/AppController+Voting.swift",
                 "path" : "Controllers/AppController/AppController+Voting.swift",
                 "sourceTree" : "<group>",
@@ -39464,7 +39512,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_41",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_42",
                 "name" : "Controllers/AppController/AppController.swift",
                 "path" : "Controllers/AppController/AppController.swift",
                 "sourceTree" : "<group>",
@@ -39472,7 +39520,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_42",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_43",
                 "name" : "Controllers/AppController/AppModels/AppModels.swift",
                 "path" : "Controllers/AppController/AppModels/AppModels.swift",
                 "sourceTree" : "<group>",
@@ -39480,7 +39528,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_43",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_44",
                 "name" : "Controllers/AppController/CreateFollowSubscription.swift",
                 "path" : "Controllers/AppController/CreateFollowSubscription.swift",
                 "sourceTree" : "<group>",
@@ -39488,7 +39536,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_44",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_45",
                 "name" : "Controllers/ClientController/Caching.swift",
                 "path" : "Controllers/ClientController/Caching.swift",
                 "sourceTree" : "<group>",
@@ -39496,7 +39544,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_45",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_46",
                 "name" : "Controllers/ClientController/ClientController+Search.swift",
                 "path" : "Controllers/ClientController/ClientController+Search.swift",
                 "sourceTree" : "<group>",
@@ -39504,7 +39552,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_46",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_47",
                 "name" : "Controllers/ClientController/ClientController.swift",
                 "path" : "Controllers/ClientController/ClientController.swift",
                 "sourceTree" : "<group>",
@@ -39512,7 +39560,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_47",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_48",
                 "name" : "Controllers/ClientController/Helpers/AppHelper.swift",
                 "path" : "Controllers/ClientController/Helpers/AppHelper.swift",
                 "sourceTree" : "<group>",
@@ -39520,7 +39568,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_48",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_49",
                 "name" : "Controllers/ClientController/Helpers/ClientHelpers.swift",
                 "path" : "Controllers/ClientController/Helpers/ClientHelpers.swift",
                 "sourceTree" : "<group>",
@@ -39528,7 +39576,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_49",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_50",
                 "name" : "Controllers/ClientController/Helpers/Utilities.swift",
                 "path" : "Controllers/ClientController/Helpers/Utilities.swift",
                 "sourceTree" : "<group>",
@@ -39536,7 +39584,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_50",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_51",
                 "name" : "Controllers/ClientController/Models/ClubDetailResponse.swift",
                 "path" : "Controllers/ClientController/Models/ClubDetailResponse.swift",
                 "sourceTree" : "<group>",
@@ -39544,7 +39592,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_51",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_52",
                 "name" : "Controllers/ClientController/Models/HomepageResponse.swift",
                 "path" : "Controllers/ClientController/Models/HomepageResponse.swift",
                 "sourceTree" : "<group>",
@@ -39552,7 +39600,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_52",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_53",
                 "name" : "Controllers/ClientController/Models/MatchEventOutput.swift",
                 "path" : "Controllers/ClientController/Models/MatchEventOutput.swift",
                 "sourceTree" : "<group>",
@@ -39560,7 +39608,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_53",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_54",
                 "name" : "Controllers/ClientController/Models/PlayerDetailResponse.swift",
                 "path" : "Controllers/ClientController/Models/PlayerDetailResponse.swift",
                 "sourceTree" : "<group>",
@@ -39568,7 +39616,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_54",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_55",
                 "name" : "Controllers/ClientController/Models/SperrItem.swift",
                 "path" : "Controllers/ClientController/Models/SperrItem.swift",
                 "sourceTree" : "<group>",
@@ -39576,7 +39624,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_55",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_56",
                 "name" : "Controllers/Common/ConversationController.swift",
                 "path" : "Controllers/Common/ConversationController.swift",
                 "sourceTree" : "<group>",
@@ -39584,7 +39632,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_56",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_57",
                 "name" : "Controllers/Common/DocumentController.swift",
                 "path" : "Controllers/Common/DocumentController.swift",
                 "sourceTree" : "<group>",
@@ -39592,7 +39640,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_57",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_58",
                 "name" : "Controllers/Common/EmailController.swift",
                 "path" : "Controllers/Common/EmailController.swift",
                 "sourceTree" : "<group>",
@@ -39600,7 +39648,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_58",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_59",
                 "name" : "Controllers/Common/ExpoPushService.swift.swift",
                 "path" : "Controllers/Common/ExpoPushService.swift.swift",
                 "sourceTree" : "<group>",
@@ -39608,7 +39656,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_59",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_60",
                 "name" : "Controllers/Common/GameDayController.swift",
                 "path" : "Controllers/Common/GameDayController.swift",
                 "sourceTree" : "<group>",
@@ -39616,7 +39664,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_60",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_61",
                 "name" : "Controllers/Common/HomepageController.swift",
                 "path" : "Controllers/Common/HomepageController.swift",
                 "sourceTree" : "<group>",
@@ -39624,7 +39672,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_61",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_62",
                 "name" : "Controllers/Common/LeagueController.swift",
                 "path" : "Controllers/Common/LeagueController.swift",
                 "sourceTree" : "<group>",
@@ -39632,7 +39680,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_62",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_63",
                 "name" : "Controllers/Common/LegalDocumentController.swift",
                 "path" : "Controllers/Common/LegalDocumentController.swift",
                 "sourceTree" : "<group>",
@@ -39640,7 +39688,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_63",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_64",
                 "name" : "Controllers/Common/MatchController.swift",
                 "path" : "Controllers/Common/MatchController.swift",
                 "sourceTree" : "<group>",
@@ -39648,7 +39696,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_64",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_65",
                 "name" : "Controllers/Common/MatchEventController.swift",
                 "path" : "Controllers/Common/MatchEventController.swift",
                 "sourceTree" : "<group>",
@@ -39656,7 +39704,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_65",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_66",
                 "name" : "Controllers/Common/NewsController.swift",
                 "path" : "Controllers/Common/NewsController.swift",
                 "sourceTree" : "<group>",
@@ -39664,7 +39712,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_66",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_67",
                 "name" : "Controllers/Common/PlayerController.swift",
                 "path" : "Controllers/Common/PlayerController.swift",
                 "sourceTree" : "<group>",
@@ -39672,7 +39720,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_67",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_68",
                 "name" : "Controllers/Common/PostponeRequestController.swift",
                 "path" : "Controllers/Common/PostponeRequestController.swift",
                 "sourceTree" : "<group>",
@@ -39680,7 +39728,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_68",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_69",
                 "name" : "Controllers/Common/RechnungsController.swift",
                 "path" : "Controllers/Common/RechnungsController.swift",
                 "sourceTree" : "<group>",
@@ -39688,7 +39736,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_69",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_70",
                 "name" : "Controllers/Common/RefereeController.swift",
                 "path" : "Controllers/Common/RefereeController.swift",
                 "sourceTree" : "<group>",
@@ -39696,7 +39744,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_70",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_71",
                 "name" : "Controllers/Common/SeasonController.swift",
                 "path" : "Controllers/Common/SeasonController.swift",
                 "sourceTree" : "<group>",
@@ -39704,7 +39752,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_71",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_72",
                 "name" : "Controllers/Common/SponsorController.swift",
                 "path" : "Controllers/Common/SponsorController.swift",
                 "sourceTree" : "<group>",
@@ -39712,7 +39760,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_72",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_73",
                 "name" : "Controllers/Common/StadiumController.swift",
                 "path" : "Controllers/Common/StadiumController.swift",
                 "sourceTree" : "<group>",
@@ -39720,7 +39768,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_73",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_74",
                 "name" : "Controllers/Common/StrafsenatController.swift",
                 "path" : "Controllers/Common/StrafsenatController.swift",
                 "sourceTree" : "<group>",
@@ -39728,7 +39776,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_74",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_75",
                 "name" : "Controllers/Common/TeamController.swift",
                 "path" : "Controllers/Common/TeamController.swift",
                 "sourceTree" : "<group>",
@@ -39736,7 +39784,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_75",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_76",
                 "name" : "Controllers/Common/TeamRegistrationController.swift",
                 "path" : "Controllers/Common/TeamRegistrationController.swift",
                 "sourceTree" : "<group>",
@@ -39744,7 +39792,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_76",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_77",
                 "name" : "Controllers/Common/TransferController.swift",
                 "path" : "Controllers/Common/TransferController.swift",
                 "sourceTree" : "<group>",
@@ -39752,7 +39800,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_77",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_78",
                 "name" : "Controllers/Common/TransferSettingsController.swift",
                 "path" : "Controllers/Common/TransferSettingsController.swift",
                 "sourceTree" : "<group>",
@@ -39760,7 +39808,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_78",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_79",
                 "name" : "Controllers/Common/UserController.swift",
                 "path" : "Controllers/Common/UserController.swift",
                 "sourceTree" : "<group>",
@@ -39768,7 +39816,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_79",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_80",
                 "name" : "Controllers/Push/BroadcastNotificationRequest.swift",
                 "path" : "Controllers/Push/BroadcastNotificationRequest.swift",
                 "sourceTree" : "<group>",
@@ -39776,7 +39824,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_80",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_81",
                 "name" : "Controllers/Push/MatchPushNotifier.swift",
                 "path" : "Controllers/Push/MatchPushNotifier.swift",
                 "sourceTree" : "<group>",
@@ -39784,7 +39832,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_81",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_82",
                 "name" : "Controllers/Push/PostponePushNotifier.swift",
                 "path" : "Controllers/Push/PostponePushNotifier.swift",
                 "sourceTree" : "<group>",
@@ -39792,7 +39840,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_82",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_83",
                 "name" : "Controllers/Push/PushDataBuilder.swift",
                 "path" : "Controllers/Push/PushDataBuilder.swift",
                 "sourceTree" : "<group>",
@@ -39800,7 +39848,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_83",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_84",
                 "name" : "Controllers/Push/PushType.swift",
                 "path" : "Controllers/Push/PushType.swift",
                 "sourceTree" : "<group>",
@@ -39808,7 +39856,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_84",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_85",
                 "name" : "CustomCORSMiddleware.swift",
                 "path" : "CustomCORSMiddleware.swift",
                 "sourceTree" : "<group>",
@@ -39816,7 +39864,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_85",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_86",
                 "name" : "Errors/AppError.swift",
                 "path" : "Errors/AppError.swift",
                 "sourceTree" : "<group>",
@@ -39824,7 +39872,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_86",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_87",
                 "name" : "Errors/UserError.swift",
                 "path" : "Errors/UserError.swift",
                 "sourceTree" : "<group>",
@@ -39832,7 +39880,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_87",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_88",
                 "name" : "Extensions/Date+Extensions.swift",
                 "path" : "Extensions/Date+Extensions.swift",
                 "sourceTree" : "<group>",
@@ -39840,7 +39888,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_88",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_89",
                 "name" : "Extensions/String+Extension.swift",
                 "path" : "Extensions/String+Extension.swift",
                 "sourceTree" : "<group>",
@@ -39848,7 +39896,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_89",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_90",
                 "name" : "Firebase/FirebaseManager.swift",
                 "path" : "Firebase/FirebaseManager.swift",
                 "sourceTree" : "<group>",
@@ -39856,7 +39904,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_90",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_91",
                 "name" : "Flows/Registrations/Models/ContactPerson.swift",
                 "path" : "Flows/Registrations/Models/ContactPerson.swift",
                 "sourceTree" : "<group>",
@@ -39864,7 +39912,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_91",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_92",
                 "name" : "Flows/Registrations/Models/TeamRegistrationRequest.swift",
                 "path" : "Flows/Registrations/Models/TeamRegistrationRequest.swift",
                 "sourceTree" : "<group>",
@@ -39872,7 +39920,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_92",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_93",
                 "name" : "Flows/Registrations/RegistrationProtocol.swift",
                 "path" : "Flows/Registrations/RegistrationProtocol.swift",
                 "sourceTree" : "<group>",
@@ -39880,7 +39928,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_93",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_94",
                 "name" : "Helpers/Email Templates/BaseTemplate.swift",
                 "path" : "Helpers/Email Templates/BaseTemplate.swift",
                 "sourceTree" : "<group>",
@@ -39888,7 +39936,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_94",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_95",
                 "name" : "Helpers/Global Functions/Global.swift",
                 "path" : "Helpers/Global Functions/Global.swift",
                 "sourceTree" : "<group>",
@@ -39896,7 +39944,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_95",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_96",
                 "name" : "Helpers/NextMatchHelper.swift",
                 "path" : "Helpers/NextMatchHelper.swift",
                 "sourceTree" : "<group>",
@@ -39904,7 +39952,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_96",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_97",
                 "name" : "Helpers/NotificationManager.swift",
                 "path" : "Helpers/NotificationManager.swift",
                 "sourceTree" : "<group>",
@@ -39912,7 +39960,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_97",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_98",
                 "name" : "Migrations/Migrations.swift",
                 "path" : "Migrations/Migrations.swift",
                 "sourceTree" : "<group>",
@@ -39920,7 +39968,15 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_98",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_99",
+                "name" : "Migrations/StatsQueryIndexesMigration.swift",
+                "path" : "Migrations/StatsQueryIndexesMigration.swift",
+                "sourceTree" : "<group>",
+                "type" : "file"
+              },
+              {
+                "fileType" : "sourcecode.swift",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_100",
                 "name" : "Models/Admin/PostponeRequest.swift",
                 "path" : "Models/Admin/PostponeRequest.swift",
                 "sourceTree" : "<group>",
@@ -39928,7 +39984,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_99",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_101",
                 "name" : "Models/Conversations/Conversation.swift",
                 "path" : "Models/Conversations/Conversation.swift",
                 "sourceTree" : "<group>",
@@ -39936,7 +39992,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_100",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_102",
                 "name" : "Models/Finance/Rechnung.swift",
                 "path" : "Models/Finance/Rechnung.swift",
                 "sourceTree" : "<group>",
@@ -39944,7 +40000,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_101",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_103",
                 "name" : "Models/FollowSubscription.swift",
                 "path" : "Models/FollowSubscription.swift",
                 "sourceTree" : "<group>",
@@ -39952,7 +40008,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_102",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_104",
                 "name" : "Models/Guestlist/PeopleEvent.swift",
                 "path" : "Models/Guestlist/PeopleEvent.swift",
                 "sourceTree" : "<group>",
@@ -39960,7 +40016,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_103",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_105",
                 "name" : "Models/Guestlist/PeopleEventController.swift",
                 "path" : "Models/Guestlist/PeopleEventController.swift",
                 "sourceTree" : "<group>",
@@ -39968,7 +40024,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_104",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_106",
                 "name" : "Models/Guestlist/PeopleEventGuest.swift",
                 "path" : "Models/Guestlist/PeopleEventGuest.swift",
                 "sourceTree" : "<group>",
@@ -39976,7 +40032,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_105",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_107",
                 "name" : "Models/League/GameDay.swift",
                 "path" : "Models/League/GameDay.swift",
                 "sourceTree" : "<group>",
@@ -39984,7 +40040,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_106",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_108",
                 "name" : "Models/League/League.swift",
                 "path" : "Models/League/League.swift",
                 "sourceTree" : "<group>",
@@ -39992,7 +40048,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_107",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_109",
                 "name" : "Models/League/Match.swift",
                 "path" : "Models/League/Match.swift",
                 "sourceTree" : "<group>",
@@ -40000,7 +40056,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_108",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_110",
                 "name" : "Models/League/MatchEventMakePlayerNullableMigration.swift",
                 "path" : "Models/League/MatchEventMakePlayerNullableMigration.swift",
                 "sourceTree" : "<group>",
@@ -40008,7 +40064,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_109",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_111",
                 "name" : "Models/League/Season.swift",
                 "path" : "Models/League/Season.swift",
                 "sourceTree" : "<group>",
@@ -40016,7 +40072,15 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_110",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_112",
+                "name" : "Models/League/SeasonTeam.swift",
+                "path" : "Models/League/SeasonTeam.swift",
+                "sourceTree" : "<group>",
+                "type" : "file"
+              },
+              {
+                "fileType" : "sourcecode.swift",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_113",
                 "name" : "Models/League/Stadium.swift",
                 "path" : "Models/League/Stadium.swift",
                 "sourceTree" : "<group>",
@@ -40024,7 +40088,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_111",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_114",
                 "name" : "Models/Legal/LegalSection.swift",
                 "path" : "Models/Legal/LegalSection.swift",
                 "sourceTree" : "<group>",
@@ -40032,7 +40096,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_112",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_115",
                 "name" : "Models/News/News.swift",
                 "path" : "Models/News/News.swift",
                 "sourceTree" : "<group>",
@@ -40040,7 +40104,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_113",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_116",
                 "name" : "Models/Push/DeviceToken.swift",
                 "path" : "Models/Push/DeviceToken.swift",
                 "sourceTree" : "<group>",
@@ -40048,7 +40112,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_114",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_117",
                 "name" : "Models/Push/PushNotificationLog.swift",
                 "path" : "Models/Push/PushNotificationLog.swift",
                 "sourceTree" : "<group>",
@@ -40056,7 +40120,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_115",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_118",
                 "name" : "Models/Rule.swift",
                 "path" : "Models/Rule.swift",
                 "sourceTree" : "<group>",
@@ -40064,7 +40128,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_116",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_119",
                 "name" : "Models/Sponsor/Sponsor.swift",
                 "path" : "Models/Sponsor/Sponsor.swift",
                 "sourceTree" : "<group>",
@@ -40072,7 +40136,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_117",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_120",
                 "name" : "Models/Strafsenat/Strafsenat.swift",
                 "path" : "Models/Strafsenat/Strafsenat.swift",
                 "sourceTree" : "<group>",
@@ -40080,7 +40144,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_118",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_121",
                 "name" : "Models/TODO/Document.swift",
                 "path" : "Models/TODO/Document.swift",
                 "sourceTree" : "<group>",
@@ -40088,7 +40152,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_119",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_122",
                 "name" : "Models/Team/Achivement.swift",
                 "path" : "Models/Team/Achivement.swift",
                 "sourceTree" : "<group>",
@@ -40096,7 +40160,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_120",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_123",
                 "name" : "Models/Team/Cache.swift",
                 "path" : "Models/Team/Cache.swift",
                 "sourceTree" : "<group>",
@@ -40104,7 +40168,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_121",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_124",
                 "name" : "Models/Team/Enums.swift",
                 "path" : "Models/Team/Enums.swift",
                 "sourceTree" : "<group>",
@@ -40112,7 +40176,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_122",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_125",
                 "name" : "Models/Team/MatchTeam.swift",
                 "path" : "Models/Team/MatchTeam.swift",
                 "sourceTree" : "<group>",
@@ -40120,7 +40184,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_123",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_126",
                 "name" : "Models/Team/Matchevent.swift",
                 "path" : "Models/Team/Matchevent.swift",
                 "sourceTree" : "<group>",
@@ -40128,7 +40192,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_124",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_127",
                 "name" : "Models/Team/Player.swift",
                 "path" : "Models/Team/Player.swift",
                 "sourceTree" : "<group>",
@@ -40136,7 +40200,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_125",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_128",
                 "name" : "Models/Team/Referee.swift",
                 "path" : "Models/Team/Referee.swift",
                 "sourceTree" : "<group>",
@@ -40144,7 +40208,15 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_126",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_129",
+                "name" : "Models/Team/StatisticsServices.swift",
+                "path" : "Models/Team/StatisticsServices.swift",
+                "sourceTree" : "<group>",
+                "type" : "file"
+              },
+              {
+                "fileType" : "sourcecode.swift",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_130",
                 "name" : "Models/Team/Team.swift",
                 "path" : "Models/Team/Team.swift",
                 "sourceTree" : "<group>",
@@ -40152,7 +40224,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_127",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_131",
                 "name" : "Models/TeamRegistration/TeamRegistration.swift",
                 "path" : "Models/TeamRegistration/TeamRegistration.swift",
                 "sourceTree" : "<group>",
@@ -40160,7 +40232,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_128",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_132",
                 "name" : "Models/Transfer/Transfer.swift",
                 "path" : "Models/Transfer/Transfer.swift",
                 "sourceTree" : "<group>",
@@ -40168,7 +40240,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_129",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_133",
                 "name" : "Models/Transfer/TransferSettings.swift",
                 "path" : "Models/Transfer/TransferSettings.swift",
                 "sourceTree" : "<group>",
@@ -40176,7 +40248,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_130",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_134",
                 "name" : "Models/User/Token.swift",
                 "path" : "Models/User/Token.swift",
                 "sourceTree" : "<group>",
@@ -40184,7 +40256,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_131",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_135",
                 "name" : "Models/User/User.swift",
                 "path" : "Models/User/User.swift",
                 "sourceTree" : "<group>",
@@ -40192,7 +40264,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_132",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_136",
                 "name" : "Models/User/UserSignup.swift",
                 "path" : "Models/User/UserSignup.swift",
                 "sourceTree" : "<group>",
@@ -40200,7 +40272,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_133",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_137",
                 "name" : "Models/User/UserVerificationToken.swift",
                 "path" : "Models/User/UserVerificationToken.swift",
                 "sourceTree" : "<group>",
@@ -40208,7 +40280,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_134",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_138",
                 "name" : "Models/Verification Code/VerificationCode.swift",
                 "path" : "Models/Verification Code/VerificationCode.swift",
                 "sourceTree" : "<group>",
@@ -40216,7 +40288,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_135",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_139",
                 "name" : "Models/VoteItem/VoteItem.swift",
                 "path" : "Models/VoteItem/VoteItem.swift",
                 "sourceTree" : "<group>",
@@ -40224,7 +40296,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_136",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_140",
                 "name" : "OpenAPI/OpenAPISupport.swift",
                 "path" : "OpenAPI/OpenAPISupport.swift",
                 "sourceTree" : "<group>",
@@ -40232,7 +40304,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_137",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_141",
                 "name" : "Protocols/BackendRepository.swift",
                 "path" : "Protocols/BackendRepository.swift",
                 "sourceTree" : "<group>",
@@ -40240,7 +40312,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_138",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_142",
                 "name" : "Protocols/ControllerProtocols.swift",
                 "path" : "Protocols/ControllerProtocols.swift",
                 "sourceTree" : "<group>",
@@ -40248,7 +40320,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_139",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_143",
                 "name" : "Protocols/StandardControllerRepository.swift",
                 "path" : "Protocols/StandardControllerRepository.swift",
                 "sourceTree" : "<group>",
@@ -40256,7 +40328,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_140",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_144",
                 "name" : "Services/FCMService.swift",
                 "path" : "Services/FCMService.swift",
                 "sourceTree" : "<group>",
@@ -40264,7 +40336,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_141",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_145",
                 "name" : "Shared/AppState.swift",
                 "path" : "Shared/AppState.swift",
                 "sourceTree" : "<group>",
@@ -40272,7 +40344,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_142",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_146",
                 "name" : "Tokashim/TokashimTestView.swift",
                 "path" : "Tokashim/TokashimTestView.swift",
                 "sourceTree" : "<group>",
@@ -40280,7 +40352,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_143",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_147",
                 "name" : "WebScraping/APIClient.swift",
                 "path" : "WebScraping/APIClient.swift",
                 "sourceTree" : "<group>",
@@ -40288,7 +40360,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_144",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_148",
                 "name" : "WebScraping/ScraperDetailController.swift",
                 "path" : "WebScraping/ScraperDetailController.swift",
                 "sourceTree" : "<group>",
@@ -40296,7 +40368,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_145",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_149",
                 "name" : "WebScraping/ScraperProtocol.swift",
                 "path" : "WebScraping/ScraperProtocol.swift",
                 "sourceTree" : "<group>",
@@ -40304,7 +40376,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_146",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_150",
                 "name" : "configure.swift",
                 "path" : "configure.swift",
                 "sourceTree" : "<group>",
@@ -40312,7 +40384,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_147",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_151",
                 "name" : "entrypoint.swift",
                 "path" : "entrypoint.swift",
                 "sourceTree" : "<group>",
@@ -40320,7 +40392,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_148",
+                "guid" : "PACKAGE:be::MAINGROUP::REF_4::REF_152",
                 "name" : "routes.swift",
                 "path" : "routes.swift",
                 "sourceTree" : "<group>",
@@ -40346,14 +40418,14 @@
       "projectIsPackage" : "true",
       "projectName" : "oekfbbackend",
       "targets" : [
-        "a3f12f9e94410b05dc26ed4fba980fed90ed1a547d59fc952ce42d3790b53dbf",
+        "50e2b2d7e45964fd35be43ddf07b8245959afc8afdcb13f92c97fccf90b2ed51",
         "99fa5e3d40cabd8039937af3162d4a9e86fb64f092dbcd63d5131fb6fbce07b7",
-        "e2f04237b68bd4b99eb7ed9056a802fbe6bbc2c1268d4e5dd5db28fed4417fa7",
-        "bc087b64e678030a2a08351fdba3c90ea4bb20c2c4d36f131331010295dd33ed",
+        "75becf390589ff28c0691993bd96aec67bb6d7322581d87924fdd8a6fe79ffd1",
+        "8ff0b77562668d660828658e73013b157fe87a2b7ec7115c828529f859a81b25",
         "95b6ad5537af7b5e133e6fa86fdece11185bbc9d3e662f8de6d75afb6c841662"
       ]
     },
-    "signature" : "8186478d8e6a8481c86e38fe8b822be586ce531a91f8b6ac083731872656af5b",
+    "signature" : "515a429f4cd83631a78e04ca4f0c05f9c4736321ebf5d053eaa44b57f402efe0",
     "type" : "project"
   },
   {
@@ -40464,6 +40536,15 @@
               "codeSignOnCopy" : "false",
               "fileReference" : "PACKAGE:be::MAINGROUP::REF_2::REF_0",
               "guid" : "PACKAGE-PRODUCT:be_AppTests.AppTests::BUILDPHASE_0::0",
+              "platformFilters" : [
+
+              ],
+              "removeHeadersOnCopy" : "false"
+            },
+            {
+              "codeSignOnCopy" : "false",
+              "fileReference" : "PACKAGE:be::MAINGROUP::REF_2::REF_1",
+              "guid" : "PACKAGE-PRODUCT:be_AppTests.AppTests::BUILDPHASE_0::1",
               "platformFilters" : [
 
               ],
@@ -40634,7 +40715,7 @@
       "productTypeIdentifier" : "com.apple.product-type.bundle.unit-test",
       "type" : "standard"
     },
-    "signature" : "a3f12f9e94410b05dc26ed4fba980fed90ed1a547d59fc952ce42d3790b53dbf",
+    "signature" : "50e2b2d7e45964fd35be43ddf07b8245959afc8afdcb13f92c97fccf90b2ed51",
     "type" : "target"
   },
   {
@@ -42191,6 +42272,42 @@
 
               ],
               "removeHeadersOnCopy" : "false"
+            },
+            {
+              "codeSignOnCopy" : "false",
+              "fileReference" : "PACKAGE:be::MAINGROUP::REF_3::REF_149",
+              "guid" : "PACKAGE-PRODUCT:be_App.App::BUILDPHASE_0::149",
+              "platformFilters" : [
+
+              ],
+              "removeHeadersOnCopy" : "false"
+            },
+            {
+              "codeSignOnCopy" : "false",
+              "fileReference" : "PACKAGE:be::MAINGROUP::REF_3::REF_150",
+              "guid" : "PACKAGE-PRODUCT:be_App.App::BUILDPHASE_0::150",
+              "platformFilters" : [
+
+              ],
+              "removeHeadersOnCopy" : "false"
+            },
+            {
+              "codeSignOnCopy" : "false",
+              "fileReference" : "PACKAGE:be::MAINGROUP::REF_3::REF_151",
+              "guid" : "PACKAGE-PRODUCT:be_App.App::BUILDPHASE_0::151",
+              "platformFilters" : [
+
+              ],
+              "removeHeadersOnCopy" : "false"
+            },
+            {
+              "codeSignOnCopy" : "false",
+              "fileReference" : "PACKAGE:be::MAINGROUP::REF_3::REF_152",
+              "guid" : "PACKAGE-PRODUCT:be_App.App::BUILDPHASE_0::152",
+              "platformFilters" : [
+
+              ],
+              "removeHeadersOnCopy" : "false"
             }
           ],
           "guid" : "PACKAGE-PRODUCT:be_App.App::BUILDPHASE_0",
@@ -42325,7 +42442,7 @@
       "productTypeIdentifier" : "com.apple.product-type.tool",
       "type" : "standard"
     },
-    "signature" : "e2f04237b68bd4b99eb7ed9056a802fbe6bbc2c1268d4e5dd5db28fed4417fa7",
+    "signature" : "75becf390589ff28c0691993bd96aec67bb6d7322581d87924fdd8a6fe79ffd1",
     "type" : "target"
   },
   {
@@ -43795,6 +43912,42 @@
 
               ],
               "removeHeadersOnCopy" : "false"
+            },
+            {
+              "codeSignOnCopy" : "false",
+              "fileReference" : "PACKAGE:be::MAINGROUP::REF_4::REF_149",
+              "guid" : "PACKAGE-TARGET:App-1DA2DD44-testable::BUILDPHASE_0::149",
+              "platformFilters" : [
+
+              ],
+              "removeHeadersOnCopy" : "false"
+            },
+            {
+              "codeSignOnCopy" : "false",
+              "fileReference" : "PACKAGE:be::MAINGROUP::REF_4::REF_150",
+              "guid" : "PACKAGE-TARGET:App-1DA2DD44-testable::BUILDPHASE_0::150",
+              "platformFilters" : [
+
+              ],
+              "removeHeadersOnCopy" : "false"
+            },
+            {
+              "codeSignOnCopy" : "false",
+              "fileReference" : "PACKAGE:be::MAINGROUP::REF_4::REF_151",
+              "guid" : "PACKAGE-TARGET:App-1DA2DD44-testable::BUILDPHASE_0::151",
+              "platformFilters" : [
+
+              ],
+              "removeHeadersOnCopy" : "false"
+            },
+            {
+              "codeSignOnCopy" : "false",
+              "fileReference" : "PACKAGE:be::MAINGROUP::REF_4::REF_152",
+              "guid" : "PACKAGE-TARGET:App-1DA2DD44-testable::BUILDPHASE_0::152",
+              "platformFilters" : [
+
+              ],
+              "removeHeadersOnCopy" : "false"
             }
           ],
           "guid" : "PACKAGE-TARGET:App-1DA2DD44-testable::BUILDPHASE_0",
@@ -43867,7 +44020,7 @@
       "productTypeIdentifier" : "org.swift.product-type.common.object",
       "type" : "standard"
     },
-    "signature" : "bc087b64e678030a2a08351fdba3c90ea4bb20c2c4d36f131331010295dd33ed",
+    "signature" : "8ff0b77562668d660828658e73013b157fe87a2b7ec7115c828529f859a81b25",
     "type" : "target"
   },
   {
