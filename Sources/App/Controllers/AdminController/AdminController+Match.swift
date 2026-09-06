@@ -661,12 +661,11 @@ extension AdminController {
             throw Abort(.notFound, reason: "Losing team not found")
         }
 
-        let cancelled = losingTeam.cancelled ?? 0
-        guard cancelled < 3 else {
-            throw Abort(.badRequest, reason: "Schon 3 Absagen gemacht diese Saison.")
-        }
-
-        let newCancelled = cancelled + 1
+        let newCancelled = try await SeasonTeam.registerCancellation(
+            for: match,
+            teamID: losingTeamID,
+            on: req.db
+        )
         let invoiceAmount: Int
         switch newCancelled {
         case 1: invoiceAmount = 170
@@ -677,7 +676,6 @@ extension AdminController {
 
         match.status = .cancelled
         winningTeam.points += 3
-        losingTeam.cancelled = newCancelled
         let previousBalance = losingTeam.balance
         let balance = previousBalance ?? 0
         losingTeam.balance = balance - Double(invoiceAmount)

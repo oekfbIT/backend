@@ -182,60 +182,68 @@ final class PostponeRequestController: RouteCollection {
         }
     }
 
-    func approveRequest(req: Request) throws -> EventLoopFuture<PostponeRequest> {
+    func approveRequest(req: Request) async throws -> PostponeRequest {
         let id = try req.parameters.require("id", as: UUID.self)
 
-        return PostponeRequest.query(on: req.db)
+        guard let request = try await PostponeRequest.query(on: req.db)
             .with(\.$match)
             .filter(\.$id == id)
             .first()
-            .unwrap(or: Abort(.notFound))
-            .flatMap { request in
-                guard let requesterID = request.requester.id else {
-                    return req.eventLoop.makeFailedFuture(
-                        Abort(.badRequest, reason: "Missing requester or match ID")
-                    )
-                }
+        else {
+            throw Abort(.notFound, reason: "Postpone request not found")
+        }
+        guard let requesterID = request.requester.id else {
+            throw Abort(.badRequest, reason: "Missing requester or match ID")
+        }
+        guard let team = try await Team.find(requesterID, on: req.db) else {
+            throw Abort(.notFound, reason: "Requester team not found")
+        }
 
-                let matchID = request.$match.id
+        // Repeated approval requests must not increment the season counter twice.
+        let wasAlreadyApproved = request.response == true && request.status == false
+        if !wasAlreadyApproved {
+            try await SeasonTeam.registerPostponement(
+                for: request.match,
+                teamID: requesterID,
+                on: req.db
+            )
+        }
 
-                let teamFuture = Team.find(requesterID, on: req.db)
-                    .unwrap(or: Abort(.notFound, reason: "Requester team not found"))
+        request.response = true
+        request.responseDate = Date.viennaNow
+        request.status = false
+        try await request.update(on: req.db)
 
-                let matchFuture = Match.find(matchID, on: req.db)
-                    .unwrap(or: Abort(.notFound, reason: "Match not found"))
-
-                return teamFuture.and(matchFuture).flatMap { team, match in
-                    request.response = true
-                    request.responseDate = Date.viennaNow
-                    request.status = false
-
-                    return request.update(on: req.db)
-                        .flatMap {
-                            let emailFuture: EventLoopFuture<Void> = {
-                                guard let email = team.usremail else {
-                                    req.logger.warning("Postpone approval notification skipped: requester has no email")
-                                    return req.eventLoop.makeSucceededFuture(())
-                                }
-                                do {
-                                    return try self.emailController.approve(req: req, approverName: request.requestee.teamName, recipient: email, match: match).transform(to: ())
-                                } catch {
-                                    req.logger.warning("Unable to prepare postpone approval email: \(error)")
-                                    return req.eventLoop.makeSucceededFuture(())
-                                }
-                            }()
-
-                            let pushFuture = PostponePushNotifier.notifyRequestApproved(
-                                req: req,
-                                postponeRequest: request,
-                                targetTeamId: requesterID
-                            )
-
-                            return self.ignoreNotificationFailure(emailFuture.and(pushFuture).transform(to: ()), req: req, action: "Postpone approval")
-                                .transform(to: request)
-                        }
-                }
+        let emailFuture: EventLoopFuture<Void> = {
+            guard let email = team.usremail else {
+                req.logger.warning("Postpone approval notification skipped: requester has no email")
+                return req.eventLoop.makeSucceededFuture(())
             }
+            do {
+                return try emailController.approve(
+                    req: req,
+                    approverName: request.requestee.teamName,
+                    recipient: email,
+                    match: request.match
+                ).transform(to: ())
+            } catch {
+                req.logger.warning("Unable to prepare postpone approval email: \(error)")
+                return req.eventLoop.makeSucceededFuture(())
+            }
+        }()
+
+        let pushFuture = PostponePushNotifier.notifyRequestApproved(
+            req: req,
+            postponeRequest: request,
+            targetTeamId: requesterID
+        )
+        try await ignoreNotificationFailure(
+            emailFuture.and(pushFuture).transform(to: ()),
+            req: req,
+            action: "Postpone approval"
+        ).get()
+
+        return request
     }
 
     func denyRequest(req: Request) throws -> EventLoopFuture<PostponeRequest> {

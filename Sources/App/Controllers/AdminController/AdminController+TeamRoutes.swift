@@ -171,9 +171,6 @@ extension AdminController {
         let trikot: Trikot?
 
         let points: Int?
-        let cancelled: Int?
-        let postponed: Int?
-
         let overdraft: Bool?
         let overdraftDate: Date?
 
@@ -348,8 +345,6 @@ extension AdminController {
             balance: patch.balance ?? team.balance,
             referCode: patch.referCode ?? team.referCode,
             overdraft: patch.overdraft ?? team.overdraft,
-            cancelled: patch.cancelled ?? team.cancelled,
-            postponed: patch.postponed ?? team.postponed,
             overdraftDate: patch.overdraftDate ?? team.overdraftDate,
             usremail: team.usremail,
             usrpass: team.usrpass,

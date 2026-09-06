@@ -103,6 +103,8 @@ extension AdminController {
         let hasPaidSeasonFee: Bool?
         let seasonFee: Double?
         let clearSeasonFee: Bool?
+        let cancelled: Int?
+        let postponed: Int?
     }
 
     struct AdminSeasonTeamResponse: Content {
@@ -110,6 +112,8 @@ extension AdminController {
         let team: AdminSeasonTeamOverview
         let hasPaidSeasonFee: Bool?
         let seasonFee: Double?
+        let cancelled: Int
+        let postponed: Int
         let wins: Int
         let draws: Int
         let losses: Int
@@ -180,6 +184,8 @@ extension AdminController {
                     team: try adminSeasonTeamOverview($0.team),
                     hasPaidSeasonFee: $0.hasPaidSeasonFee,
                     seasonFee: $0.seasonFee,
+                    cancelled: $0.cancelled ?? 0,
+                    postponed: $0.postponed ?? 0,
                     wins: stats.wins,
                     draws: stats.draws,
                     losses: stats.losses,
@@ -209,6 +215,18 @@ extension AdminController {
         if let paid = patch.hasPaidSeasonFee {
             record.hasPaidSeasonFee = paid
         }
+        if let cancelled = patch.cancelled {
+            guard cancelled >= 0 && cancelled <= 3 else {
+                throw Abort(.badRequest, reason: "Cancellation count must be between 0 and 3.")
+            }
+            record.cancelled = cancelled
+        }
+        if let postponed = patch.postponed {
+            guard postponed >= 0 else {
+                throw Abort(.badRequest, reason: "Postponement count cannot be negative.")
+            }
+            record.postponed = postponed
+        }
 
         try await record.save(on: req.db)
         try await record.$team.load(on: req.db)
@@ -222,6 +240,8 @@ extension AdminController {
             team: try adminSeasonTeamOverview(record.team),
             hasPaidSeasonFee: record.hasPaidSeasonFee,
             seasonFee: record.seasonFee,
+            cancelled: record.cancelled ?? 0,
+            postponed: record.postponed ?? 0,
             wins: stats.wins,
             draws: stats.draws,
             losses: stats.losses,

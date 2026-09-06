@@ -738,6 +738,12 @@ extension AppController {
             throw Abort(.badRequest, reason: "Invalid winning team specified")
         }
 
+        let newCancelled = try await SeasonTeam.registerCancellation(
+            for: match,
+            teamID: losingTeamId,
+            on: req.db
+        )
+
         match.status = .cancelled
         try await match.save(on: req.db)
         // Statistics are a cache. A cache outage must not make a completed
@@ -756,14 +762,6 @@ extension AppController {
         }
 
         winningTeam.points += 3
-
-        let cancelled = losingTeam.cancelled ?? 0
-        guard cancelled < 3 else {
-            throw Abort(.badRequest, reason: "Schon 3 Absagen gemacht diese Saison.")
-        }
-
-        let newCancelled = cancelled + 1
-        losingTeam.cancelled = newCancelled
 
         let rechnungAmount: Int
         switch newCancelled {

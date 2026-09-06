@@ -2,6 +2,26 @@
 import XCTVapor
 
 final class AppTests: XCTestCase {
+    func testSeasonTeamOwnsSeasonBookkeeping() {
+        let seasonID = UUID()
+        let teamID = UUID()
+        let participation = SeasonTeam(
+            seasonID: seasonID,
+            teamID: teamID,
+            hasPaidSeasonFee: true,
+            seasonFee: 300,
+            cancelled: 2,
+            postponed: 1
+        )
+
+        XCTAssertEqual(participation.$season.id, seasonID)
+        XCTAssertEqual(participation.$team.id, teamID)
+        XCTAssertEqual(participation.hasPaidSeasonFee, true)
+        XCTAssertEqual(participation.seasonFee, 300)
+        XCTAssertEqual(participation.cancelled, 2)
+        XCTAssertEqual(participation.postponed, 1)
+    }
+
     func testCreatedTokensAreCookieAndBearerSafe() throws {
         let id = UUID()
         let user = User(
