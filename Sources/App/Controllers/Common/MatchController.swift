@@ -1045,7 +1045,15 @@ final class MatchController: RouteCollection {
                 match.status = .cancelled
 
                 return match.save(on: req.db)
-                    .flatMap { StatsCacheManager.invalidateStats(for: match, on: req.db) }
+                    // Cache invalidation is best-effort. Do not report a failed
+                    // cancellation after the match has already been persisted.
+                    .flatMap {
+                        StatsCacheManager.invalidateStats(for: match, on: req.db)
+                            .flatMapError { error in
+                                req.logger.warning("Unable to invalidate stats after team cancellation: \(error)")
+                                return req.eventLoop.makeSucceededFuture(())
+                            }
+                    }
                     .flatMap {
                     Team.find(winningTeamId, on: req.db)
                         .unwrap(or: Abort(.notFound, reason: "Winning team not found"))

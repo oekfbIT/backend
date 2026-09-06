@@ -686,7 +686,13 @@ extension AppController {
 
         match.status = .cancelled
         try await match.save(on: req.db)
-        try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
+        // Statistics are a cache. A cache outage must not make a completed
+        // cancellation appear to have failed to the team.
+        do {
+            try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
+        } catch {
+            req.logger.warning("Unable to invalidate stats after no-show result: \(error)")
+        }
 
         guard let team = try await Team.find(winningTeamId, on: req.db) else {
             throw Abort(.notFound, reason: "Winning team not found")
@@ -734,7 +740,13 @@ extension AppController {
 
         match.status = .cancelled
         try await match.save(on: req.db)
-        try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
+        // Statistics are a cache. A cache outage must not make a completed
+        // cancellation appear to have failed to the team.
+        do {
+            try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
+        } catch {
+            req.logger.warning("Unable to invalidate stats after team cancellation: \(error)")
+        }
 
         guard let winningTeam = try await Team.find(winningTeamId, on: req.db) else {
             throw Abort(.notFound, reason: "Winning team not found")

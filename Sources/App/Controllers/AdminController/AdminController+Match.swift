@@ -623,14 +623,99 @@ extension AdminController {
 
     // MARK: PATCH /admin/matches/:id/teamcancel
     func teamCancelGame(req: Request) async throws -> HTTPStatus {
-        // Keeping this as a stub in admin controller because your legacy version has:
-        // - emails
-        // - points updates
-        // - cancellation tracking
-        // - Rechnung creation
-        //
-        // If you want the full logic copied 1:1 into admin, tell me and I’ll port it cleanly.
-        throw Abort(.notImplemented, reason: "teamcancel not yet ported to AdminController+MatchRoutes.swift")
+        let matchID = try requireUUIDParam(req, "id")
+        let body = try req.content.decode(NoShowRequest.self)
+
+        let match = try await Match.query(on: req.db)
+            .with(\.$homeTeam)
+            .with(\.$awayTeam)
+            .with(\.$referee) { $0.with(\.$user) }
+            .filter(\.$id == matchID)
+            .first()
+        guard let match else {
+            throw Abort(.notFound, reason: "Match not found")
+        }
+
+        let winningTeamID: UUID
+        let losingTeamID: UUID
+        let recipientEmail: String?
+        switch body.winningTeam.lowercased() {
+        case "home":
+            match.score = Score(home: 6, away: 0)
+            winningTeamID = match.$homeTeam.id
+            losingTeamID = match.$awayTeam.id
+            recipientEmail = match.homeTeam.usremail
+        case "away":
+            match.score = Score(home: 0, away: 6)
+            winningTeamID = match.$awayTeam.id
+            losingTeamID = match.$homeTeam.id
+            recipientEmail = match.awayTeam.usremail
+        default:
+            throw Abort(.badRequest, reason: "Invalid winning team specified")
+        }
+
+        guard let winningTeam = try await Team.find(winningTeamID, on: req.db) else {
+            throw Abort(.notFound, reason: "Winning team not found")
+        }
+        guard let losingTeam = try await Team.find(losingTeamID, on: req.db) else {
+            throw Abort(.notFound, reason: "Losing team not found")
+        }
+
+        let cancelled = losingTeam.cancelled ?? 0
+        guard cancelled < 3 else {
+            throw Abort(.badRequest, reason: "Schon 3 Absagen gemacht diese Saison.")
+        }
+
+        let newCancelled = cancelled + 1
+        let invoiceAmount: Int
+        switch newCancelled {
+        case 1: invoiceAmount = 170
+        case 2: invoiceAmount = 270
+        case 3: invoiceAmount = 370
+        default: invoiceAmount = 0
+        }
+
+        match.status = .cancelled
+        winningTeam.points += 3
+        losingTeam.cancelled = newCancelled
+        let previousBalance = losingTeam.balance
+        let balance = previousBalance ?? 0
+        losingTeam.balance = balance - Double(invoiceAmount)
+
+        let invoice = Rechnung(
+            team: losingTeam.id,
+            teamName: losingTeam.teamName,
+            number: UUID().uuidString,
+            summ: Double(invoiceAmount),
+            topay: nil,
+            previousBalance: previousBalance,
+            kennzeichen: "Spiel Absage: \(newCancelled)"
+        )
+
+        try await match.save(on: req.db)
+        try await invoice.save(on: req.db)
+        try await losingTeam.save(on: req.db)
+        try await winningTeam.save(on: req.db)
+
+        do {
+            try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
+        } catch {
+            req.logger.warning("Unable to invalidate stats after team cancellation: \(error)")
+        }
+
+        do {
+            if let recipientEmail {
+                let emailController = EmailController()
+                try emailController.sendCancellationNotification(req: req, recipient: recipientEmail, match: match)
+                if let referee = match.referee, let user = referee.user {
+                    try emailController.informRefereeCancellation(req: req, email: user.email, name: referee.name ?? "Referee", match: match)
+                }
+            }
+        } catch {
+            req.logger.warning("Unable to send cancellation emails: \(error)")
+        }
+
+        return .ok
     }
 
     // MARK: PATCH /admin/matches/:id/spielabbruch
