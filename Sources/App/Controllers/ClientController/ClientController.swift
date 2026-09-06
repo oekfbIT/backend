@@ -158,6 +158,7 @@ final class ClientController: RouteCollection {
                 id: league.id,
                 state: league.state,
                 code: league.code,
+                logo: league.logo,
                 teamcount: league.teamcount,
                 name: league.name,
                 visibility: league.visibility
@@ -1106,6 +1107,7 @@ extension ClientController {
                     id: league.id,
                     state: league.state,
                     code: league.code,
+                    logo: league.logo,
                     teamcount: league.teamcount,
                     name: league.name,
                     visibility: league.visibility

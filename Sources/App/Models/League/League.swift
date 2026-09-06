@@ -63,6 +63,7 @@ final class League: Model, Content, Codable {
     @OptionalField(key: FieldKeys.state) var state: Bundesland?
 
     @OptionalField(key: FieldKeys.code) var code: String?
+    @OptionalField(key: FieldKeys.logo) var logo: String?
     
     @OptionalField(key: FieldKeys.homepageData) var homepagedata: HomepageData?
     
@@ -83,6 +84,7 @@ final class League: Model, Content, Codable {
         static var hourly: FieldKey { "hourly" }
         static var teamcount: FieldKey { "teamcount" }
         static var code: FieldKey { "code" }
+        static var logo: FieldKey { "logo" }
         static var name: FieldKey { "name" }
         static var homepageData: FieldKey { "homepageData" }
         static var youtube: FieldKey { "youtube" }
@@ -91,11 +93,12 @@ final class League: Model, Content, Codable {
 
     init() {}
 
-    init(id: UUID? = nil, state: Bundesland?, teamcount: Int?, code: String, name: String, wochenbericht: String? = nil, homepagedata: HomepageData? = nil, youtube: String? = nil, visibility: Bool?) {
+    init(id: UUID? = nil, state: Bundesland?, teamcount: Int?, code: String, name: String, logo: String? = nil, wochenbericht: String? = nil, homepagedata: HomepageData? = nil, youtube: String? = nil, visibility: Bool?) {
         self.id = id
         self.state = state
         self.code = code
         self.name = name
+        self.logo = logo
         self.teamcount = teamcount ?? 14
         self.homepagedata = homepagedata
         self.youtube = youtube
@@ -112,6 +115,7 @@ extension League: Mergeable {
         merged.state = other.state
         merged.hourly = other.hourly
         merged.code = other.code
+        merged.logo = other.logo
         merged.name = other.name
         merged.teamcount = other.teamcount
         merged.homepagedata = other.homepagedata
@@ -129,6 +133,7 @@ extension LeagueMigration: Migration {
             .field(League.FieldKeys.id, .uuid, .identifier(auto: true))
             .field(League.FieldKeys.state, .string, .required)
             .field(League.FieldKeys.code, .string)
+            .field(League.FieldKeys.logo, .string)
             .field(League.FieldKeys.hourly, .double)
             .field(League.FieldKeys.teamcount, .int)
             .field(League.FieldKeys.visibility, .bool)
@@ -139,6 +144,20 @@ extension LeagueMigration: Migration {
 
     func revert(on database: Database) -> EventLoopFuture<Void> {
         database.schema(League.schema).delete()
+    }
+}
+
+extension LeagueAddLogoMigration: Migration {
+    func prepare(on database: Database) -> EventLoopFuture<Void> {
+        database.schema(League.schema)
+            .field(League.FieldKeys.logo, .string)
+            .update()
+    }
+
+    func revert(on database: Database) -> EventLoopFuture<Void> {
+        database.schema(League.schema)
+            .deleteField(League.FieldKeys.logo)
+            .update()
     }
 }
 
@@ -435,7 +454,8 @@ extension League {
             id: try requireID(),
             name: name,
             code: code ?? "",
-            state: state ?? .wien
+            state: state ?? .wien,
+            logo: logo
         )
     }
 }

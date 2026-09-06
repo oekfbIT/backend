@@ -170,7 +170,8 @@ extension AppController {
                 id: UUID(),
                 name: "Unknown",
                 code: "",
-                state: .wien
+                state: .wien,
+                logo: nil
             )
 
             return AppModels.AppTeamOverview(
@@ -193,7 +194,8 @@ extension AppController {
                 id: UUID(),
                 name: "Unknown",
                 code: "",
-                state: .wien
+                state: .wien,
+                logo: nil
             )
 
             let teamOverview = AppModels.AppTeamOverview(

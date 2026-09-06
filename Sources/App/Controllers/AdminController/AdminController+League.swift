@@ -64,12 +64,14 @@ extension AdminController {
     struct CreateLeagueRequest: Content {
         let name: String
         let state: Bundesland
+        let logo: String?
     }
 
     /// Patch-style updates: send only what you want to change.
     struct PatchLeagueRequest: Content {
         let state: Bundesland?
         let code: String?
+        let logo: String?
         let homepagedata: HomepageData?
         let hourly: Double?
         let youtube: String?
@@ -148,6 +150,7 @@ extension AdminController {
             teamcount: nil,
             code: "",
             name: trimmedName,
+            logo: body.logo,
             wochenbericht: nil,
             homepagedata: nil,
             youtube: nil,
@@ -174,6 +177,7 @@ extension AdminController {
 
         if let state = patch.state { league.state = state }
         if let code = patch.code { league.code = code }
+        if let logo = patch.logo { league.logo = logo }
         if let homepagedata = patch.homepagedata { league.homepagedata = homepagedata }
         if let hourly = patch.hourly { league.hourly = hourly }
         if let youtube = patch.youtube { league.youtube = youtube }

@@ -9,6 +9,7 @@ let app_migrations: [Migration] = [
     TeamMigration(),
     PlayerMigration(),
     LeagueMigration(),
+    LeagueAddLogoMigration(),
     MatchMigration(),
     StadiumMigration(),
     UserVerificationTokenMigration(),
@@ -42,6 +43,7 @@ struct UserMigration { }
 struct TeamMigration { }
 struct PlayerMigration { }
 struct LeagueMigration { }
+struct LeagueAddLogoMigration { }
 struct MatchMigration { }
 struct StadiumMigration { }
 struct UserVerificationTokenMigration { }

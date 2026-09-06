@@ -95,6 +95,7 @@ struct AppModels {
         let name: String
         let code: String
         let state: Bundesland
+        let logo: String?
     }
     
     struct AppSeason: Content, Codable {

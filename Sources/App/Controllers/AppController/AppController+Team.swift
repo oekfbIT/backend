@@ -76,7 +76,7 @@ extension AppController {
         }
 
         let leagueOverview = try team.league?.toAppLeagueOverview()
-        ?? AppModels.AppLeagueOverview(id: UUID(), name: "Unknown", code: "", state: .wien)
+        ?? AppModels.AppLeagueOverview(id: UUID(), name: "Unknown", code: "", state: .wien, logo: nil)
 
         let teamOverview = try await team.toAppTeamOverview(league: leagueOverview, req: req).get()
 
@@ -125,7 +125,7 @@ extension AppController {
         }
 
         let leagueOverview = try team.league?.toAppLeagueOverview()
-        ?? AppModels.AppLeagueOverview(id: UUID(), name: "Unknown", code: "", state: .wien)
+        ?? AppModels.AppLeagueOverview(id: UUID(), name: "Unknown", code: "", state: .wien, logo: nil)
 
         let teamOverview = try await team.toAppTeamOverview(league: leagueOverview, req: req).get()
 

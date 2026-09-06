@@ -126,7 +126,8 @@ extension MatchEvent {
                 id: UUID(),
                 name: "Unknown",
                 code: "",
-                state: .wien
+                state: .wien,
+                logo: nil
             )
         }
 
@@ -203,7 +204,8 @@ let error_app_player = AppModels.AppPlayer(
             id: UUID(),
             name: "",
             code: "",
-            state: .ausgetreten
+            state: .ausgetreten,
+            logo: nil
         ),
         points: 0,
         logo: "",

@@ -46,6 +46,7 @@ final class HomepageController: RouteCollection {
                 id: league.id,
                 state: league.state,
                 code: league.code,
+                logo: league.logo,
                 teamcount: league.teamcount,
                 name: league.name,
                 visibility: league.visibility
@@ -675,6 +676,7 @@ struct PublicLeagueOverview: Content, Codable {
     var id: UUID?
     var state: Bundesland?
     var code: String?
+    var logo: String?
     var teamcount: Int?
     var name: String
     var visibility: Bool?
