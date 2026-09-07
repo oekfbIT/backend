@@ -74,50 +74,56 @@ final class TransferController: RouteCollection {
 
         let dto = try req.content.decode(CreateTransferDTO.self)
 
-        return req.db.transaction { db in
-            // 1) Load player (+ current team id)
-            return Player.find(dto.player, on: db).unwrap(or: Abort(.notFound, reason: "Player not found.")).flatMap { player in
-                // Gate on the boolean flag
-                if player.transferred == true {
-                    return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Player already has an active transfer."))
-                }
+        return TransferSettings.query(on: req.db).first().flatMap { settings in
+            guard let settings = settings, settings.isTransferOpen else {
+                return req.eventLoop.makeFailedFuture(Abort(.forbidden, reason: "Transfers are currently closed."))
+            }
 
-                guard let originTeamID = player.$team.id else {
-                    return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Player's current team not set."))
-                }
+            return req.db.transaction { db in
+                // 1) Load player (+ current team id)
+                return Player.find(dto.player, on: db).unwrap(or: Abort(.notFound, reason: "Player not found.")).flatMap { player in
+                    // Gate on the boolean flag
+                    if player.transferred == true {
+                        return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Player already has an active transfer."))
+                    }
 
-                // 2) Load origin team details
-                return Team.find(originTeamID, on: db).unwrap(or: Abort(.notFound, reason: "Player's current team details not found.")).flatMap { originTeam in
-                    // 3) Create new transfer
-                    var transfer = Transfer(
-                        team: dto.team,
-                        player: dto.player,
-                        status: .warten,
-                        playerName: dto.playerName ?? player.name,
-                        playerImage: dto.playerImage ?? player.image ?? "",
-                        teamName: dto.teamName ?? "",                  // allow nulls (backend can show fallback)
-                        teamImage: dto.teamImage ?? "",
-                        origin: originTeam.id,
-                        originName: originTeam.teamName,
-                        originImage: originTeam.logo
-                    )
+                    guard let originTeamID = player.$team.id else {
+                        return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Player's current team not set."))
+                    }
 
-                    // 4) Persist transfer + update player atomically
-                    return transfer.create(on: db).flatMap {
-                        player.transferred = true
-                        return player.update(on: db).flatMap {
-                            // 5) Try email, but don't hard-fail if missing
-                            if let recipientEmail = player.email {
-                                do {
-                                    try self.emailController.sendTransferRequest(req: req, recipient: recipientEmail, transfer: transfer)
-                                } catch {
-                                    req.logger.warning("Failed to send transfer email: \(error.localizedDescription)")
-                                    // Intentionally do not fail the request
+                    // 2) Load origin team details
+                    return Team.find(originTeamID, on: db).unwrap(or: Abort(.notFound, reason: "Player's current team details not found.")).flatMap { originTeam in
+                        // 3) Create new transfer
+                        var transfer = Transfer(
+                            team: dto.team,
+                            player: dto.player,
+                            status: .warten,
+                            playerName: dto.playerName ?? player.name,
+                            playerImage: dto.playerImage ?? "",
+                            teamName: dto.teamName ?? "",                  // allow nulls (backend can show fallback)
+                            teamImage: dto.teamImage ?? "",
+                            origin: originTeam.id,
+                            originName: originTeam.teamName,
+                            originImage: originTeam.logo
+                        )
+
+                        // 4) Persist transfer + update player atomically
+                        return transfer.create(on: db).flatMap {
+                            player.transferred = true
+                            return player.update(on: db).flatMap {
+                                // 5) Try email, but don't hard-fail if missing
+                                if let recipientEmail = player.email {
+                                    do {
+                                        try self.emailController.sendTransferRequest(req: req, recipient: recipientEmail, transfer: transfer)
+                                    } catch {
+                                        req.logger.warning("Failed to send transfer email: \(error.localizedDescription)")
+                                        // Intentionally do not fail the request
+                                    }
+                                } else {
+                                    req.logger.info("Player has no email; skipping transfer email.")
                                 }
-                            } else {
-                                req.logger.info("Player has no email; skipping transfer email.")
+                                return req.eventLoop.makeSucceededFuture(transfer)
                             }
-                            return req.eventLoop.makeSucceededFuture(transfer)
                         }
                     }
                 }

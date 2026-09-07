@@ -25,7 +25,7 @@ final class TransferSettingsController: RouteCollection {
         route.get(":id", use: repository.getbyID)
         route.delete(":id", use: repository.deleteID)
 
-        route.patch(":id", use: repository.updateID)
+        route.patch(":id", use: updateSettings)
         route.patch("batch", use: repository.updateBatch)
         
         // Add the new routes
@@ -56,6 +56,38 @@ final class TransferSettingsController: RouteCollection {
         }
 
         settings.isTransferOpen.toggle()
+        try await settings.save(on: req.db)
+        return settings
+    }
+
+    private struct UpdateTransferSettingsRequest: Content {
+        let isTransferOpen: Bool?
+        let isDressChangeOpen: Bool?
+        let isCancelPossible: Bool?
+        let showSponsors: Bool?
+        let fromDate: String?
+        let to: String?
+        let name: String?
+        let minAppVersion: String?
+    }
+
+    func updateSettings(req: Request) async throws -> TransferSettings {
+        guard let id = req.parameters.get("id", as: UUID.self),
+              let settings = try await TransferSettings.find(id, on: req.db) else {
+            throw Abort(.notFound, reason: "TransferSettings not found.")
+        }
+
+        let update = try req.content.decode(UpdateTransferSettingsRequest.self)
+
+        if let value = update.isTransferOpen { settings.isTransferOpen = value }
+        if let value = update.isDressChangeOpen { settings.isDressChangeOpen = value }
+        if let value = update.isCancelPossible { settings.isCancelPossible = value }
+        if let value = update.showSponsors { settings.showSponsors = value }
+        if let value = update.fromDate { settings.fromDate = value }
+        if let value = update.to { settings.to = value }
+        if let value = update.name { settings.name = value }
+        if let value = update.minAppVersion { settings.minAppVersion = value }
+
         try await settings.save(on: req.db)
         return settings
     }

@@ -74,6 +74,11 @@ extension AppController {
 
         let dto = try req.content.decode(CreateTransferDTO.self)
 
+        guard let settings = try await TransferSettings.query(on: req.db).first(),
+              settings.isTransferOpen else {
+            throw Abort(.forbidden, reason: "Transfers are currently closed.")
+        }
+
         guard let player = try await Player.find(dto.player, on: req.db) else {
             throw Abort(.notFound, reason: "Player not found.")
         }

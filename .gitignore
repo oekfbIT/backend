@@ -68,3 +68,7 @@ coverage
 
 # Swift Package Manager build products and dependency repositories
 /.build/
+
+# Swift Package Manager/Xcode local workspace state
+.swiftpm/xcode/package.xcworkspace/xcuserdata/
+*.xcuserstate
