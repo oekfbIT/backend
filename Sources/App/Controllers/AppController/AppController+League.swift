@@ -589,7 +589,7 @@ extension AppController {
             }
         }
 
-        var rows: [(item: TableItem, sortingPoints: Double)] = teams.compactMap { team in
+        var rows: [TableItem] = teams.compactMap { team in
             guard let tid = team.id else { return nil }
 
             let st = stats(for: tid)
@@ -611,21 +611,18 @@ extension AppController {
                 form: recentForm(for: tid)
             )
 
-            return (
-                item: item,
-                sortingPoints: team.hiddenpoints ?? Double(calculatedPoints)
-            )
+            return item
         }
 
         rows.sort {
-            if $0.sortingPoints == $1.sortingPoints {
-                return $0.item.difference > $1.item.difference
+            if $0.points == $1.points {
+                return $0.difference > $1.difference
             }
 
-            return $0.sortingPoints > $1.sortingPoints
+            return $0.points > $1.points
         }
 
-        var table = rows.map { $0.item }
+        var table = rows
 
         for i in table.indices {
             table[i].ranking = i + 1
