@@ -71,6 +71,13 @@ enum SponsorSupport {
         return trimmed
     }
 
+    static func validatedOptionalURL(_ value: String?, field: String) throws -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return try validatedURL(trimmed, field: field)
+    }
+
     static func persistCanonicalOrder(_ items: [Sponsor], on database: Database) async throws {
         for (index, item) in items.enumerated() {
             let expected = index + 1

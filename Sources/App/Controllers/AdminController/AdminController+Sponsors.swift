@@ -17,6 +17,7 @@ extension AdminController {
         let name: String
         let link: String
         let logo: String
+        let footerLogo: String?
         let type: SponsorType
         let position: Int?
     }
@@ -25,6 +26,7 @@ extension AdminController {
         let name: String?
         let link: String?
         let logo: String?
+        let footerLogo: String?
         let type: SponsorType?
         let position: Int?
     }
@@ -44,6 +46,7 @@ extension AdminController {
             name: try SponsorSupport.normalizedName(body.name),
             link: try SponsorSupport.validatedURL(body.link, field: "Link"),
             logo: try SponsorSupport.validatedURL(body.logo, field: "Logo"),
+            footerLogo: try SponsorSupport.validatedOptionalURL(body.footerLogo, field: "Footer logo"),
             type: body.type,
             position: items.count + 1
         )
@@ -67,6 +70,7 @@ extension AdminController {
         if let name = body.name { item.name = try SponsorSupport.normalizedName(name) }
         if let link = body.link { item.link = try SponsorSupport.validatedURL(link, field: "Link") }
         if let logo = body.logo { item.logo = try SponsorSupport.validatedURL(logo, field: "Logo") }
+        if let footerLogo = body.footerLogo { item.footerLogo = try SponsorSupport.validatedOptionalURL(footerLogo, field: "Footer logo") }
         if let type = body.type { item.type = type }
         try await item.update(on: req.db)
 

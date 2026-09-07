@@ -30,6 +30,9 @@ final class Sponsor: Model, Content, Codable {
     @OptionalField(key: FieldKeys.logo)
     var logo: String?
 
+    @OptionalField(key: FieldKeys.footerLogo)
+    var footerLogo: String?
+
     @OptionalField(key: FieldKeys.description)
     var description: String?
 
@@ -50,6 +53,7 @@ final class Sponsor: Model, Content, Codable {
         static var name: FieldKey { "name" }
         static var link: FieldKey { "link" }
         static var logo: FieldKey { "logo" }
+        static var footerLogo: FieldKey { "footerLogo" }
         static var description: FieldKey { "description" }
         static var type: FieldKey { "type" }
         static var position: FieldKey { "position" }
@@ -64,6 +68,7 @@ final class Sponsor: Model, Content, Codable {
         name: String?,
         link: String?,
         logo: String?,
+        footerLogo: String? = nil,
         description: String? = nil,
         type: SponsorType? = nil,
         position: Int? = nil,
@@ -73,6 +78,7 @@ final class Sponsor: Model, Content, Codable {
         self.name = name
         self.link = link
         self.logo = logo
+        self.footerLogo = footerLogo
         self.description = description
         self.type = type
         self.position = position
@@ -87,6 +93,7 @@ extension Sponsor: Mergeable {
         merged.name = other.name ?? self.name
         merged.link = other.link ?? self.link
         merged.logo = other.logo ?? self.logo
+        merged.footerLogo = other.footerLogo ?? self.footerLogo
         merged.description = other.description ?? self.description
         merged.type = other.type ?? self.type
         merged.position = other.position ?? self.position
@@ -107,6 +114,20 @@ struct SponsorDisplayFieldsMigration: Migration {
         database.schema(Sponsor.schema)
             .deleteField(Sponsor.FieldKeys.position)
             .deleteField(Sponsor.FieldKeys.updated)
+            .update()
+    }
+}
+
+struct SponsorFooterLogoMigration: Migration {
+    func prepare(on database: Database) -> EventLoopFuture<Void> {
+        database.schema(Sponsor.schema)
+            .field(Sponsor.FieldKeys.footerLogo, .string)
+            .update()
+    }
+
+    func revert(on database: Database) -> EventLoopFuture<Void> {
+        database.schema(Sponsor.schema)
+            .deleteField(Sponsor.FieldKeys.footerLogo)
             .update()
     }
 }
