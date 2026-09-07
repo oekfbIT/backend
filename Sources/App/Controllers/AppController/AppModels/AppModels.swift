@@ -96,6 +96,26 @@ struct AppModels {
         let code: String
         let state: Bundesland
         let logo: String?
+        let teamCount: Int?
+        let seasonName: String?
+
+        init(
+            id: UUID,
+            name: String,
+            code: String,
+            state: Bundesland,
+            logo: String?,
+            teamCount: Int? = nil,
+            seasonName: String? = nil
+        ) {
+            self.id = id
+            self.name = name
+            self.code = code
+            self.state = state
+            self.logo = logo
+            self.teamCount = teamCount
+            self.seasonName = seasonName
+        }
     }
     
     struct AppSeason: Content, Codable {

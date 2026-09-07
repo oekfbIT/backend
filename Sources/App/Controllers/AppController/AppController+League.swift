@@ -37,17 +37,27 @@ extension AppController {
             .with(\.$league)
             .all()
 
-        // 2️⃣ Collect unique leagues and filter only visible ones
-        let visibleLeagues = Dictionary(
-            grouping: primarySeasons.compactMap { $0.league }
-                .filter { $0.visibility == true }
-        ) { league in
-            league.id
+        // 2️⃣ Deduplicate each league while retaining its primary-season summary.
+        let primaryLeaguePairs = Dictionary(
+            grouping: primarySeasons.compactMap { season -> (league: League, season: Season)? in
+                guard let league = season.league, league.visibility == true else { return nil }
+                return (league, season)
+            }
+        ) { pair in
+            pair.league.id
         }.compactMap { $0.value.first }
 
-        // 3️⃣ Convert to AppLeagueOverview models
-        let overviews = try visibleLeagues.map { league in
-            try league.toAppLeagueOverview()
+        // 3️⃣ Return all metadata required by the list in one response.
+        let overviews = try primaryLeaguePairs.map { pair in
+            AppModels.AppLeagueOverview(
+                id: try pair.league.requireID(),
+                name: pair.league.name,
+                code: pair.league.code ?? "",
+                state: pair.league.state ?? .wien,
+                logo: pair.league.logo,
+                teamCount: pair.league.teamcount,
+                seasonName: pair.season.name
+            )
         }
 
         // 4️⃣ Sort alphabetically by state, then name
