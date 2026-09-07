@@ -355,7 +355,11 @@ extension AppController {
                 )
             }
 
-            return GameDayGroup(gameday: day, matches: appMatches)
+            return GameDayGroup(
+                gameday: day,
+                date: matchesForDay.compactMap(\.details.date).min(),
+                matches: appMatches
+            )
         }
 
         return groups
@@ -462,7 +466,11 @@ extension AppController {
                 )
             }
 
-            return GameDayGroup(gameday: day, matches: appMatches)
+            return GameDayGroup(
+                gameday: day,
+                date: matchesForDay.compactMap(\.details.date).min(),
+                matches: appMatches
+            )
         }
 
         return groups

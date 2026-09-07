@@ -100,6 +100,10 @@ func buildLeagueTable(
 
 struct GameDayGroup: Content {
     let gameday: Int
+    /// The first scheduled match date for this matchday. The app can use this
+    /// as the date displayed on the matchday card instead of creating a card
+    /// for every calendar date.
+    let date: Date?
     let matches: [AppModels.AppMatchOverview]
 }
 
@@ -107,4 +111,3 @@ struct AppStadiumWithForecast: Content {
     let stadium: Stadium
     let forecast: Stadium.WeatherResponse
 }
-

@@ -254,7 +254,11 @@ extension AppController {
                 )
             }
 
-            groups.append(GameDayGroup(gameday: day, matches: appMatches))
+            groups.append(GameDayGroup(
+                gameday: day,
+                date: matchesForDay.compactMap(\.details.date).min(),
+                matches: appMatches
+            ))
         }
 
         return groups
