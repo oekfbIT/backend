@@ -2,6 +2,17 @@
 import XCTVapor
 
 final class AppTests: XCTestCase {
+    func testNewRefereesAreActiveByDefault() {
+        let referee = Referee(
+            name: "Test Referee",
+            identification: nil,
+            image: nil,
+            nationality: "Österreich"
+        )
+
+        XCTAssertEqual(referee.active, true)
+    }
+
     func testCreatedTokensAreCookieAndBearerSafe() throws {
         let id = UUID()
         let user = User(

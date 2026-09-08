@@ -38,7 +38,8 @@ let app_migrations: [Migration] = [
     SeasonTeamMigration(),
     SeasonDateRangeMigration(),
     StatsQueryIndexesMigration(),
-    PrimaryLeagueOverviewIndexesMigration()
+    PrimaryLeagueOverviewIndexesMigration(),
+    RefereeActiveMigration()
 ]
 
 struct UserMigration { }

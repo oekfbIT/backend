@@ -21,6 +21,7 @@ final class Referee: Model, Content, Codable {
     @OptionalField(key: FieldKeys.identification) var identification: String?
     @OptionalField(key: FieldKeys.image) var image: String?
     @OptionalField(key: FieldKeys.nationality) var nationality: String?
+    @OptionalField(key: FieldKeys.active) var active: Bool?
     enum FieldKeys {
         static var id: FieldKey { "id" }
         static var userId: FieldKey { "userId" }
@@ -31,11 +32,12 @@ final class Referee: Model, Content, Codable {
         static var balance: FieldKey { "balance" }
         static var identification: FieldKey { "identification" }
         static var nationality: FieldKey { "nationality" }
+        static var active: FieldKey { "active" }
     }
 
     init() {}
 
-    init(id: UUID? = nil, userId: UUID? = nil, balance: Double? = 0, name: String?, identification: String?, image: String?, nationality: String?, phone: String? = nil) {
+    init(id: UUID? = nil, userId: UUID? = nil, balance: Double? = 0, name: String?, identification: String?, image: String?, nationality: String?, phone: String? = nil, active: Bool? = true) {
         self.id = id
         self.$user.id = userId
         self.balance = balance
@@ -44,6 +46,7 @@ final class Referee: Model, Content, Codable {
         self.image = image
         self.nationality = nationality
         self.phone = phone
+        self.active = active
     }
 }
 
@@ -58,7 +61,29 @@ extension Referee: Mergeable {
         merged.identification = other.identification
         merged.image = other.image
         merged.nationality = other.nationality
+        merged.active = other.active ?? self.active ?? true
         return merged
+    }
+}
+
+/// Adds availability status and keeps every existing referee active by default.
+struct RefereeActiveMigration: Migration {
+    func prepare(on database: Database) -> EventLoopFuture<Void> {
+        database.schema(Referee.schema)
+            .field(Referee.FieldKeys.active, .bool)
+            .update()
+            .flatMap {
+                Referee.query(on: database)
+                    .filter(\.$active == nil)
+                    .set(\.$active, to: true)
+                    .update()
+            }
+    }
+
+    func revert(on database: Database) -> EventLoopFuture<Void> {
+        database.schema(Referee.schema)
+            .deleteField(Referee.FieldKeys.active)
+            .update()
     }
 }
 
@@ -81,4 +106,3 @@ extension Referee: Migration {
         database.schema(Referee.schema).delete()
     }
 }
-

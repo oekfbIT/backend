@@ -43,6 +43,7 @@ extension AdminController {
         let phone: String?
         let nationality: String?
         let balance: Double?
+        let active: Bool?
     }
 
     struct PatchRefereeRequest: Content {
@@ -53,6 +54,7 @@ extension AdminController {
         let image: String?
         let nationality: String?
         let userId: UUID?
+        let active: Bool?
     }
 
     struct RefereeAssignmentCompact: Content {
@@ -102,6 +104,7 @@ extension AdminController {
         if let v = body.image { ref.image = v }
         if let v = body.nationality { ref.nationality = v }
         if let v = body.userId { ref.$user.id = v }
+        if let v = body.active { ref.active = v }
 
         try await ref.save(on: req.db)
         return ref
@@ -120,7 +123,8 @@ extension AdminController {
                 image: r.image,
                 phone: r.phone,
                 nationality: r.nationality,
-                balance: r.balance
+                balance: r.balance,
+                active: r.active
             )
         }
     }
