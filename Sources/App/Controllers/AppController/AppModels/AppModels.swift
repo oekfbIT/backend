@@ -98,6 +98,7 @@ struct AppModels {
         let logo: String?
         let teamCount: Int?
         let seasonName: String?
+        let category: LeagueCategory?
 
         init(
             id: UUID,
@@ -106,7 +107,8 @@ struct AppModels {
             state: Bundesland,
             logo: String?,
             teamCount: Int? = nil,
-            seasonName: String? = nil
+            seasonName: String? = nil,
+            category: LeagueCategory? = nil
         ) {
             self.id = id
             self.name = name
@@ -115,6 +117,7 @@ struct AppModels {
             self.logo = logo
             self.teamCount = teamCount
             self.seasonName = seasonName
+            self.category = category
         }
     }
     

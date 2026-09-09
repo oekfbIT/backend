@@ -10,6 +10,7 @@ let app_migrations: [Migration] = [
     PlayerMigration(),
     LeagueMigration(),
     LeagueAddLogoMigration(),
+    LeagueAddCategoryMigration(),
     MatchMigration(),
     StadiumMigration(),
     UserVerificationTokenMigration(),

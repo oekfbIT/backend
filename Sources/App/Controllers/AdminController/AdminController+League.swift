@@ -65,6 +65,7 @@ extension AdminController {
         let name: String
         let state: Bundesland
         let logo: String?
+        let category: LeagueCategory?
     }
 
     /// Patch-style updates: send only what you want to change.
@@ -77,6 +78,7 @@ extension AdminController {
         let youtube: String?
         let teamcount: Int?
         let visibility: Bool?
+        let category: LeagueCategory?
         let name: String?
     }
 
@@ -154,7 +156,8 @@ extension AdminController {
             wochenbericht: nil,
             homepagedata: nil,
             youtube: nil,
-            visibility: true
+            visibility: true,
+            category: body.category ?? .major
         )
 
         // Keep nameLower consistent
@@ -183,6 +186,7 @@ extension AdminController {
         if let youtube = patch.youtube { league.youtube = youtube }
         if let teamcount = patch.teamcount { league.teamcount = teamcount }
         if let visibility = patch.visibility { league.visibility = visibility }
+        if let category = patch.category { league.category = category }
 
         if let name = patch.name {
             let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -38,6 +38,11 @@ struct HomepageData: Codable {
     var sliderdata: [SliderData]
 }
 
+enum LeagueCategory: String, Codable {
+    case major
+    case challenger
+}
+
 // MARK: - League Model Extension
 
 extension League {
@@ -71,6 +76,7 @@ final class League: Model, Content, Codable {
     @OptionalField(key: FieldKeys.youtube) var youtube: String?
     @OptionalField(key: FieldKeys.teamcount) var teamcount: Int?
     @OptionalField(key: FieldKeys.visibility) var visibility: Bool?
+    @OptionalField(key: FieldKeys.category) var category: LeagueCategory?
     @Field(key: FieldKeys.name) var name: String
     @Children(for: \.$league) var teams: [Team]
     @Children(for: \.$league) var seasons: [Season]
@@ -89,11 +95,12 @@ final class League: Model, Content, Codable {
         static var homepageData: FieldKey { "homepageData" }
         static var youtube: FieldKey { "youtube" }
         static var visibility: FieldKey { "visibility" }
+        static var category: FieldKey { "category" }
     }
 
     init() {}
 
-    init(id: UUID? = nil, state: Bundesland?, teamcount: Int?, code: String, name: String, logo: String? = nil, wochenbericht: String? = nil, homepagedata: HomepageData? = nil, youtube: String? = nil, visibility: Bool?) {
+    init(id: UUID? = nil, state: Bundesland?, teamcount: Int?, code: String, name: String, logo: String? = nil, wochenbericht: String? = nil, homepagedata: HomepageData? = nil, youtube: String? = nil, visibility: Bool?, category: LeagueCategory? = .major) {
         self.id = id
         self.state = state
         self.code = code
@@ -103,6 +110,7 @@ final class League: Model, Content, Codable {
         self.homepagedata = homepagedata
         self.youtube = youtube
         self.visibility = visibility
+        self.category = category
         self.nameLower = name.lowercased()
 
     }
@@ -121,6 +129,7 @@ extension League: Mergeable {
         merged.homepagedata = other.homepagedata
         merged.youtube = other.youtube
         merged.visibility = other.visibility
+        merged.category = other.category
         return merged
     }
 }
@@ -137,6 +146,7 @@ extension LeagueMigration: Migration {
             .field(League.FieldKeys.hourly, .double)
             .field(League.FieldKeys.teamcount, .int)
             .field(League.FieldKeys.visibility, .bool)
+            .field(League.FieldKeys.category, .string)
             .field(League.FieldKeys.homepageData, .json)
             .field(League.FieldKeys.youtube, .string)
             .create()
@@ -157,6 +167,20 @@ extension LeagueAddLogoMigration: Migration {
     func revert(on database: Database) -> EventLoopFuture<Void> {
         database.schema(League.schema)
             .deleteField(League.FieldKeys.logo)
+            .update()
+    }
+}
+
+struct LeagueAddCategoryMigration: Migration {
+    func prepare(on database: Database) -> EventLoopFuture<Void> {
+        database.schema(League.schema)
+            .field(League.FieldKeys.category, .string)
+            .update()
+    }
+
+    func revert(on database: Database) -> EventLoopFuture<Void> {
+        database.schema(League.schema)
+            .deleteField(League.FieldKeys.category)
             .update()
     }
 }
@@ -455,7 +479,8 @@ extension League {
             name: name,
             code: code ?? "",
             state: state ?? .wien,
-            logo: logo
+            logo: logo,
+            category: category
         )
     }
 }
