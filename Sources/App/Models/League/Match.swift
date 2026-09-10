@@ -7,6 +7,7 @@ struct MatchDetails: Codable {
     var date: Date?
     var stadium: UUID?
     var location: String?
+    var videoURL: String? = nil
 }
 
 struct Score: Codable {

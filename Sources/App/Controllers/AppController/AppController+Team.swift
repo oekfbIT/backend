@@ -80,16 +80,15 @@ extension AppController {
 
         let teamOverview = try await team.toAppTeamOverview(league: leagueOverview, req: req).get()
 
-        let playerStats = try await StatsCacheManager.getPlayerStats(
-            for: team.players.compactMap(\.id),
-            on: req.db
-        ).get()
+        let ids = team.players.compactMap(\.id)
+        let leagues = Dictionary(uniqueKeysWithValues: ids.map { ($0, team.$league.id) })
+        let playerStats = try await PlayerStatisticsService.calculate(playerIDs: ids, activeLeagueIDs: leagues, on: req.db).get()
         let playerOverviews = try await team.players.asyncMap { player in
-            let stats = player.id.flatMap { playerStats[$0] } ?? PlayerStatisticsService.emptyStats()
-            return try await player.toAppPlayer(team: teamOverview, stats: stats, req: req)
+            let pair = player.id.flatMap { playerStats[$0] }
+            return try await player.toAppPlayer(team: teamOverview, stats: pair?.all ?? PlayerStatisticsService.emptyStats(), seasonStats: pair?.season, req: req)
         }
         
-        return try await team.toAppTeam(league: leagueOverview, players: playerOverviews, req: req).get()
+        return try await team.toAppTeam(league: leagueOverview, players: playerOverviews, statistics: TeamStatsPair(all: teamOverview.stats ?? TeamStatisticsService.emptyStats(), season: teamOverview.seasonStats ?? TeamStatisticsService.emptyStats()), req: req).get()
     }
 
     // MARK: - GET /app/team/:teamID/balance
@@ -129,16 +128,15 @@ extension AppController {
 
         let teamOverview = try await team.toAppTeamOverview(league: leagueOverview, req: req).get()
 
-        let playerStats = try await StatsCacheManager.getPlayerStats(
-            for: team.players.compactMap(\.id),
-            on: req.db
-        ).get()
+        let ids = team.players.compactMap(\.id)
+        let leagues = Dictionary(uniqueKeysWithValues: ids.map { ($0, team.$league.id) })
+        let playerStats = try await PlayerStatisticsService.calculate(playerIDs: ids, activeLeagueIDs: leagues, on: req.db).get()
         let playerOverviews = try await team.players.asyncMap { player in
-            let stats = player.id.flatMap { playerStats[$0] } ?? PlayerStatisticsService.emptyStats()
-            return try await player.toAppPlayer(team: teamOverview, stats: stats, req: req)
+            let pair = player.id.flatMap { playerStats[$0] }
+            return try await player.toAppPlayer(team: teamOverview, stats: pair?.all ?? PlayerStatisticsService.emptyStats(), seasonStats: pair?.season, req: req)
         }
 
-        return try await team.toAppTeam(league: leagueOverview, players: playerOverviews, req: req).get()
+        return try await team.toAppTeam(league: leagueOverview, players: playerOverviews, statistics: TeamStatsPair(all: teamOverview.stats ?? TeamStatisticsService.emptyStats(), season: teamOverview.seasonStats ?? TeamStatisticsService.emptyStats()), req: req).get()
     }
     
     func getFixturesByTeamID(req: Request) async throws -> [GameDayGroup] {
@@ -162,27 +160,17 @@ extension AppController {
         // Optional query parameter ?onlyPrimary=true
         let onlyPrimary = (try? req.query.get(Bool.self, at: "onlyPrimary")) ?? false
 
-        // 2️⃣ Fetch relevant seasons
-        var seasonQuery = Season.query(on: req.db)
-            .filter(\.$league.$id == league.id)
-
+        var query = Match.query(on: req.db).group(.or) {
+            $0.filter(\.$homeTeam.$id == teamID)
+            $0.filter(\.$awayTeam.$id == teamID)
+        }.with(\.$homeTeam).with(\.$awayTeam).with(\.$season) { $0.with(\.$league) }
         if onlyPrimary {
-            seasonQuery = seasonQuery.filter(\.$primary == true)
+            let ids = try await Season.query(on: req.db).filter(\.$league.$id == league.id)
+                .filter(\.$primary == true).all(\.$id)
+            guard !ids.isEmpty else { return [] }
+            query = query.filter(\.$season.$id ~~ ids)
         }
-
-        let seasons = try await seasonQuery.all()
-        let seasonIDs = try seasons.map { try $0.requireID() }
-
-        // 3️⃣ Fetch matches where this team played (home or away)
-        let matches = try await Match.query(on: req.db)
-            .group(.or) { or in
-                or.filter(\.$homeTeam.$id == teamID)
-                or.filter(\.$awayTeam.$id == teamID)
-            }
-            .filter(\.$season.$id ~~ seasonIDs)
-            .with(\.$homeTeam)
-            .with(\.$awayTeam)
-            .all()
+        let matches = try await query.all()
 
         // 4️⃣ Group by gameday and sort by date
         let grouped = Dictionary(grouping: matches) { $0.details.gameday }
@@ -223,10 +211,10 @@ extension AppController {
                 )
 
                 let season = try match.season?.toAppSeason() ?? AppModels.AppSeason(
-                    id: UUID().uuidString,
+                    id: match.$season.id?.uuidString ?? "00000000-0000-0000-0000-000000000000",
                     league: league.name,
                     leagueId: try league.requireID(),
-                    name: "Primary"
+                    name: "Ohne Saisonzuordnung"
                 )
 
                 return AppModels.AppMatchOverview(

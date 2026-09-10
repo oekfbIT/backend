@@ -349,7 +349,7 @@ extension AdminController {
             name: body.name,
             image: body.image,
             number: body.number,
-            assign: body.assign,
+            assign: MatchAssignment(rawValue: body.scoreTeam.lowercased()),
             ownGoal: body.ownGoal
         )
         event.$match.id = matchId

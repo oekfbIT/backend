@@ -263,17 +263,26 @@ final class PlayerController: RouteCollection {
             return req.eventLoop.future(error: Abort(.badRequest, reason: "Missing search parameter"))
         }
 
-        return Player.query(on: req.db)
-            .group(.or) { group in
-                group.filter(\.$name ~~ searchValue)
-                group.filter(\.$sid ~~ searchValue)
+        return TransferSettings.query(on: req.db).first().flatMap { settings in
+            guard let settings = settings, settings.isTransferOpen else {
+                return req.eventLoop.makeFailedFuture(
+                    Abort(.forbidden, reason: "Transfers are currently closed.")
+                )
             }
-            .filter(\.$email != nil) // Ensure email is not nil
-            .filter(\.$email != "") // Ensure email is not empty
-            .all()
-            .map { players in
-                players.map { $0.asPublic() }
-            }
+
+            return Player.query(on: req.db)
+                .group(.or) { group in
+                    group.filter(\.$name ~~ searchValue)
+                    group.filter(\.$sid ~~ searchValue)
+                }
+                .filter(\.$email != nil)
+                .filter(\.$email != "")
+                .filter(\.$transferred != true)
+                .all()
+                .map { players in
+                    players.map { $0.asPublic() }
+                }
+        }
     }
 
     func searchByName(req: Request) -> EventLoopFuture<[Player.Public]> {

@@ -237,47 +237,6 @@ extension Player {
         return PlayerStatisticsService.calculate(playerID: playerID, on: db).map(\.all)
     }
 
-    /// Computes stats directly from an already-loaded `events` array (no DB hit).
-    func getStatsFromLoadedEvents() -> PlayerStats {
-        return Self.computeStats(from: self.events)
-    }
-
-    /// Event-only fallback for callers that deliberately avoid a database query.
-    /// A team-sheet-only appearance cannot be inferred from this method.
-    private static func computeStats(from events: [MatchEvent]) -> PlayerStats {
-        var stats = PlayerStats(
-            matchesPlayed: 0,
-            goalsScored: 0,
-            redCards: 0,
-            yellowCards: 0,
-            yellowRedCrd: 0
-        )
-
-        var matchSet = Set<UUID>()
-
-        for event in events {
-            matchSet.insert(event.$match.id)
-
-            switch event.type {
-            case .goal where event.ownGoal != true:
-                stats.goalsScored += 1
-            case .redCard:
-                stats.redCards += 1
-            case .yellowCard:
-                stats.yellowCards += 1
-            case .yellowRedCard:
-                stats.yellowRedCrd += 1
-            default:
-                break
-            }
-        }
-
-        stats.matchesPlayed = matchSet.count
-        stats.goalsAverage = stats.matchesPlayed > 0
-            ? Double(stats.goalsScored) / Double(stats.matchesPlayed)
-            : nil
-        return stats
-    }
 }
 
 // MARK: - Player → App models

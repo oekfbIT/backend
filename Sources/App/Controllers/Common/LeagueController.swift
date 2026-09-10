@@ -81,105 +81,12 @@ final class LeagueController: RouteCollection {
         guard let leagueID = req.parameters.get("id", as: UUID.self) else {
             return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league ID"))
         }
-        
-        return League.find(leagueID, on: req.db)
-            .unwrap(or: Abort(.notFound, reason: "League not found"))
-            .flatMap { league in
-                league.$teams.query(on: req.db).all().flatMap { teams in
-                    let teamStatsFutures = teams.map { team in
-                        self.getTeamStats(teamID: team.id!, db: req.db).map { stats in (team, stats) }
-                    }
-
-                    return req.eventLoop.flatten(teamStatsFutures).map { teamStatsPairs in
-                        var tableItems: [TableItem] = []
-                        
-                        for (team, stats) in teamStatsPairs {
-                            let tableItem = TableItem(
-                                image: team.logo,
-                                name: team.teamName,
-                                points: team.points,
-                                id: team.id!,
-                                goals: stats.totalScored,
-                                ranking: 0,
-                                wins: stats.wins,
-                                draws: stats.draws,
-                                losses: stats.losses,
-                                scored: stats.totalScored,
-                                against: stats.totalAgainst,
-                                difference: stats.goalDifference, form: []
-                            )
-                            tableItems.append(tableItem)
-                        }
-                        
-                        tableItems.sort {
-                            if $0.points == $1.points {
-                                return $0.difference > $1.difference
-                            }
-                            return $0.points > $1.points
-                        }
-
-                        for i in 0..<tableItems.count {
-                            tableItems[i].ranking = i + 1
-                        }
-                        
-                        return tableItems
-                    }
-                }
-            }
+        return TeamStatisticsService.table(leagueID: leagueID, primaryOnly: true, on: req.db)
     }
 
     // Similar to HomepageController, we keep stats logic concise
     func getTeamStats(teamID: UUID, db: Database) -> EventLoopFuture<TeamStats> {
-        let validStatuses: [GameStatus] = [.completed, .abbgebrochen, .submitted, .cancelled, .done]
-
-        return Match.query(on: db)
-            .group(.or) { group in
-                group.filter(\.$homeTeam.$id == teamID)
-                group.filter(\.$awayTeam.$id == teamID)
-            }
-            .filter(\.$status ~~ validStatuses)
-            .with(\.$events)
-            .all()
-            .map { matches in
-                var stats = TeamStats(wins: 0, draws: 0, losses: 0, totalScored: 0, totalAgainst: 0, goalDifference: 0, totalPoints: 0, totalYellowCards: 0, totalRedCards: 0)
-                
-                for match in matches {
-                    let isHome = match.$homeTeam.id == teamID
-                    let scored = isHome ? match.score.home : match.score.away
-                    let against = isHome ? match.score.away : match.score.home
-
-                    stats.totalScored += scored
-                    stats.totalAgainst += against
-
-                    if scored > against {
-                        stats.wins += 1
-                        stats.totalPoints += 3
-                    } else if scored == against {
-                        stats.draws += 1
-                        stats.totalPoints += 1
-                    } else {
-                        stats.losses += 1
-                    }
-
-                    for event in match.events {
-                        if let assign = event.assign {
-                            if (isHome && assign == .home) || (!isHome && assign == .away) {
-                                switch event.type {
-                                case .yellowCard:
-                                    stats.totalYellowCards += 1
-                                case .redCard:
-                                    stats.totalRedCards += 1
-                                default:
-                                    break
-                                }
-                            }
-                        }
-                    }
-                }
-
-                stats.goalDifference = stats.totalScored - stats.totalAgainst
-                return stats
-            }
+        StatsCacheManager.getTeamStats(for: teamID, on: db)
     }
 
     
@@ -432,86 +339,9 @@ final class LeagueController: RouteCollection {
         guard let leagueID = req.parameters.get("id", as: UUID.self) else {
             return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league ID"))
         }
-
-        return Team.query(on: req.db)
-            .filter(\.$league.$id == leagueID)
-            .with(\.$players)
-            .all()
-            .flatMap { teams in
-                // 1) Build the dictionary: PlayerID -> (teamLogo, teamName, teamIdString)
-                var playerTeamDict: [UUID: (String?, String?, String?)] = [:]
-                for team in teams {
-                    let teamIdString = team.id?.uuidString
-                    for player in team.players {
-                        if let pid = player.id {
-                            // Store whichever info you want from the team
-                            playerTeamDict[pid] = (team.logo, team.teamName, teamIdString)
-                        }
-                    }
-                }
-                
-                // 2) Collect all the player IDs so we only fetch relevant events
-                let playerIDs = playerTeamDict.keys.map { $0 }
-
-                // 3) Fetch all events (of eventType) for those players
-                return MatchEvent.query(on: req.db)
-                    .filter(\.$player.$id ~~ playerIDs)
-                    .filter(\.$type == eventType)
-                    .all()
-                    // 4) Map them to your LeaderBoard objects, passing the dictionary
-                    .map { events in
-                        self.mapEventsToLeaderBoard(events, playerTeamDict: playerTeamDict)
-                    }
-            }
+        return LeaderboardService.fetch(leagueID: leagueID, eventType: eventType, primaryOnly: true, on: req.db)
     }
 
-    /// Aggregates events per player and joins with team info.
-    /// Assumes `playerTeamDict` contains mapping playerId → (teamImg, teamName, teamId)
-    func mapEventsToLeaderBoard(
-        _ events: [MatchEvent],
-        playerTeamDict: [UUID: (String?, String?, String?)]
-    ) -> [LeaderBoard] {
-        var playerEventCounts: [UUID: (name: String?, image: String?, number: String?, count: Int)] = [:]
-
-        for event in events {
-            // OptionalParent → id is UUID?
-            guard let pid = event.$player.id else {
-                // event is not tied to a (current) player → skip for leaderboard
-                continue
-            }
-
-            let info = (event.name, event.image, event.number)
-
-            if let existing = playerEventCounts[pid] {
-                playerEventCounts[pid] = (
-                    existing.name,
-                    existing.image,
-                    existing.number,
-                    existing.count + 1
-                )
-            } else {
-                playerEventCounts[pid] = (info.0, info.1, info.2, 1)
-            }
-        }
-
-        return playerEventCounts
-            .map { (playerId, data) in
-                let (teamImg, teamName, teamId) = playerTeamDict[playerId] ?? (nil, nil, nil)
-
-                return LeaderBoard(
-                    name: data.name,
-                    image: data.image,
-                    number: data.number,
-                    count: Double(data.count),
-                    playerid: playerId,
-                    teamimg: teamImg,
-                    teamName: teamName,
-                    teamId: teamId
-                )
-            }
-            .sorted { ($0.count ?? 0) > ($1.count ?? 0) }
-    }
-    
     // MARK: - New Functions for SliderData Management
     
     /// Adds a new slide to the league's homepage slider data.
@@ -665,6 +495,7 @@ struct TeamStats: Content, Codable {
     var totalPoints: Int
     var totalYellowCards: Int
     var totalRedCards: Int
+    var totalYellowRedCards: Int = 0
     var avgGoals: Double?
 }
 

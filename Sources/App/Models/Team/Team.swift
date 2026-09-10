@@ -308,6 +308,7 @@ extension Team {
     func toAppTeam(
         league: AppModels.AppLeagueOverview,
         players: [AppModels.AppPlayer],
+        statistics: TeamStatsPair? = nil,
         req: Request
     ) async throws -> EventLoopFuture<AppModels.AppTeam> {
         let teamID = try requireID()
@@ -317,13 +318,15 @@ extension Team {
             on: req.db,
             onlyPrimarySeason: true
         )
-        return StatsCacheManager.getTeamStats(for: teamID, on: req.db)
-            .map { stats in
-                AppModels.AppTeam(
+        let statsF = statistics.map { req.eventLoop.makeSucceededFuture([teamID: $0]) }
+            ?? TeamStatisticsService.calculate(teamIDs: [teamID], on: req.db)
+        return statsF.map { pairs in
+                let pair = pairs[teamID] ?? TeamStatsPair(all: TeamStatisticsService.emptyStats(), season: TeamStatisticsService.emptyStats())
+                return AppModels.AppTeam(
                     id: teamID,
                     sid: self.sid ?? "",
                     league: league,
-                    points: self.points,
+                    points: pair.season.totalPoints,
                     logo: self.logo,
                     teamImage: self.coverimg ?? "",
                     name: self.teamName,
@@ -336,7 +339,8 @@ extension Team {
                     trikot: self.trikot,
                     balance: self.balance,
                     players: players,
-                    stats: stats,
+                    stats: pair.all,
+                    seasonStats: pair.season,
                     form: form
                 )
             }
@@ -349,17 +353,18 @@ extension Team {
     ) throws -> EventLoopFuture<AppModels.AppTeamOverview> {
         let teamID = try requireID()
         
-        return StatsCacheManager.getTeamStats(for: teamID, on: req.db)
-            .map { stats in
-                AppModels.AppTeamOverview(
+        return TeamStatisticsService.calculate(teamIDs: [teamID], on: req.db).map { pairs in
+                let pair = pairs[teamID] ?? TeamStatsPair(all: TeamStatisticsService.emptyStats(), season: TeamStatisticsService.emptyStats())
+                return AppModels.AppTeamOverview(
                     id: teamID,
                     sid: self.sid ?? "",
                     league: league,
-                    points: self.points,
+                    points: pair.season.totalPoints,
                     logo: self.logo,
                     name: self.teamName,
                     shortName: self.shortName,
-                    stats: stats
+                    stats: pair.all,
+                    seasonStats: pair.season
                 )
             }
     }
@@ -367,61 +372,14 @@ extension Team {
 
 
 extension Team {
-    static func getRecentForm(
-        for teamID: UUID,
-        on db: Database,
-        onlyPrimarySeason: Bool = false
-    ) async throws -> [FormItem] {
-        // Start base query
-        var query = Match.query(on: db)
-            .group(.or) { or in
-                or.filter(\.$homeTeam.$id == teamID)
-                or.filter(\.$awayTeam.$id == teamID)
-            }
-            .filter(\.$status == .done)
-
-        // 🔹 Restrict to primary season if requested
-        if onlyPrimarySeason {
-            query = query
-                .join(parent: \Match.$season)
-                .filter(Season.self, \.$primary == true)
-        }
-
-        let matches = try await query.all()
-
-        // Sort manually by date
-        let sortedMatches = matches.sorted {
-            let d1 = $0.details.date ?? .distantPast
-            let d2 = $1.details.date ?? .distantPast
-            return d1 > d2
-        }
-
-        let recentMatches = Array(sortedMatches.prefix(5))
-
-        return recentMatches.compactMap { match in
-            guard let matchID = match.id else { return defaultFromItemBlank }
-
-            let isHome = match.$homeTeam.id == teamID
-            let homeScore = match.score.home
-            let awayScore = match.score.away
-
-            let result: FormResultItem
-            if homeScore == awayScore {
-                result = .D
-            } else if (isHome && homeScore > awayScore) || (!isHome && awayScore > homeScore) {
-                result = .W
-            } else {
-                result = .L
-            }
-
-            return FormItem(result: result,
-                            matchID: matchID,
-                            gameday: match.details.gameday,
-                            score: match.score,
-                            home: match.homeBlanket?.name,
-                            away: match.awayBlanket?.name,
-                            date: match.details.date)
-        }
+    static func getRecentForm(for teamID: UUID, on db: Database, onlyPrimarySeason: Bool = false) async throws -> [FormItem] {
+        let matches = try await Match.query(on: db).group(.or) {
+            $0.filter(\.$homeTeam.$id == teamID)
+            $0.filter(\.$awayTeam.$id == teamID)
+        }.with(\.$season).all()
+        return TeamStatisticsService.recentForm(teamID: teamID, matches: matches.filter {
+            !onlyPrimarySeason || $0.season?.primary == true
+        })
     }
 }
 

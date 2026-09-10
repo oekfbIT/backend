@@ -61,40 +61,8 @@ final class AppController: RouteCollection {
     }
 }
 
-func buildLeagueTable(
-    for league: League,
-    on req: Request,
-    onlyPrimarySeason: Bool = false
-) async throws -> [TableItem] {
-    try await league.teams.asyncMap { team in
-        let stats = try await Team.getTeamStats(
-            teamID: try team.requireID(),
-            db: req.db,
-            onlyPrimarySeason: onlyPrimarySeason
-        ).get()
-
-        let form = try await Team.getRecentForm(
-            for: try team.requireID(),
-            on: req.db,
-            onlyPrimarySeason: onlyPrimarySeason
-        )
-
-        return TableItem(
-            image: team.logo,
-            name: team.teamName,
-            points: team.points,
-            id: try team.requireID(),
-            goals: stats.totalScored,
-            ranking: 0,
-            wins: stats.wins,
-            draws: stats.draws,
-            losses: stats.losses,
-            scored: stats.totalScored,
-            against: stats.totalAgainst,
-            difference: stats.goalDifference,
-            form: form
-        )
-    }
+func buildLeagueTable(for league: League, on req: Request, onlyPrimarySeason: Bool = false) async throws -> [TableItem] {
+    try await TeamStatisticsService.table(leagueID: league.requireID(), primaryOnly: onlyPrimarySeason, on: req.db).get()
 }
 
 

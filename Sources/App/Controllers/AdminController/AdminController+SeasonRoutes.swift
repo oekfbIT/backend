@@ -443,30 +443,8 @@ extension AdminController {
 private extension AdminController {
 
     func adminSeasonStats(teamID: UUID, matches: [Match]) -> (wins: Int, draws: Int, losses: Int) {
-        var wins = 0
-        var draws = 0
-        var losses = 0
-
-        for match in matches {
-            let homeID = match.$homeTeam.id
-            let awayID = match.$awayTeam.id
-            guard homeID == teamID || awayID == teamID else { continue }
-
-            switch match.status {
-            case .pending, .first, .halftime, .second, .cancelled:
-                continue
-            default:
-                break
-            }
-
-            let ownScore = homeID == teamID ? match.score.home : match.score.away
-            let opponentScore = homeID == teamID ? match.score.away : match.score.home
-            if ownScore > opponentScore { wins += 1 }
-            else if ownScore == opponentScore { draws += 1 }
-            else { losses += 1 }
-        }
-
-        return (wins, draws, losses)
+        let stats = TeamStatisticsService.aggregate(teamID: teamID, matches: matches)
+        return (stats.wins, stats.draws, stats.losses)
     }
 
     func requireSeason(req: Request, param: String) async throws -> Season {

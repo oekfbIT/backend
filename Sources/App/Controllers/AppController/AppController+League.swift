@@ -84,17 +84,16 @@ extension AppController {
 
         let overview = try league.toAppLeagueOverview()
 
-        // Map teams and attach cached stats
+        // Batch current-season team statistics for this league.
+        let teamStats = try await TeamStatisticsService.calculate(teamIDs: league.teams.compactMap(\.id), primaryOnly: true, on: req.db).get()
         let teams = try await league.teams.asyncMap { team in
-            let stats = try await StatsCacheManager
-                .getTeamStats(for: try team.requireID(), on: req.db)
-                .get()
+            let stats = teamStats[try team.requireID()]?.season ?? TeamStatisticsService.emptyStats()
 
             return AppModels.AppTeamOverview(
                 id: try team.requireID(),
                 sid: team.sid ?? "",
                 league: overview,
-                points: team.points,
+                points: stats.totalPoints,
                 logo: team.logo,
                 name: team.teamName,
                 shortName: team.shortName,
@@ -136,17 +135,16 @@ extension AppController {
 
         let overview = try league.toAppLeagueOverview()
 
-        // Map teams and attach cached stats
+        // Batch current-season team statistics for this league.
+        let teamStats = try await TeamStatisticsService.calculate(teamIDs: league.teams.compactMap(\.id), primaryOnly: true, on: req.db).get()
         let teams = try await league.teams.asyncMap { team in
-            let stats = try await StatsCacheManager
-                .getTeamStats(for: try team.requireID(), on: req.db)
-                .get()
+            let stats = teamStats[try team.requireID()]?.season ?? TeamStatisticsService.emptyStats()
 
             return AppModels.AppTeamOverview(
                 id: try team.requireID(),
                 sid: team.sid ?? "",
                 league: overview,
-                points: team.points,
+                points: stats.totalPoints,
                 logo: team.logo,
                 name: team.teamName,
                 shortName: team.shortName,
@@ -155,24 +153,7 @@ extension AppController {
         }
 
         // Build league table directly from teams
-        var tableItems = teams.compactMap { team -> TableItem? in
-            guard let stats = team.stats else { return nil }
-            return TableItem(
-                image: team.logo,
-                name: team.name,
-                points: team.points,
-                id: team.id,
-                goals: stats.totalScored,
-                ranking: 0,
-                wins: stats.wins,
-                draws: stats.draws,
-                losses: stats.losses,
-                scored: stats.totalScored,
-                against: stats.totalAgainst,
-                difference: stats.goalDifference,
-                form: [] // include this since TableItem now requires form
-            )
-        }
+        var tableItems = try await buildLeagueTable(for: league, on: req, onlyPrimarySeason: true)
 
         // Sort by points, then goal difference
         tableItems.sort {
@@ -206,16 +187,15 @@ extension AppController {
 
         let leagueOverview = try league.toAppLeagueOverview()
 
+        let teamStats = try await TeamStatisticsService.calculate(teamIDs: league.teams.compactMap(\.id), primaryOnly: true, on: req.db).get()
         return try await league.teams.asyncMap { team in
-            let stats = try await StatsCacheManager
-                .getTeamStats(for: try team.requireID(), on: req.db)
-                .get()
+            let stats = teamStats[try team.requireID()]?.season ?? TeamStatisticsService.emptyStats()
 
             return AppModels.AppTeamOverview(
                 id: try team.requireID(),
                 sid: team.sid ?? "",
                 league: leagueOverview,
-                points: team.points,
+                points: stats.totalPoints,
                 logo: team.logo,
                 name: team.teamName,
                 shortName: team.shortName,
@@ -240,16 +220,15 @@ extension AppController {
 
         let leagueOverview = try league.toAppLeagueOverview()
 
+        let teamStats = try await TeamStatisticsService.calculate(teamIDs: league.teams.compactMap(\.id), primaryOnly: true, on: req.db).get()
         return try await league.teams.asyncMap { team in
-            let stats = try await StatsCacheManager
-                .getTeamStats(for: try team.requireID(), on: req.db)
-                .get()
+            let stats = teamStats[try team.requireID()]?.season ?? TeamStatisticsService.emptyStats()
 
             return AppModels.AppTeamOverview(
                 id: try team.requireID(),
                 sid: team.sid ?? "",
                 league: leagueOverview,
-                points: team.points,
+                points: stats.totalPoints,
                 logo: team.logo,
                 name: team.teamName,
                 shortName: team.shortName,
@@ -491,7 +470,7 @@ extension AppController {
         }
 
         // ✅ Desktop equivalent: NOT primary-season restricted
-        var tableItems = try await buildLeagueTable(for: league, on: req, onlyPrimarySeason: false)
+        var tableItems = try await buildLeagueTable(for: league, on: req, onlyPrimarySeason: true)
 
         tableItems.sort {
             if $0.points == $1.points {
@@ -510,143 +489,8 @@ extension AppController {
     // MARK: - CURRENT SEASON TABLE (EXACT webClient clone)
     // MARK: - CURRENT SEASON TABLE (CLONE + FORM)
     func getLeagueCurrentSeasonTable_CLONE(req: Request) async throws -> [TableItem] {
-        guard let leagueID = req.parameters.get("leagueID", as: UUID.self) else {
-            throw Abort(.badRequest, reason: "Missing or invalid league ID.")
-        }
-
-        guard let league = try await League.find(leagueID, on: req.db) else {
-            throw Abort(.notFound, reason: "League not found.")
-        }
-
-        guard let primarySeason = try await Season.query(on: req.db)
-            .filter(\.$league.$id == leagueID)
-            .filter(\.$primary == true)
-            .with(\.$matches)
-            .first()
-        else {
-            throw Abort(.notFound, reason: "No primary season found.")
-        }
-
-        let seasonMatches = primarySeason.matches
-        let teams = try await league.$teams.query(on: req.db).all()
-
-        let doneMatches: [Match] = try await Match.query(on: req.db)
-            .filter(\.$status == .done)
-            .join(parent: \Match.$season)
-            .filter(Season.self, \.$primary == true)
-            .filter(Season.self, \.$league.$id == leagueID)
-            .all()
-
-        func stats(for teamID: UUID) -> (w: Int, d: Int, l: Int, s: Int, a: Int) {
-            var w = 0, d = 0, l = 0, s = 0, a = 0
-
-            for m in seasonMatches {
-                let homeId = m.$homeTeam.id
-                let awayId = m.$awayTeam.id
-
-                guard homeId == teamID || awayId == teamID else { continue }
-
-                switch m.status {
-                case .pending, .first, .halftime, .second:
-                    continue
-                default:
-                    break
-                }
-
-                let isHome = homeId == teamID
-                let mine = isHome ? m.score.home : m.score.away
-                let opp = isHome ? m.score.away : m.score.home
-
-                s += mine
-                a += opp
-
-                if mine > opp { w += 1 }
-                else if mine == opp { d += 1 }
-                else { l += 1 }
-            }
-
-            return (w, d, l, s, a)
-        }
-
-        func recentForm(for teamID: UUID) -> [FormItem] {
-            let relevant = doneMatches.filter { m in
-                m.$homeTeam.id == teamID || m.$awayTeam.id == teamID
-            }
-
-            let sorted = relevant.sorted {
-                let d1 = $0.details.date ?? .distantPast
-                let d2 = $1.details.date ?? .distantPast
-                return d1 > d2
-            }
-
-            return Array(sorted.prefix(5)).compactMap { match in
-                guard let matchID = match.id else { return nil }
-
-                let isHome = match.$homeTeam.id == teamID
-                let homeScore = match.score.home
-                let awayScore = match.score.away
-
-                let result: FormResultItem
-                if homeScore == awayScore {
-                    result = .D
-                } else if (isHome && homeScore > awayScore) || (!isHome && awayScore > homeScore) {
-                    result = .W
-                } else {
-                    result = .L
-                }
-
-                return FormItem(
-                    result: result,
-                    matchID: matchID,
-                    gameday: match.details.gameday,
-                    score: match.score,
-                    home: match.homeBlanket?.name,
-                    away: match.awayBlanket?.name,
-                    date: match.details.date
-                )
-            }
-        }
-
-        var rows: [TableItem] = teams.compactMap { team in
-            guard let tid = team.id else { return nil }
-
-            let st = stats(for: tid)
-            let calculatedPoints = st.w * 3 + st.d
-
-            let item = TableItem(
-                image: team.logo,
-                name: team.teamName,
-                points: calculatedPoints,
-                id: tid,
-                goals: st.s,
-                ranking: 0,
-                wins: st.w,
-                draws: st.d,
-                losses: st.l,
-                scored: st.s,
-                against: st.a,
-                difference: st.s - st.a,
-                form: recentForm(for: tid)
-            )
-
-            return item
-        }
-
-        rows.sort {
-            if $0.points == $1.points {
-                return $0.difference > $1.difference
-            }
-
-            return $0.points > $1.points
-        }
-
-        var table = rows
-
-        for i in table.indices {
-            table[i].ranking = i + 1
-        }
-
-        return table
+        let leagueID = try req.parameters.require("leagueID", as: UUID.self)
+        return try await TeamStatisticsService.table(leagueID: leagueID, primaryOnly: true, on: req.db).get()
     }
 
 }

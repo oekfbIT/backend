@@ -48,8 +48,7 @@ extension ClientController {
     }
 
     func fetchAllPlayerStats(_ players: [Player], db: Database) -> EventLoopFuture<[MiniPlayer]> {
-        let futures = players.map { player in
-            self.getPlayerStats(playerID: player.id!, db: db).map { stats in
+        let result = players.map { player in
                 MiniPlayer(
                     id: player.id,
                     sid: player.sid,
@@ -66,9 +65,8 @@ extension ClientController {
                     isCaptain: player.isCaptain,
                     bank: player.bank
                 )
-            }
         }
-        return db.eventLoop.flatten(futures)
+        return db.eventLoop.makeSucceededFuture(result)
     }
 
     func fetchTeamAndLeagueNews(teamName: String, leagueCode: String?, db: Database) -> EventLoopFuture<[NewsItem]> {
@@ -88,4 +86,3 @@ extension ClientController {
             .all()
     }
 }
-

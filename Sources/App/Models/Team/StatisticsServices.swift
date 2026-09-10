@@ -1,166 +1,125 @@
 import Fluent
 import Vapor
 
-/// One source of truth for player statistics used by the website and app APIs.
+/// Shared, indexed reads and aggregation for every player statistics consumer.
 enum PlayerStatisticsService {
+    // FieldKey's literal "id" aliases MongoDB's root _id. Codable lineups
+    // contain a literal nested "id", so this MUST use .string("id").
+    static let homePlayerPath: [FieldKey] = ["homeBlanket", "players", .string("id")]
+    static let awayPlayerPath: [FieldKey] = ["awayBlanket", "players", .string("id")]
+
+    struct Snapshot {
+        let matches: [Match]
+        let events: [MatchEvent]
+
+        func stats(for playerID: UUID, activeLeagueID: UUID? = nil) -> PlayerStatsPair {
+            let playerEvents = events.filter { $0.$player.id == playerID }
+            let eventIDs = Set(playerEvents.map { $0.$match.id })
+            let appearances = matches.filter {
+                contains(playerID, in: $0) || $0.id.map(eventIDs.contains) == true
+            }
+            return makeStats(matches: appearances, events: playerEvents, activeLeagueID: activeLeagueID)
+        }
+    }
+
     static func contains(_ playerID: UUID, in match: Match) -> Bool {
-        let homeContains = match.homeBlanket?.players.contains { $0.id == playerID } ?? false
-        let awayContains = match.awayBlanket?.players.contains { $0.id == playerID } ?? false
-        return homeContains || awayContains
+        (match.homeBlanket?.players.contains { $0.id == playerID } ?? false)
+            || (match.awayBlanket?.players.contains { $0.id == playerID } ?? false)
     }
 
     static func countsAsAppearance(_ match: Match) -> Bool {
-        switch match.status {
-        case .pending, .cancelled:
-            return false
-        default:
-            return true
-        }
+        match.status != .pending && match.status != .cancelled
     }
 
-    static func calculate(
-        playerID: UUID,
-        activeLeagueID: UUID? = nil,
-        on db: Database
-    ) -> EventLoopFuture<PlayerStatsPair> {
-        calculate(playerIDs: [playerID], activeLeagueIDs: [playerID: activeLeagueID], on: db)
-            .map { $0[playerID] ?? PlayerStatsPair(all: emptyStats(), season: emptyStats()) }
-    }
-
-    /// Fetches only matches where one of the players appears in a submitted team
-    /// sheet, plus matches that contain one of their recorded events. This avoids
-    /// scanning the entire `matches` collection for every player.
-    static func calculate(
-        playerIDs: [UUID],
-        activeLeagueIDs: [UUID: UUID?] = [:],
-        on db: Database
-    ) -> EventLoopFuture<[UUID: PlayerStatsPair]> {
-        let requestedIDs = Array(Set(playerIDs))
-        guard !requestedIDs.isEmpty else {
-            return db.eventLoop.makeSucceededFuture([:])
+    /// Query both lineups and event-only participation, across every season and
+    /// historical team. No current-team restriction and no collection-wide scan.
+    static func load(playerIDs: [UUID], on db: Database) -> EventLoopFuture<Snapshot> {
+        let ids = Array(Set(playerIDs))
+        guard !ids.isEmpty else {
+            return db.eventLoop.makeSucceededFuture(Snapshot(matches: [], events: []))
         }
-
-        let homePlayerPath: [FieldKey] = ["homeBlanket", "players", "id"]
-        let awayPlayerPath: [FieldKey] = ["awayBlanket", "players", "id"]
-
-        let blanketMatches = Match.query(on: db)
-            .group(.or) { group in
-                group.filter(homePlayerPath, .subset(inverse: false), requestedIDs)
-                group.filter(awayPlayerPath, .subset(inverse: false), requestedIDs)
+        let sheets = Match.query(on: db)
+            .group(.or) {
+                $0.filter(homePlayerPath, .subset(inverse: false), ids)
+                $0.filter(awayPlayerPath, .subset(inverse: false), ids)
             }
-            .with(\.$season)
+            .with(\.$season) { $0.with(\.$league) }
             .all()
+        let events = MatchEvent.query(on: db).filter(\.$player.$id ~~ ids).all()
+        return sheets.and(events).flatMap { matches, events in
+            let knownIDs = Set(matches.compactMap(\.id))
+            let missingIDs = Array(Set(events.map { $0.$match.id }).subtracting(knownIDs))
+            guard !missingIDs.isEmpty else {
+                return db.eventLoop.makeSucceededFuture(Snapshot(matches: matches, events: events))
+            }
+            // An event can outlive its deleted match. Fetching explicitly avoids
+            // an eager-parent failure and excludes that orphan from all totals.
+            return Match.query(on: db).filter(\.$id ~~ missingIDs)
+                .with(\.$season) { $0.with(\.$league) }.all()
+                .map { Snapshot(matches: matches + $0, events: events) }
+        }
+    }
 
-        let events = MatchEvent.query(on: db)
-            .filter(\.$player.$id ~~ requestedIDs)
-            .with(\.$match) { $0.with(\.$season) }
-            .all()
+    static func calculate(playerID: UUID, activeLeagueID: UUID? = nil, on db: Database) -> EventLoopFuture<PlayerStatsPair> {
+        load(playerIDs: [playerID], on: db).map { $0.stats(for: playerID, activeLeagueID: activeLeagueID) }
+    }
 
-        let emptyResult = Dictionary(uniqueKeysWithValues: requestedIDs.map {
-            ($0, PlayerStatsPair(all: emptyStats(), season: emptyStats()))
-        })
-
-        return blanketMatches.and(events).map { blanketMatches, events in
-            let requested = Set(requestedIDs)
+    static func calculate(playerIDs: [UUID], activeLeagueIDs: [UUID: UUID?] = [:], on db: Database) -> EventLoopFuture<[UUID: PlayerStatsPair]> {
+        let ids = Array(Set(playerIDs))
+        return load(playerIDs: ids, on: db).map { snapshot in
+            // Index once for a whole roster, not one scan/calculation per player.
+            let requested = Set(ids)
             var matchesByPlayer = [UUID: [UUID: Match]]()
             var eventsByPlayer = [UUID: [MatchEvent]]()
-
-            func add(_ match: Match, for playerID: UUID) {
-                guard let matchID = match.id else { return }
-                matchesByPlayer[playerID, default: [:]][matchID] = match
+            let matchesByID = Dictionary(snapshot.matches.compactMap { m in m.id.map { ($0, m) } }, uniquingKeysWith: { a, _ in a })
+            for match in snapshot.matches {
+                guard let matchID = match.id else { continue }
+                let participants = Set((match.homeBlanket?.players.map(\.id) ?? []) + (match.awayBlanket?.players.map(\.id) ?? []))
+                for id in participants.intersection(requested) { matchesByPlayer[id, default: [:]][matchID] = match }
             }
-
-            for match in blanketMatches {
-                let sheetPlayerIDs = (match.homeBlanket?.players.map(\.id) ?? [])
-                    + (match.awayBlanket?.players.map(\.id) ?? [])
-                for playerID in Set(sheetPlayerIDs) where requested.contains(playerID) {
-                    add(match, for: playerID)
-                }
+            for event in snapshot.events {
+                guard let id = event.$player.id, requested.contains(id) else { continue }
+                eventsByPlayer[id, default: []].append(event)
+                if let match = matchesByID[event.$match.id] { matchesByPlayer[id, default: [:]][event.$match.id] = match }
             }
-
-            for event in events {
-                guard let playerID = event.$player.id, requested.contains(playerID) else { continue }
-                eventsByPlayer[playerID, default: []].append(event)
-                add(event.match, for: playerID)
-            }
-
-            return Dictionary(uniqueKeysWithValues: requestedIDs.map { playerID in
-                let matches = Array(matchesByPlayer[playerID, default: [:]].values)
-                let eventList = eventsByPlayer[playerID, default: []]
-                return (playerID, makeStats(
-                    matches: matches,
-                    events: eventList,
-                    activeLeagueID: activeLeagueIDs[playerID] ?? nil
-                ))
+            return Dictionary(uniqueKeysWithValues: ids.map { id in
+                (id, makeStats(matches: Array(matchesByPlayer[id, default: [:]].values), events: eventsByPlayer[id, default: []], activeLeagueID: activeLeagueIDs[id] ?? nil))
             })
-        }
-        .flatMapError { _ in
-            // Statistics are supplementary data. A database timeout must not
-            // turn a player or team response into a failed request.
-            db.eventLoop.makeSucceededFuture(emptyResult)
         }
     }
 
     static func emptyStats() -> PlayerStats {
-        PlayerStats(
-            matchesPlayed: 0,
-            goalsScored: 0,
-            redCards: 0,
-            yellowCards: 0,
-            yellowRedCrd: 0,
-            goalsAverage: nil
-        )
+        PlayerStats(matchesPlayed: 0, goalsScored: 0, redCards: 0, yellowCards: 0, yellowRedCrd: 0, goalsAverage: nil)
     }
 
-    private static func makeStats(
-        matches: [Match],
-        events: [MatchEvent],
-        activeLeagueID: UUID?
-    ) -> PlayerStatsPair {
-        let countableMatches = matches.filter(countsAsAppearance)
-        let countableMatchIDs = Set(countableMatches.compactMap(\.id))
-        let activeMatchIDs = Set(countableMatches.compactMap { match -> UUID? in
-            guard match.season?.primary == true else { return nil }
-            if let activeLeagueID, match.season?.$league.id != activeLeagueID {
-                return nil
-            }
-            return match.id
-        })
-
-        var all = emptyStats()
-        var season = emptyStats()
-        all.matchesPlayed = countableMatchIDs.count
-        season.matchesPlayed = activeMatchIDs.count
-
-        for event in events where countableMatchIDs.contains(event.$match.id) {
+    static func makeStats(matches: [Match], events: [MatchEvent], activeLeagueID: UUID?) -> PlayerStatsPair {
+        let played = matches.filter(countsAsAppearance)
+        let allIDs = Set(played.compactMap(\.id))
+        let activeIDs = Set(played.filter {
+            $0.season?.primary == true && (activeLeagueID == nil || $0.season?.$league.id == activeLeagueID)
+        }.compactMap(\.id))
+        var all = emptyStats(), season = emptyStats()
+        all.matchesPlayed = allIDs.count
+        season.matchesPlayed = activeIDs.count
+        var seenEvents = Set<UUID>()
+        for event in events where allIDs.contains(event.$match.id) {
+            if let id = event.id, !seenEvents.insert(id).inserted { continue }
             add(event, to: &all)
-            if activeMatchIDs.contains(event.$match.id) {
-                add(event, to: &season)
-            }
+            if activeIDs.contains(event.$match.id) { add(event, to: &season) }
         }
-
-        all.goalsAverage = average(goals: all.goalsScored, appearances: all.matchesPlayed)
-        season.goalsAverage = average(goals: season.goalsScored, appearances: season.matchesPlayed)
+        all.goalsAverage = all.matchesPlayed > 0 ? Double(all.goalsScored) / Double(all.matchesPlayed) : nil
+        season.goalsAverage = season.matchesPlayed > 0 ? Double(season.goalsScored) / Double(season.matchesPlayed) : nil
         return PlayerStatsPair(all: all, season: season)
     }
 
     private static func add(_ event: MatchEvent, to stats: inout PlayerStats) {
         switch event.type {
-        case .goal where event.ownGoal != true:
-            stats.goalsScored += 1
-        case .redCard:
-            stats.redCards += 1
-        case .yellowCard:
-            stats.yellowCards += 1
-        case .yellowRedCard:
-            stats.yellowRedCrd += 1
-        default:
-            break
+        case .goal where event.ownGoal != true: stats.goalsScored += 1
+        case .redCard: stats.redCards += 1
+        case .yellowCard: stats.yellowCards += 1
+        case .yellowRedCard: stats.yellowRedCrd += 1
+        default: break
         }
-    }
-
-    private static func average(goals: Int, appearances: Int) -> Double? {
-        appearances > 0 ? Double(goals) / Double(appearances) : nil
     }
 }
 
@@ -169,13 +128,13 @@ enum PlayerStatisticsService {
 /// events in the correct league.
 enum LeaderboardService {
     static func fetch(
-        leagueID: UUID,
+        leagueID: UUID?,
         eventType: MatchEventType,
         primaryOnly: Bool,
         on db: Database
     ) -> EventLoopFuture<[LeaderBoard]> {
         var seasonQuery = Season.query(on: db)
-            .filter(\.$league.$id == leagueID)
+        if let leagueID { seasonQuery = seasonQuery.filter(\.$league.$id == leagueID) }
         if primaryOnly {
             seasonQuery = seasonQuery.filter(\.$primary == true)
         }
@@ -241,7 +200,7 @@ enum LeaderboardService {
         var teamID: String?
     }
 
-    private static func map(
+    static func map(
         _ events: [MatchEvent],
         matchByID: [UUID: Match],
         playerByID: [UUID: Player]
@@ -254,10 +213,15 @@ enum LeaderboardService {
             let lhsDate = lhsMatch?.details.date ?? .distantPast
             let rhsDate = rhsMatch?.details.date ?? .distantPast
             if lhsDate != rhsDate { return lhsDate < rhsDate }
-            return lhs.minute < rhs.minute
+            if lhs.minute != rhs.minute { return lhs.minute < rhs.minute }
+            return (lhs.id?.uuidString ?? "") < (rhs.id?.uuidString ?? "")
         }
 
+        var seenEvents = Set<UUID>()
         for event in orderedEvents {
+            if let id = event.id, !seenEvents.insert(id).inserted { continue }
+            guard !(event.type == .goal && event.ownGoal == true), let recordedMatch = matchByID[event.$match.id],
+                  PlayerStatisticsService.countsAsAppearance(recordedMatch) else { continue }
             guard let playerID = event.$player.id else { continue }
             let player = playerByID[playerID]
             let match = matchByID[event.$match.id]
@@ -305,25 +269,17 @@ enum LeaderboardService {
             if ($0.count ?? 0) != ($1.count ?? 0) {
                 return ($0.count ?? 0) > ($1.count ?? 0)
             }
-            return ($0.name ?? "") < ($1.name ?? "")
+            if ($0.name ?? "") != ($1.name ?? "") { return ($0.name ?? "") < ($1.name ?? "") }
+            return ($0.playerid?.uuidString ?? "") < ($1.playerid?.uuidString ?? "")
         }
     }
 
     private static func team(for event: MatchEvent, playerID: UUID, match: Match?) -> Team? {
         guard let match else { return nil }
-        switch event.assign {
-        case .home:
-            return match.homeTeam
-        case .away:
-            return match.awayTeam
-        case nil:
-            if match.homeBlanket?.players.contains(where: { $0.id == playerID }) == true {
-                return match.homeTeam
-            }
-            if match.awayBlanket?.players.contains(where: { $0.id == playerID }) == true {
-                return match.awayTeam
-            }
-            return nil
+        switch TeamStatisticsService.assignment(for: event, in: match) {
+        case .home: return match.homeTeam
+        case .away: return match.awayTeam
+        case nil: return nil
         }
     }
 }

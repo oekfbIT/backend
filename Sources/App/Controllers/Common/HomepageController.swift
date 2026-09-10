@@ -227,7 +227,7 @@ final class HomepageController: RouteCollection {
                         id: team.id,
                         sid: team.sid,
                         leagueCode: team.leagueCode,
-                        points: team.points,
+                        points: statsPair.season.totalPoints,
                         logo: team.logo,
                         coverimg: team.coverimg,
                         teamName: team.teamName,
@@ -494,106 +494,14 @@ final class HomepageController: RouteCollection {
     }
 
     func getTeamStats(teamID: UUID, db: Database) -> EventLoopFuture<TeamStats> {
-        let validStatuses: [GameStatus] = [.completed, .abbgebrochen, .submitted, .cancelled, .done]
-
-        return Match.query(on: db)
-            .group(.or) { group in
-                group.filter(\.$homeTeam.$id == teamID)
-                group.filter(\.$awayTeam.$id == teamID)
-            }
-            .filter(\.$status ~~ validStatuses)
-            .with(\.$events)
-            .all()
-            .map { matches in
-                var stats = TeamStats(wins: 0, draws: 0, losses: 0, totalScored: 0, totalAgainst: 0, goalDifference: 0, totalPoints: 0, totalYellowCards: 0, totalRedCards: 0)
-
-                for match in matches {
-                    let isHome = match.$homeTeam.id == teamID
-                    let scored = isHome ? match.score.home : match.score.away
-                    let against = isHome ? match.score.away : match.score.home
-
-                    stats.totalScored += scored
-                    stats.totalAgainst += against
-
-                    if scored > against {
-                        stats.wins += 1
-                        stats.totalPoints += 3
-                    } else if scored == against {
-                        stats.draws += 1
-                        stats.totalPoints += 1
-                    } else {
-                        stats.losses += 1
-                    }
-
-                    for event in match.events {
-                        if let assign = event.assign {
-                            if (isHome && assign == .home) || (!isHome && assign == .away) {
-                                switch event.type {
-                                case .yellowCard:
-                                    stats.totalYellowCards += 1
-                                case .redCard:
-                                    stats.totalRedCards += 1
-                                default:
-                                    break
-                                }
-                            }
-                        }
-                    }
-                }
-                stats.goalDifference = stats.totalScored - stats.totalAgainst
-                return stats
-            }
+        StatsCacheManager.getTeamStats(for: teamID, on: db)
     }
 
     func getLeagueTable(req: Request) -> EventLoopFuture<[TableItem]> {
         guard let leagueID = req.parameters.get("id", as: UUID.self) else {
             return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league ID"))
         }
-
-        return League.find(leagueID, on: req.db)
-            .unwrap(or: Abort(.notFound, reason: "League not found"))
-            .flatMap { league in
-                league.$teams.query(on: req.db).all().flatMap { teams in
-                    let teamStatsFutures = teams.map { team in
-                        self.getTeamStats(teamID: team.id!, db: req.db).map { stats in (team, stats) }
-                    }
-
-                    return req.eventLoop.flatten(teamStatsFutures).map { teamStatsPairs in
-                        var tableItems: [TableItem] = []
-
-                        for (team, stats) in teamStatsPairs {
-                            let tableItem = TableItem(
-                                image: team.logo,
-                                name: team.teamName,
-                                points: team.points,
-                                id: team.id!,
-                                goals: stats.totalScored,
-                                ranking: 0,
-                                wins: stats.wins,
-                                draws: stats.draws,
-                                losses: stats.losses,
-                                scored: stats.totalScored,
-                                against: stats.totalAgainst,
-                                difference: stats.goalDifference, form: []
-                            )
-                            tableItems.append(tableItem)
-                        }
-
-                        tableItems.sort {
-                            if $0.points == $1.points {
-                                return $0.difference > $1.difference
-                            }
-                            return $0.points > $1.points
-                        }
-
-                        for i in 0..<tableItems.count {
-                            tableItems[i].ranking = i + 1
-                        }
-
-                        return tableItems
-                    }
-                }
-            }
+        return TeamStatisticsService.table(leagueID: leagueID, primaryOnly: true, on: req.db)
     }
 
     func fetchLeagueMatches(req: Request) throws -> EventLoopFuture<[PublicMatchShort]> {
@@ -627,45 +535,6 @@ final class HomepageController: RouteCollection {
                     )
                 }
             }
-    }
-
-    private func mapEventsToLeaderBoard(_ events: [MatchEvent]) -> [LeaderBoard] {
-        // no need to keep id in the value, it’s the key
-        var playerEventCounts: [UUID: (name: String?, image: String?, number: String?, count: Int)] = [:]
-
-        for event in events {
-            // Optional parent -> id is UUID?
-            guard let playerId = event.$player.id else {
-                // Decide: skip events without a player
-                continue
-            }
-
-            let playerInfo = (event.name, event.image, event.number)
-
-            if var existing = playerEventCounts[playerId] {
-                existing.count += 1
-                playerEventCounts[playerId] = existing
-            } else {
-                playerEventCounts[playerId] = (playerInfo.0, playerInfo.1, playerInfo.2, 1)
-            }
-        }
-
-        let leaderboard = playerEventCounts.map { (playerId, playerData) in
-            LeaderBoard(
-                name: playerData.name,
-                image: playerData.image,
-                number: playerData.number,
-                count: playerData.count.asDouble(),
-                playerid: playerId,
-                teamimg: nil,
-                teamName: nil,
-                teamId: nil
-            )
-        }
-        // If you still want sorting:
-        // .sorted { ($0.count ?? 0) > ($1.count ?? 0) }
-
-        return leaderboard
     }
 
 }

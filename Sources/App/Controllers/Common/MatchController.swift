@@ -351,7 +351,7 @@ final class MatchController: RouteCollection {
                         name: goalRequest.name,
                         image: goalRequest.image,
                         number: goalRequest.number,
-                        assign: goalRequest.assign,
+                        assign: MatchAssignment(rawValue: goalRequest.scoreTeam.lowercased()),
                         ownGoal: goalRequest.ownGoal
                     )
                     event.$match.id = match.id!

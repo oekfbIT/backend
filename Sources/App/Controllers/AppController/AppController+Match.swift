@@ -70,9 +70,7 @@ extension AppController {
             stats: try? await StatsCacheManager.getTeamStats(for: awayID, on: req.db).get()
         )
 
-        let appEvents: [AppModels.AppMatchEvent] = try await match.events.asyncMap {
-            try await $0.toAppMatchEvent(on: req)
-        }
+        let appEvents = try await MatchEvent.toAppMatchEvents(match.events, on: req)
 
         return AppModels.AppMatch(
             id: try match.requireID(),
@@ -276,7 +274,7 @@ extension AppController {
             name: goalRequest.name,
             image: goalRequest.image,
             number: goalRequest.number,
-            assign: goalRequest.assign,
+            assign: MatchAssignment(rawValue: goalRequest.scoreTeam.lowercased()),
             ownGoal: goalRequest.ownGoal
         )
 

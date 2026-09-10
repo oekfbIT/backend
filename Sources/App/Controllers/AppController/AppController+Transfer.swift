@@ -92,14 +92,18 @@ extension AppController {
             throw Abort(.badRequest, reason: "Player's current team not set.")
         }
 
+        guard let targetTeam = try await Team.find(dto.team, on: req.db) else {
+            throw Abort(.notFound, reason: "Target team not found.")
+        }
+
         let transfer = Transfer(
             team: dto.team,
             player: dto.player,
             status: .warten,
-            playerName: dto.playerName ?? player.name,
-            playerImage: dto.playerImage ?? player.image ?? "",
-            teamName: dto.teamName ?? "",
-            teamImage: dto.teamImage ?? "",
+            playerName: player.name,
+            playerImage: player.image ?? dto.playerImage ?? "",
+            teamName: targetTeam.teamName,
+            teamImage: targetTeam.logo,
             origin: originTeam.id,
             originName: originTeam.teamName,
             originImage: originTeam.logo
@@ -112,7 +116,7 @@ extension AppController {
 
         if let recipientEmail = player.email {
             do {
-                try EmailController()
+                _ = try EmailController()
                     .sendTransferRequest(req: req, recipient: recipientEmail, transfer: transfer)
             } catch {
                 req.logger.warning("Failed to send transfer email: \(error)")

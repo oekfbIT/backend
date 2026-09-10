@@ -97,95 +97,38 @@ extension MatchEventMigration: Migration {
     }
 }
 
-// MARK: - MatchEvent → AppMatchEvent (SAFE: no `$player.get`)
-
+// MARK: - Batched event presentation (no discarded team-stat queries)
 extension MatchEvent {
-    func toAppMatchEvent(on req: Request) async throws -> AppModels.AppMatchEvent {
-        // 1️⃣ Resolve player manually by id (no relation loader)
-        let player: Player?
-        if let pid = self.$player.id {
-            player = try await Player.find(pid, on: req.db)
-        } else {
-            player = nil
+    static func toAppMatchEvents(_ events: [MatchEvent], on req: Request) async throws -> [AppModels.AppMatchEvent] {
+        guard !events.isEmpty else { return [] }
+        let matchIDs = Array(Set(events.map { $0.$match.id }))
+        let playerIDs = Array(Set(events.compactMap { $0.$player.id }))
+        async let matchesF = Match.query(on: req.db).filter(\.$id ~~ matchIDs)
+            .with(\.$homeTeam).with(\.$awayTeam).all().get()
+        async let playersF = Player.query(on: req.db).filter(\.$id ~~ playerIDs).all().get()
+        let (matches, players) = try await (matchesF, playersF)
+        let matchByID = Dictionary(matches.compactMap { m in m.id.map { ($0, m) } }, uniquingKeysWith: { a, _ in a })
+        let playerByID = Dictionary(players.compactMap { p in p.id.map { ($0, p) } }, uniquingKeysWith: { a, _ in a })
+        return events.compactMap { event in
+            guard let match = matchByID[event.$match.id] else { return nil }
+            let player = event.$player.id.flatMap { playerByID[$0] }
+            let wrapper = AppModels.AppPlayerMatchEventWrapper(
+                id: event.$player.id ?? UUID(uuidString: "00000000-0000-0000-0000-000000000000")!,
+                sid: player?.sid ?? "", name: event.name ?? player?.name ?? "Unknown",
+                number: event.number ?? player?.number ?? "", nationality: player?.nationality ?? "",
+                eligilibity: player?.eligibility ?? .Warten, image: event.image ?? player?.image ?? "")
+            let headline = AppModels.Matchheadline(
+                homeID: match.$homeTeam.id, homeName: match.homeBlanket?.name ?? match.homeTeam.teamName,
+                homeLogo: match.homeBlanket?.logo ?? match.homeTeam.logo,
+                gameday: match.details.gameday, date: match.details.date ?? .distantPast,
+                awayID: match.$awayTeam.id, awayName: match.awayBlanket?.name ?? match.awayTeam.teamName,
+                awayLogo: match.awayBlanket?.logo ?? match.awayTeam.logo)
+            return AppModels.AppMatchEvent(id: event.id, headline: headline, type: event.type, player: wrapper,
+                minute: event.minute, matchID: event.$match.id, name: event.name, image: event.image,
+                number: event.number, assign: event.assign, ownGoal: event.ownGoal)
         }
-
-        // 2️⃣ Resolve team manually via player's team id
-        let team: Team?
-        if let player = player, let teamId = player.$team.id {
-            team = try await Team.find(teamId, on: req.db)
-        } else {
-            team = nil
-        }
-
-        // 3️⃣ League overview
-        let leagueOverview: AppModels.AppLeagueOverview
-        if let league = team?.league {
-            leagueOverview = try league.toAppLeagueOverview()
-        } else {
-            leagueOverview = AppModels.AppLeagueOverview(
-                id: UUID(),
-                name: "Unknown",
-                code: "",
-                state: .wien,
-                logo: nil
-            )
-        }
-
-        // 4️⃣ Team overview (with stats if you want to keep that)
-        let teamOverview: AppModels.AppTeamOverview
-        if let team = team {
-            teamOverview = try await team
-                .toAppTeamOverview(league: leagueOverview, req: req)
-                .get()
-        } else {
-            teamOverview = AppModels.AppTeamOverview(
-                id: UUID(),
-                sid: "",
-                league: leagueOverview,
-                points: 0,
-                logo: "",
-                name: "Unknown Team", shortName: "",
-                stats: nil
-            )
-        }
-
-        // 5️⃣ Player wrapper: use real player if exists, otherwise fallback
-        let appPlayer = try player?.toAppPlayerOverviewMatchEvent(team: teamOverview)
-        let fallbackPlayer = try error_player.toAppPlayerOverviewMatchEvent(team: teamOverview)
-
-        // 6️⃣ Headline: you *can* still use relation loaders for Match here
-        let match = try await self.$match.get(on: req.db)
-        let homeTeam = try await match.$homeTeam.get(on: req.db)
-        let awayTeam = try await match.$awayTeam.get(on: req.db)
-
-        let headline = AppModels.Matchheadline(
-            homeID: try homeTeam.requireID(),
-            homeName: homeTeam.teamName,
-            homeLogo: homeTeam.logo,
-            gameday: match.details.gameday,
-            date: match.details.date ?? Date(),
-            awayID: try awayTeam.requireID(),
-            awayName: awayTeam.teamName,
-            awayLogo: awayTeam.logo
-        )
-
-        return AppModels.AppMatchEvent(
-            id: try self.requireID(),
-            headline: headline,
-            type: self.type,
-            player: appPlayer ?? fallbackPlayer,
-            minute: self.minute,
-            matchID: self.$match.id,
-            name: self.name,
-            image: self.image,
-            number: self.number,
-            assign: self.assign,
-            ownGoal: self.ownGoal
-        )
     }
 }
-
-
 
 // Fallback "error" player, used if the real player is deleted or missing
 let error_app_player = AppModels.AppPlayer(

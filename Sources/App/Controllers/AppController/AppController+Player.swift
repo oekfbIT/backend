@@ -55,11 +55,7 @@ extension AppController {
         }
 
         // events → AppMatchEvent
-        var appEvents: [AppModels.AppMatchEvent] = []
-        for event in player.events {
-            let appEvent = try await event.toAppMatchEvent(on: req)
-            appEvents.append(appEvent)
-        }
+        let appEvents = try await MatchEvent.toAppMatchEvents(player.events, on: req)
 
         let leagueOverview = try league.toAppLeagueOverview()
 
@@ -69,14 +65,10 @@ extension AppController {
 
         // 0 or 1 next match, as array
         let nextMatches = try await teamModel.fetchNextAppNextMatches(on: req)
+        let snapshot = try await PlayerStatisticsService.load(playerIDs: [playerID], on: req.db).get()
         let seasons = try await ClientController(path: "webClient")
-            .seasonsForPlayerFast(player: player, league: league, req: req)
-            .get()
-        let stats = try await PlayerStatisticsService.calculate(
-            playerID: playerID,
-            activeLeagueID: league.id,
-            on: req.db
-        ).get()
+            .seasonsForPlayerFast(player: player, league: league, req: req, snapshot: snapshot).get()
+        let stats = snapshot.stats(for: playerID, activeLeagueID: league.id)
 
         return try await player.toAppPlayer(
             team: teamOverview,
@@ -112,11 +104,7 @@ extension AppController {
             throw Abort(.notFound, reason: "League not found for this player.")
         }
 
-        var appEvents: [AppModels.AppMatchEvent] = []
-        for event in player.events {
-            let appEvent = try await event.toAppMatchEvent(on: req)
-            appEvents.append(appEvent)
-        }
+        let appEvents = try await MatchEvent.toAppMatchEvents(player.events, on: req)
 
         let leagueOverview = try league.toAppLeagueOverview()
 
@@ -126,14 +114,10 @@ extension AppController {
 
         let nextMatches = try await teamModel.fetchNextAppNextMatches(on: req)
         let playerID = try player.requireID()
+        let snapshot = try await PlayerStatisticsService.load(playerIDs: [playerID], on: req.db).get()
         let seasons = try await ClientController(path: "webClient")
-            .seasonsForPlayerFast(player: player, league: league, req: req)
-            .get()
-        let stats = try await PlayerStatisticsService.calculate(
-            playerID: playerID,
-            activeLeagueID: league.id,
-            on: req.db
-        ).get()
+            .seasonsForPlayerFast(player: player, league: league, req: req, snapshot: snapshot).get()
+        let stats = snapshot.stats(for: playerID, activeLeagueID: league.id)
 
         return try await player.toAppPlayer(
             team: teamOverview,

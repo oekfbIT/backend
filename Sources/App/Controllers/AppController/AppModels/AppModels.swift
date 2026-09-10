@@ -46,6 +46,7 @@ struct AppModels {
         let balance: Double?
         let players: [AppPlayer]
         let stats: TeamStats?
+        var seasonStats: TeamStats? = nil
         let form: [FormItem]?  // NEW
     }
     
@@ -58,6 +59,7 @@ struct AppModels {
         let name: String
         let shortName: String?
         let stats: TeamStats?
+        var seasonStats: TeamStats? = nil
         
     }
 

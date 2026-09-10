@@ -145,72 +145,19 @@ final class MatchEventController: RouteCollection {
 
     // Helper function to update the match score after removing a goal event
     private func updateScoreForGoalRemoval(event: MatchEvent, match: Match, req: Request) -> EventLoopFuture<Void> {
-        guard let assign = event.assign else {
-            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Event assignment is missing or invalid."))
+        guard let side = TeamStatisticsService.scoringAssignment(for: event, in: match) else {
+            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Cannot determine the scoring team for this event."))
         }
-
-        // Ensure the match score is initialized
-        if match.score.home == nil {
-            match.score.home = 0
-        }
-        if match.score.away == nil {
-            match.score.away = 0
-        }
-
-        switch assign {
-        case .home:
-            match.score.home = max(0, (match.score.home ?? 0) - 1) // Safely unwrap and decrement
-        case .away:
-            match.score.away = max(0, (match.score.away ?? 0) - 1) // Safely unwrap and decrement
-        }
-
-        // Save the updated match with the modified score
+        if side == .home { match.score.home = max(0, match.score.home - 1) }
+        else { match.score.away = max(0, match.score.away - 1) }
         return match.save(on: req.db)
     }
 
     // Helper function to revert a card event and update the blanket based on player team ID
     private func revertCardEvent(event: MatchEvent, match: Match, req: Request) -> EventLoopFuture<Void> {
-        // Find the player's team (home or away) by checking their team ID against the match's home/away team
-        return event.$player.get(on: req.db).flatMap { player in
-            var blanket: Blankett?
-
-            // Check whether the player's team matches the home or away team
-            if player?.$team.id == match.$homeTeam.id {
-                blanket = match.homeBlanket
-            } else if player?.$team.id == match.$awayTeam.id {
-                blanket = match.awayBlanket
-            } else {
-                return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Player team does not match home or away team"))
-            }
-
-            guard var mutableBlanket = blanket else {
-                return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Blanket for the team not found."))
-            }
-
-            // Update the player's card status by removing the relevant card count
-            if let index = mutableBlanket.players.firstIndex(where: { $0.id == player?.id }) {
-                switch event.type {
-                case .redCard:
-                    mutableBlanket.players[index].redCard = max(0, (mutableBlanket.players[index].redCard ?? 0) - 1)
-                case .yellowCard:
-                    mutableBlanket.players[index].yellowCard = max(0, (mutableBlanket.players[index].yellowCard ?? 0) - 1)
-                case .yellowRedCard:
-                    mutableBlanket.players[index].redYellowCard = max(0, (mutableBlanket.players[index].redYellowCard ?? 0) - 1)
-                default:
-                    break
-                }
-            }
-
-            // Save the updated blanket back to the match
-            if player?.$team.id == match.$homeTeam.id {
-                match.homeBlanket = mutableBlanket
-            } else {
-                match.awayBlanket = mutableBlanket
-            }
-
-            // Save the updated match with the reverted card status
-            return match.save(on: req.db)
-        }
+        // Editing history must work after a player transfers or is deleted.
+        TeamStatisticsService.removeCardFromSheet(event, match: match)
+        return match.save(on: req.db)
     }
 }
 

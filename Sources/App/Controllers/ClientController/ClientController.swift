@@ -67,85 +67,11 @@ final class ClientController: RouteCollection {
 
     func getcurrentSeasonTable(req: Request) -> EventLoopFuture<[TableItem]> {
         guard let code = req.parameters.get("code", as: String.self) else {
-            return req.eventLoop.future(error: Abort(.badRequest, reason: "Invalid or missing league code"))
+            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league code"))
         }
-
-        return fetchLeagueAndCurrentSeason(code, db: req.db).flatMap { (league, season) in
-            season.$matches.query(on: req.db).all().and(league.$teams.query(on: req.db).all())
-                .map { (matches, teams) in
-
-                    func stats(for teamID: UUID, in matches: [Match]) -> (wins: Int, draws: Int, losses: Int, scored: Int, against: Int) {
-                        var w = 0, d = 0, l = 0, s = 0, a = 0
-
-                        for m in matches {
-                            let homeId = m.$homeTeam.id
-                            let awayId = m.$awayTeam.id
-
-                            guard homeId == teamID || awayId == teamID else { continue }
-
-                            switch m.status {
-                            case .pending, .first, .halftime, .second, .cancelled:
-                                continue
-                            default:
-                                break
-                            }
-
-                            let isHome = homeId == teamID
-                            let mine = isHome ? m.score.home : m.score.away
-                            let opp = isHome ? m.score.away : m.score.home
-
-                            s += mine
-                            a += opp
-
-                            if mine > opp { w += 1 }
-                            else if mine == opp { d += 1 }
-                            else { l += 1 }
-                        }
-
-                        return (w, d, l, s, a)
-                    }
-
-                    var rows: [TableItem] = teams.compactMap { team in
-                        guard let tid = team.id else { return nil }
-
-                        let st = stats(for: tid, in: matches)
-                        let calculatedPoints = st.wins * 3 + st.draws
-
-                        let item = TableItem(
-                            image: team.logo,
-                            name: team.teamName,
-                            points: calculatedPoints,
-                            id: tid,
-                            goals: st.scored,
-                            ranking: 0,
-                            wins: st.wins,
-                            draws: st.draws,
-                            losses: st.losses,
-                            scored: st.scored,
-                            against: st.against,
-                            difference: st.scored - st.against,
-                            form: []
-                        )
-
-                        return item
-                    }
-
-                    rows.sort {
-                        if $0.points == $1.points {
-                            return $0.difference > $1.difference
-                        }
-
-                        return $0.points > $1.points
-                    }
-
-                    var table = rows
-
-                    for i in table.indices {
-                        table[i].ranking = i + 1
-                    }
-
-                    return table
-                }
+        return fetchLeagueByCode(code, db: req.db).flatMap { league in
+            guard let id = league.id else { return req.eventLoop.makeFailedFuture(Abort(.notFound)) }
+            return TeamStatisticsService.table(leagueID: id, primaryOnly: true, on: req.db)
         }
     }
     // MARK: League Selection
@@ -224,52 +150,12 @@ final class ClientController: RouteCollection {
     
     // MARK: Table
     func fetchtable(req: Request) -> EventLoopFuture<[TableItem]> {
-        
-        guard let leagueCode = req.parameters.get("code", as: String.self) else {
-            return req.eventLoop.future(error: Abort(.badRequest, reason: "Invalid or missing league code"))
+        guard let code = req.parameters.get("code", as: String.self) else {
+            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid or missing league code"))
         }
-        
-        return fetchLeagueByCode(leagueCode, db: req.db).flatMap { league in
-            league.$teams.query(on: req.db).all().flatMap { teams in
-                let teamStatsFutures = teams.map { team in
-                    self.getTeamStats(teamID: team.id!, db: req.db).map { stats in (team, stats) }
-                }
-                
-                return req.eventLoop.flatten(teamStatsFutures).map { teamStatsPairs in
-                    var tableItems: [TableItem] = []
-                    
-                    for (team, stats) in teamStatsPairs {
-                        let tableItem = TableItem(
-                            image: team.logo,
-                            name: team.teamName,
-                            points: team.points,
-                            id: team.id!,
-                            goals: stats.totalScored,
-                            ranking: 0,
-                            wins: stats.wins,
-                            draws: stats.draws,
-                            losses: stats.losses,
-                            scored: stats.totalScored,
-                            against: stats.totalAgainst,
-                            difference: stats.goalDifference, form: []
-                        )
-                        tableItems.append(tableItem)
-                    }
-                    
-                    tableItems.sort {
-                        if $0.points == $1.points {
-                            return $0.difference > $1.difference
-                        }
-                        return $0.points > $1.points
-                    }
-                    
-                    for i in 0..<tableItems.count {
-                        tableItems[i].ranking = i + 1
-                    }
-                    
-                    return tableItems
-                }
-            }
+        return fetchLeagueByCode(code, db: req.db).flatMap { league in
+            guard let id = league.id else { return req.eventLoop.makeFailedFuture(Abort(.notFound)) }
+            return TeamStatisticsService.table(leagueID: id, primaryOnly: true, on: req.db)
         }
     }
     
@@ -583,33 +469,16 @@ extension ClientController {
         // UPDATED: use the pair-returning stats function
         let teamStatsFuture = teamFuture.flatMap { self.getTeamStatsPair(teamID: $0.id!, db: req.db) }
 
-        // Build [PublicSeasonMatches] from the team's league seasons
-        let seasonsFuture: EventLoopFuture<[PublicSeasonMatches]> = teamFuture.and(leagueFuture).flatMap { (team, league) in
-            guard let league = league, let leagueID = league.id, let tID = team.id else {
-                return req.eventLoop.makeSucceededFuture([])
+        let seasonsFuture = teamFuture.and(leagueFuture).flatMap { team, league in
+            let matchesF = Match.query(on: req.db).group(.or) {
+                $0.filter(\.$homeTeam.$id == teamID)
+                $0.filter(\.$awayTeam.$id == teamID)
+            }.with(\.$season) { $0.with(\.$league) }.all()
+            let activeF: EventLoopFuture<[Season]> = league?.id == nil ? req.eventLoop.makeSucceededFuture([]) :
+                Season.query(on: req.db).filter(\.$league.$id == league?.id).filter(\.$primary == true).with(\.$league).all()
+            return matchesF.and(activeF).map { matches, seasons in
+                self.seasonGroups(matches: matches, activeSeasons: seasons, league: league)
             }
-
-            return Season.query(on: req.db)
-                .filter(\.$league.$id == leagueID)
-                .all()
-                .flatMap { seasons in
-                    let perSeason: [EventLoopFuture<PublicSeasonMatches>] = seasons.compactMap { season in
-                        guard let sID = season.id else { return nil }
-                        return self.fetchTeamMatches(inSeason: sID, teamID: tID, db: req.db)
-                            .map { matches in
-                                PublicSeasonMatches(
-                                    leagueName: league.name,
-                                    leagueID: leagueID,
-                                    seasonID: sID,
-                                    seasonName: season.name,
-                                    primary: season.primary ?? false,
-                                    matches: matches
-                                )
-                            }
-                    }
-                    return perSeason.flatten(on: req.eventLoop)
-                }
-                .map { $0.sorted { ($0.primary && !$1.primary) } }
         }
 
         let newsFuture = teamFuture.and(leagueFuture).flatMap { (team, league) in
@@ -630,7 +499,7 @@ extension ClientController {
                     id: team.id,
                     sid: team.sid,
                     leagueCode: team.leagueCode,
-                    points: team.points,
+                    points: teamStatsPair.season.totalPoints,
                     logo: team.logo,
                     coverimg: team.coverimg,
                     teamName: team.teamName,
@@ -696,7 +565,7 @@ extension ClientController {
                     id: team.id,
                     sid: team.sid,
                     leagueCode: team.leagueCode,
-                    points: team.points,
+                    points: teamStatsPair.season.totalPoints,
                     logo: team.logo,
                     coverimg: team.coverimg,
                     teamName: team.teamName,
@@ -714,183 +583,99 @@ extension ClientController {
 }
 
 
-// MARK: - Tiny TTL cache (soft LRU-ish)
-private actor _LRUCache<Value> {
-    struct Entry { let value: Value; let expiresAt: Date }
-    private var store: [String: Entry] = [:]
-    private let ttl: TimeInterval
-
-    init(ttl: TimeInterval) { self.ttl = ttl }
-
-    func get(_ key: String) -> Value? {
-        guard let e = store[key] else { return nil }
-        if e.expiresAt > Date() { return e.value }
-        store[key] = nil
-        return nil
-    }
-
-    func set(_ key: String, _ value: Value) {
-        store[key] = .init(value: value, expiresAt: Date().addingTimeInterval(ttl))
-        // very soft cap to avoid unbounded growth
-        if store.count > 256, let first = store.keys.first {
-            store.removeValue(forKey: first)
-        }
-    }
-}
-
-// Reuse caches across requests in this process
-private enum Cache {
-    // Cache the expensive (player, league) => [PublicSeasonMatches] assembly
-    static let seasons = _LRUCache<[PublicSeasonMatches]>(ttl: 30) // seconds
-}
-
-// MARK: - Public DTOs you already use (shown for reference)
-// struct PublicPlayer { ... }
-// struct PublicSeasonMatches { let leagueName: String; let leagueID: UUID; let seasonID: UUID; let seasonName: String; let primary: Bool; let matches: [PublicMatchShort] }
-// struct PlayerDetailResponse { let player: PublicPlayer; let upcoming: [PublicSeasonMatches]; let news: [PublicNews]? }
-
-// MARK: - Helper (nil-safe date compare)
-private func _date(_ match: Match) -> Date {
-    match.details.date ?? .distantFuture
-}
-
-private func _containsPlayer(_ playerID: UUID, in match: Match) -> Bool {
-    PlayerStatisticsService.contains(playerID, in: match)
-}
-
-private func _countsAsAppearance(_ match: Match) -> Bool {
-    PlayerStatisticsService.countsAsAppearance(match)
-}
-
-private func _countsAsAppearance(_ match: PublicMatchShort) -> Bool {
-    guard let status = match.status else { return false }
-    switch status {
-    case .pending, .cancelled:
-        return false
-    default:
-        return true
-    }
-}
-
 extension ClientController {
-    // Build (and cache) the seasons+matches view for a given player within a league
+    // Render the same complete history snapshot used for the statistics.
     func seasonsForPlayerFast(
         player: Player,
-        league: League,
-        req: Request
+        league: League?,
+        req: Request,
+        snapshot: PlayerStatisticsService.Snapshot? = nil
     ) -> EventLoopFuture<[PublicSeasonMatches]> {
-        guard let leagueID = league.id, let playerID = player.id else {
+        guard let playerID = player.id else {
             return req.eventLoop.makeSucceededFuture([])
         }
 
-        let cacheKey = "player:\(playerID.uuidString)|league:\(leagueID.uuidString)"
-        if let cached = Caches.seasons.get(cacheKey) {
-            return req.eventLoop.makeSucceededFuture(cached)
-        }
-
-        let homePlayerPath: [FieldKey] = ["homeBlanket", "players", "id"]
-        let awayPlayerPath: [FieldKey] = ["awayBlanket", "players", "id"]
-        let blanketMatchesF = Match.query(on: req.db)
-            .group(.or) { group in
-                group.filter(homePlayerPath, .equal, playerID)
-                group.filter(awayPlayerPath, .equal, playerID)
-            }
-            .with(\.$season) { season in
-                season.with(\.$league)
-            }
-            .all()
-
-        // An event is also evidence that the player appeared. Keeping this
-        // union makes old/incomplete match blankets visible instead of silently
-        // dropping matches which already contain a goal or card for the player.
-        let eventMatchesF = MatchEvent.query(on: req.db)
-            .filter(\.$player.$id == playerID)
-            .with(\.$match) { match in
-                match.with(\.$season) { season in
-                    season.with(\.$league)
-                }
-            }
-            .all()
-            .map { $0.map(\.match) }
+        let snapshotF = snapshot.map { req.eventLoop.makeSucceededFuture($0) }
+            ?? PlayerStatisticsService.load(playerIDs: [playerID], on: req.db)
+        let leagueID = league?.id
 
         // Preserve the current league's active season even before the player has
         // an appearance in it, so the UI can show accurate zero season stats.
-        let activeSeasonsF = Season.query(on: req.db)
+        let activeSeasonsF: EventLoopFuture<[Season]> = leagueID == nil ? req.eventLoop.makeSucceededFuture([]) : Season.query(on: req.db)
             .filter(\.$league.$id == leagueID)
             .filter(\.$primary == true)
             .with(\.$league)
             .all()
 
-        return blanketMatchesF.and(eventMatchesF).and(activeSeasonsF).map { result, activeSeasons in
-            let (blanketMatches, eventMatches) = result
-            var matchesByID = [UUID: Match]()
-            for match in blanketMatches + eventMatches {
-                if let matchID = match.id {
-                    matchesByID[matchID] = match
-                }
-            }
-            let relevant = Array(matchesByID.values)
-
-            var matchesBySeason: [UUID: [Match]] = [:]
-            var seasonsByID: [UUID: Season] = [:]
-
-            for match in relevant {
-                guard let season = match.season, let seasonID = season.id else { continue }
-                matchesBySeason[seasonID, default: []].append(match)
-                seasonsByID[seasonID] = season
-            }
-            for season in activeSeasons {
-                if let seasonID = season.id {
-                    seasonsByID[seasonID] = season
-                }
-            }
-
-            let orderedSeasons = seasonsByID.values.sorted { lhs, rhs in
-                let lhsPrimary = lhs.primary ?? false
-                let rhsPrimary = rhs.primary ?? false
-                if lhsPrimary != rhsPrimary { return lhsPrimary && !rhsPrimary }
-                if lhs.details != rhs.details { return lhs.details > rhs.details }
-                return (lhs.id?.uuidString ?? "") < (rhs.id?.uuidString ?? "")
-            }
-
-            let payload: [PublicSeasonMatches] = orderedSeasons.compactMap { season in
-                guard
-                    let seasonID = season.id,
-                    let seasonLeagueID = season.$league.id
-                else { return nil }
-
-                let seasonLeagueName = season.league?.name ??
-                    (seasonLeagueID == leagueID ? league.name : "Unbekannte Liga")
-                let publicMatches = (matchesBySeason[seasonID] ?? [])
-                    .sorted {
-                        let d0 = $0.details.date ?? .distantFuture
-                        let d1 = $1.details.date ?? .distantFuture
-                        if d0 != d1 { return d0 < d1 }
-                        return ($0.id?.uuidString ?? "") < ($1.id?.uuidString ?? "")
-                    }
-                    .map(self.toPublicShort)
-
-                return PublicSeasonMatches(
-                    leagueName: seasonLeagueName,
-                    leagueID: seasonLeagueID,
-                    seasonID: seasonID,
-                    seasonName: season.name,
-                    primary: (season.primary ?? false) && seasonLeagueID == leagueID,
-                    matches: publicMatches
-                )
-            }
-
-            Caches.seasons.set(cacheKey, payload)
-            return payload
+        return snapshotF.and(activeSeasonsF).map { snapshot, activeSeasons in
+            self.seasonGroups(matches: snapshot.matches, activeSeasons: activeSeasons, league: league)
         }
-        .flatMapError { _ in
-            // Player history is optional presentation data. A temporary
-            // database problem should leave the profile usable.
-            req.eventLoop.makeSucceededFuture([])
-        }
+
     }
 
-    // MARK: Player Detail (season-grouped + cached)
+    func seasonGroups(matches relevant: [Match], activeSeasons: [Season], league: League?) -> [PublicSeasonMatches] {
+        let leagueID = league?.id
+
+        var matchesBySeason: [UUID: [Match]] = [:]
+        var seasonsByID: [UUID: Season] = [:]
+
+        for match in relevant {
+            guard let season = match.season, let seasonID = season.id else { continue }
+            matchesBySeason[seasonID, default: []].append(match)
+            seasonsByID[seasonID] = season
+        }
+        for season in activeSeasons {
+            if let seasonID = season.id {
+                seasonsByID[seasonID] = season
+            }
+        }
+
+        let orderedSeasons = seasonsByID.values.sorted { lhs, rhs in
+            let lhsPrimary = lhs.primary ?? false
+            let rhsPrimary = rhs.primary ?? false
+            if lhsPrimary != rhsPrimary { return lhsPrimary && !rhsPrimary }
+            if lhs.details != rhs.details { return lhs.details > rhs.details }
+            return (lhs.id?.uuidString ?? "") < (rhs.id?.uuidString ?? "")
+        }
+
+        var payload: [PublicSeasonMatches] = orderedSeasons.compactMap { season in
+            guard
+                let seasonID = season.id,
+                let seasonLeagueID = season.$league.id
+            else { return nil }
+
+            let seasonLeagueName = season.league?.name ??
+                (seasonLeagueID == leagueID ? league?.name ?? "Unbekannte Liga" : "Unbekannte Liga")
+            let publicMatches = (matchesBySeason[seasonID] ?? [])
+                .sorted {
+                    let d0 = $0.details.date ?? .distantFuture
+                    let d1 = $1.details.date ?? .distantFuture
+                    if d0 != d1 { return d0 < d1 }
+                    return ($0.id?.uuidString ?? "") < ($1.id?.uuidString ?? "")
+                }
+                .map(self.toPublicShort)
+
+            return PublicSeasonMatches(
+                leagueName: seasonLeagueName,
+                leagueID: seasonLeagueID,
+                seasonID: seasonID,
+                seasonName: season.name,
+                primary: (season.primary ?? false) && (leagueID == nil || seasonLeagueID == leagueID),
+                matches: publicMatches
+            )
+        }
+
+        let unassigned = relevant.filter { $0.season == nil || $0.season?.$league.id == nil }
+        if !unassigned.isEmpty {
+            let unknown = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
+            payload.append(PublicSeasonMatches(leagueName: "Unbekannte Liga", leagueID: unknown,
+                seasonID: unknown, seasonName: "Ohne Saisonzuordnung", primary: false,
+                matches: unassigned.sorted { ($0.details.date ?? .distantFuture) < ($1.details.date ?? .distantFuture) }.map(self.toPublicShort)))
+        }
+        return payload
+    }
+
+    // MARK: Player Detail (one season-grouped snapshot)
     func fetchPlayer(req: Request) throws -> EventLoopFuture<PlayerDetailResponse> {
         guard let playerID = req.parameters.get("id", as: UUID.self) else {
             throw Abort(.badRequest, reason: "Invalid or missing player ID")
@@ -909,20 +694,13 @@ extension ClientController {
             return self.fetchLeagueForTeam(team, db: req.db)
         }
 
-        // seasons + matches (uses cache)
-        let seasonsF: EventLoopFuture<[PublicSeasonMatches]> = playerF.and(leagueF).flatMap { (player, league) in
-            guard let league = league else { return req.eventLoop.makeSucceededFuture([]) }
-            return self.seasonsForPlayerFast(player: player, league: league, req: req)
+        // One snapshot drives the displayed history AND both statistic totals.
+        let snapshotF = PlayerStatisticsService.load(playerIDs: [playerID], on: req.db)
+        let seasonsF = playerF.and(leagueF).and(snapshotF).flatMap { pair, snapshot in
+            self.seasonsForPlayerFast(player: pair.0, league: pair.1, req: req, snapshot: snapshot)
         }
-
-        // Stats use the exact same appearance list returned to the frontend.
-        let statsF: EventLoopFuture<PlayerStatsPair> = seasonsF.and(leagueF).flatMap { seasons, league in
-            self.getPlayerStatsBundle(
-                playerID: playerID,
-                activeLeagueID: league?.id,
-                seasons: seasons,
-                db: req.db
-            )
+        let statsF = snapshotF.and(leagueF).map { snapshot, league in
+            snapshot.stats(for: playerID, activeLeagueID: league?.id)
         }
 
         return playerF.and(seasonsF).and(statsF).map { (playerAndSeasons, stats) in
@@ -957,24 +735,6 @@ extension ClientController {
     }
 }
 
-extension ClientController {
-    
-    func getPlayerStatsBundle(
-        playerID: UUID,
-        activeLeagueID: UUID?,
-        seasons _: [PublicSeasonMatches],
-        db: Database
-    ) -> EventLoopFuture<PlayerStatsPair> {
-        PlayerStatisticsService.calculate(
-            playerID: playerID,
-            activeLeagueID: activeLeagueID,
-            on: db
-        )
-    }
-
-}
-
-
 // MARK: LEADERBOARD
 extension ClientController {
     
@@ -1006,51 +766,6 @@ extension ClientController {
         )
     }
 
-    // 3) Supply the team info
-    private func mapEventsToLeaderBoard(
-        _ events: [MatchEvent],
-        playerTeamDict: [UUID: (String?, String?, String?)]
-    ) -> [LeaderBoard] {
-        var playerEventCounts: [UUID: (name: String?, image: String?, number: String?, count: Int)] = [:]
-
-        for event in events {
-            // OptionalParent -> id is UUID?
-            guard let pid = event.$player.id else {
-                // No player (or already deleted and set to null) → skip for leaderboard
-                continue
-            }
-
-            let info = (event.name, event.image, event.number)
-
-            if let existing = playerEventCounts[pid] {
-                playerEventCounts[pid] = (
-                    existing.name,
-                    existing.image,
-                    existing.number,
-                    existing.count + 1
-                )
-            } else {
-                playerEventCounts[pid] = (info.0, info.1, info.2, 1)
-            }
-        }
-
-        return playerEventCounts
-            .map { (playerId, data) in
-                let (teamImg, teamName, teamId) = playerTeamDict[playerId] ?? (nil, nil, nil)
-
-                return LeaderBoard(
-                    name: data.name,
-                    image: data.image,
-                    number: data.number,
-                    count: Double(data.count),
-                    playerid: playerId,
-                    teamimg: teamImg,
-                    teamName: teamName,
-                    teamId: teamId
-                )
-            }
-            .sorted { ($0.count ?? 0) > ($1.count ?? 0) }
-    }
 
 
 }

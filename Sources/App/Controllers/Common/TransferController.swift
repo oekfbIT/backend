@@ -25,21 +25,28 @@ final class TransferController: RouteCollection {
 
     func setupRoutes(on app: RoutesBuilder) throws {
         let route = app.grouped(PathComponent(stringLiteral: repository.path))
+        let adminRoute = route.grouped(
+            Token.authenticator(),
+            User.guardMiddleware(),
+            AdminOnlyMiddleware()
+        )
 
-        // Generic CRUD from your repository
-        route.post("batch", use: repository.createBatch)
+        // Read routes remain available to the existing clients. Generic mutation
+        // routes are admin-only so they cannot bypass transfer-window checks.
         route.get(use: indexTransfers)
         route.get(":id", use: repository.getbyID)
-        route.delete(":id", use: repository.deleteID)
-        route.patch(":id", use: repository.updateID)
-        route.patch("batch", use: repository.updateBatch)
+        adminRoute.post("batch", use: repository.createBatch)
+        adminRoute.delete(":id", use: repository.deleteID)
+        adminRoute.patch(":id", use: repository.updateID)
+        adminRoute.patch("batch", use: repository.updateBatch)
 
         // Custom routes
         route.get("reject", ":id", use: rejectTransfer)
         route.get("options", ":teamID", use: getTransfersOptions)
+        route.get("isOpen", use: isTransferMarketOpen)
 
         route.post("create", use: createTransfer)               // client-facing DTO
-        route.post("admin", "create", use: createTransferAdmin) // admin flow
+        adminRoute.post("admin", "create", use: createTransferAdmin) // admin correction flow
 
         route.get("confirm", ":id", use: confirmTransfer)
 
@@ -55,6 +62,17 @@ final class TransferController: RouteCollection {
         return Transfer.query(on: req.db)
             .sort(\.$created, .descending) // newest first
             .paginate(pageRequest)
+    }
+
+    // GET /transfers/isOpen
+    // This is intentionally read from the database on every request so clients
+    // that stay logged in can refresh their access without signing in again.
+    func isTransferMarketOpen(req: Request) async throws -> Response {
+        let isOpen = try await TransferSettings.query(on: req.db).first()?.isTransferOpen ?? false
+        var headers = HTTPHeaders()
+        headers.add(name: .contentType, value: "application/json; charset=utf-8")
+        headers.add(name: .cacheControl, value: "no-store, no-cache, must-revalidate")
+        return Response(status: .ok, headers: headers, body: .init(string: isOpen ? "true" : "false"))
     }
 
     // POST /transfers/create
@@ -93,36 +111,38 @@ final class TransferController: RouteCollection {
 
                     // 2) Load origin team details
                     return Team.find(originTeamID, on: db).unwrap(or: Abort(.notFound, reason: "Player's current team details not found.")).flatMap { originTeam in
-                        // 3) Create new transfer
-                        var transfer = Transfer(
-                            team: dto.team,
-                            player: dto.player,
-                            status: .warten,
-                            playerName: dto.playerName ?? player.name,
-                            playerImage: dto.playerImage ?? "",
-                            teamName: dto.teamName ?? "",                  // allow nulls (backend can show fallback)
-                            teamImage: dto.teamImage ?? "",
-                            origin: originTeam.id,
-                            originName: originTeam.teamName,
-                            originImage: originTeam.logo
-                        )
+                        return Team.find(dto.team, on: db).unwrap(or: Abort(.notFound, reason: "Target team not found.")).flatMap { targetTeam in
+                            // Store authoritative image and team data from the database.
+                            let transfer = Transfer(
+                                team: dto.team,
+                                player: dto.player,
+                                status: .warten,
+                                playerName: player.name,
+                                playerImage: player.image ?? dto.playerImage ?? "",
+                                teamName: targetTeam.teamName,
+                                teamImage: targetTeam.logo,
+                                origin: originTeam.id,
+                                originName: originTeam.teamName,
+                                originImage: originTeam.logo
+                            )
 
-                        // 4) Persist transfer + update player atomically
-                        return transfer.create(on: db).flatMap {
-                            player.transferred = true
-                            return player.update(on: db).flatMap {
-                                // 5) Try email, but don't hard-fail if missing
-                                if let recipientEmail = player.email {
-                                    do {
-                                        try self.emailController.sendTransferRequest(req: req, recipient: recipientEmail, transfer: transfer)
-                                    } catch {
-                                        req.logger.warning("Failed to send transfer email: \(error.localizedDescription)")
-                                        // Intentionally do not fail the request
+                            // 4) Persist transfer + update player atomically
+                            return transfer.create(on: db).flatMap {
+                                player.transferred = true
+                                return player.update(on: db).flatMap {
+                                    // 5) Try email, but don't hard-fail if missing
+                                    if let recipientEmail = player.email {
+                                        do {
+                                            _ = try self.emailController.sendTransferRequest(req: req, recipient: recipientEmail, transfer: transfer)
+                                        } catch {
+                                            req.logger.warning("Failed to send transfer email: \(error.localizedDescription)")
+                                            // Intentionally do not fail the request
+                                        }
+                                    } else {
+                                        req.logger.info("Player has no email; skipping transfer email.")
                                     }
-                                } else {
-                                    req.logger.info("Player has no email; skipping transfer email.")
+                                    return req.eventLoop.makeSucceededFuture(transfer)
                                 }
-                                return req.eventLoop.makeSucceededFuture(transfer)
                             }
                         }
                     }
@@ -158,7 +178,7 @@ final class TransferController: RouteCollection {
                     return req.eventLoop.makeFailedFuture(Abort(.notFound, reason: "Player's current team details not found."))
                 }
 
-                var newTransfer = Transfer(
+                let newTransfer = Transfer(
                     team: dto.team,
                     player: dto.player,
                     status: .angenommen,
