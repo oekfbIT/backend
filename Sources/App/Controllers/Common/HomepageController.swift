@@ -678,6 +678,7 @@ struct PublicMatchShort: Content, Codable {
 }
 
 struct MiniBlankett: Codable {
+    var shortName: String? = nil
     let id: UUID?
     let logo: String?
     let name: String?

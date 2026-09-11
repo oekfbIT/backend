@@ -433,6 +433,7 @@ struct Table: Codable, Content {
 }
 
 struct TableItem: Codable, Content {
+    var shortName: String? = nil
     var image: String
     var name: String
     var points: Int

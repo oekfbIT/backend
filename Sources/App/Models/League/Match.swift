@@ -42,6 +42,7 @@ struct PlayerOverview: Codable {
 }
 
 struct Blankett: Codable {
+    var shortName: String? = nil
     var name: String?
     var dress: String?
     var logo: String?

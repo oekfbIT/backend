@@ -48,6 +48,7 @@ public func configure(_ app: Application) throws {
     app.logger.info("Connecting to MongoDB")
     
     try app.databases.use(.mongo(connectionString: mongoConnectionString), as: .mongo)
+    app.databases.middleware.use(TeamLeagueMiddleware(), on: .mongo)
     
     
     // MARK: - Leaf Configuration

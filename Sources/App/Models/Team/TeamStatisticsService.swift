@@ -141,7 +141,7 @@ enum TeamStatisticsService {
         var rows = teams.compactMap { team -> TableItem? in
             guard let id = team.id else { return nil }
             let stats = aggregate(teamID: id, matches: matches)
-            return TableItem(image: team.logo, name: team.teamName, points: stats.totalPoints, id: id,
+            return TableItem(shortName: team.shortName, image: team.logo, name: team.teamName, points: stats.totalPoints, id: id,
                              goals: stats.totalScored, ranking: 0, wins: stats.wins, draws: stats.draws,
                              losses: stats.losses, scored: stats.totalScored, against: stats.totalAgainst,
                              difference: stats.goalDifference, form: recentForm(teamID: id, matches: matches))

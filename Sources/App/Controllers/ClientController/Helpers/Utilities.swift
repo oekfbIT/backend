@@ -28,11 +28,13 @@ extension ClientController {
                         id: match.id,
                         details: match.details,
                         homeBlanket: MiniBlankett(
+                            shortName: match.homeTeam.shortName,
                             id: match.$homeTeam.id,
                             logo: match.homeBlanket?.logo,
                             name: match.homeBlanket?.name
                         ),
                         awayBlanket: MiniBlankett(
+                            shortName: match.awayTeam.shortName,
                             id: match.$awayTeam.id,
                             logo: match.awayBlanket?.logo,
                             name: match.awayBlanket?.name
@@ -83,11 +85,13 @@ extension ClientController {
                 id: match.id,
                 details: match.details,
                 homeBlanket: MiniBlankett(
+                    shortName: match.homeTeam.shortName,
                     id: match.$homeTeam.id,
                     logo: match.homeBlanket?.logo,
                     name: match.homeBlanket?.name
                 ),
                 awayBlanket: MiniBlankett(
+                    shortName: match.awayTeam.shortName,
                     id: match.$awayTeam.id,
                     logo: match.awayBlanket?.logo,
                     name: match.awayBlanket?.name
@@ -118,3 +122,20 @@ extension HomepageController {
 }
 
                                                                                        
+
+// Explicit season response: the database Season model excludes its matches from encoding.
+struct ClientSeasonMatches: Content {
+    let id: UUID?
+    let name: String
+    let primary: Bool?
+    let matches: [PublicMatchShort]
+}
+
+extension ClientController {
+    func publicBlanket(_ stored: Blankett?, team: Team) -> Blankett {
+        var blanket = stored ?? Blankett(name: team.teamName, dress: nil,
+                                         logo: team.logo, players: [])
+        blanket.shortName = team.shortName
+        return blanket
+    }
+}

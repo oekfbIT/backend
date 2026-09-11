@@ -38,6 +38,7 @@ final class AdminController: RouteCollection {
         setupLegalReadRoutes(on: admin)
         setupLegalWriteRoutes(on: admin)
         setupSponsorRoutes(on: admin)
+        setupAchievementRoutes(on: admin)
         setupSearchRoutes(on: admin)
 
     }

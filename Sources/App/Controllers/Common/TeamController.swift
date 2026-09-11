@@ -14,8 +14,8 @@ final class TeamController: RouteCollection {
         route.post(use: repository.create)
         route.post("batch", use: repository.createBatch)
 
-        route.get(use: repository.index)
-        route.get(":id", use: repository.getbyID)
+        route.get(use: indexWithLeague)
+        route.get(":id", use: getWithLeague)
         route.get(":id",  "matches" , use: getWithMatches)
         route.delete(":id", use: getWithMatches)
 
@@ -42,6 +42,23 @@ final class TeamController: RouteCollection {
         try setupRoutes(on: routes)
     }
     
+    // Return current relationship data even for historical rows with stale leagueCode.
+    func indexWithLeague(req: Request) throws -> EventLoopFuture<Page<Team>> {
+        Team.query(on: req.db).with(\.$league).paginate(for: req).map { page in
+            page.items.forEach { $0.leagueCode = $0.league?.name }
+            return page
+        }
+    }
+
+    func getWithLeague(req: Request) throws -> EventLoopFuture<Team> {
+        guard let id = req.parameters.get("id", as: UUID.self) else { throw Abort(.badRequest) }
+        return Team.query(on: req.db).filter(\.$id == id).with(\.$league).first()
+            .unwrap(or: Abort(.notFound)).map { team in
+                team.leagueCode = team.league?.name
+                return team
+            }
+    }
+
     func updateID(req: Request) throws -> EventLoopFuture<Team> {
         guard let id = req.parameters.get("id", as: Team.IDValue.self) else {
             throw Abort(.badRequest)

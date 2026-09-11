@@ -17,6 +17,7 @@ final class ClientController: RouteCollection {
         
         route.get("home", "league", ":code", use: fetchHomepageData)
         route.get("selection", use: fetchLeagueSelection)
+        route.get("achievements", ":ownerType", ":ownerId", use: AchievementSupport.list)
         route.get("clubs", "league", ":code", use: fetchLeagueClubs)
         route.get("clubs", "detail", ":id", use: fetchClub)
         route.get("teamseaction", "detail", ":id", use: teamSectionClub)
@@ -223,15 +224,24 @@ final class ClientController: RouteCollection {
         }
     }
     
-    func fetchAllSeasonMatches(req: Request) throws -> EventLoopFuture<[Season]> {
+    func fetchAllSeasonMatches(req: Request) throws -> EventLoopFuture<[ClientSeasonMatches]> {
         guard let leagueCode = req.parameters.get("code", as: String.self) else {
             throw Abort(.badRequest, reason: "Invalid or missing league code")
         }
 
         return fetchLeagueByCode(leagueCode, db: req.db).flatMap { league in
             league.$seasons.query(on: req.db)
-                .with(\.$matches)
+                .with(\.$matches) { match in
+                    match.with(\.$homeTeam).with(\.$awayTeam)
+                }
                 .all()
+                .map { seasons in
+                    seasons.map { season in
+                        ClientSeasonMatches(id: season.id, name: season.name,
+                                            primary: season.primary,
+                                            matches: self.mapMatchesToShort(season.matches))
+                    }
+                }
         }
     }
 
@@ -240,7 +250,11 @@ final class ClientController: RouteCollection {
         guard let matchID = req.parameters.get("id", as: UUID.self) else {
             throw Abort(.badRequest, reason: "Invalid or missing match ID")
         }
-        return Match.find(matchID, on: req.db)
+        return Match.query(on: req.db)
+            .filter(\.$id == matchID)
+            .with(\.$homeTeam)
+            .with(\.$awayTeam)
+            .first()
             .unwrap(or: Abort(.notFound, reason: "Match not found"))
             .flatMap { match in
                 match.$season.load(on: req.db).and(match.$referee.load(on: req.db)).flatMap { _, _ in
@@ -252,8 +266,8 @@ final class ClientController: RouteCollection {
                                 details: match.details,
                                 referee: match.$referee.wrappedValue,
                                 season: match.$season.wrappedValue,
-                                homeBlanket: match.homeBlanket,
-                                awayBlanket: match.awayBlanket,
+                                homeBlanket: self.publicBlanket(match.homeBlanket, team: match.homeTeam),
+                                awayBlanket: self.publicBlanket(match.awayBlanket, team: match.awayTeam),
                                 events: events,
                                 score: match.score,
                                 status: match.status,
@@ -341,6 +355,8 @@ final class ClientController: RouteCollection {
     func getLivescoreShort(req: Request) throws -> EventLoopFuture<[LeagueMatchesShort]> {
         return Match.query(on: req.db)
             .filter(\.$status ~~ [.first, .second, .halftime])
+            .with(\.$homeTeam)
+            .with(\.$awayTeam)
             .with(\.$season) { seasonQuery in
                 seasonQuery.with(\.$league)
             }
@@ -362,8 +378,8 @@ final class ClientController: RouteCollection {
                     let short = PublicMatchShort(
                         id: match.id,
                         details: match.details,
-                        homeBlanket: MiniBlankett(id: match.$homeTeam.id, logo: match.homeBlanket?.logo, name: match.homeBlanket?.name),
-                        awayBlanket: MiniBlankett(id: match.$awayTeam.id, logo: match.awayBlanket?.logo, name: match.awayBlanket?.name),
+                        homeBlanket: MiniBlankett(shortName: match.homeTeam.shortName, id: match.$homeTeam.id, logo: match.homeBlanket?.logo, name: match.homeBlanket?.name),
+                        awayBlanket: MiniBlankett(shortName: match.awayTeam.shortName, id: match.$awayTeam.id, logo: match.awayBlanket?.logo, name: match.awayBlanket?.name),
                         score: match.score,
                         status: match.status,
                         firstHalfDate: match.firstHalfStartDate,
@@ -406,11 +422,13 @@ extension ClientController {
             details: m.details,
             // Use team relation IDs; take logo/name from the blankets you already store
             homeBlanket: MiniBlankett(
+                shortName: m.$homeTeam.value?.shortName,
                 id: m.$homeTeam.id,
                 logo: m.homeBlanket?.logo,
                 name: m.homeBlanket?.name
             ),
             awayBlanket: MiniBlankett(
+                shortName: m.$awayTeam.value?.shortName,
                 id: m.$awayTeam.id,
                 logo: m.awayBlanket?.logo,
                 name: m.awayBlanket?.name
@@ -430,6 +448,8 @@ extension ClientController {
                 or.filter(\.$homeTeam.$id == teamID)
                   .filter(\.$awayTeam.$id == teamID)
             }
+            .with(\.$homeTeam)
+            .with(\.$awayTeam)
             .all()
             .map { $0.map(self.toPublicShort) }
     }
@@ -473,7 +493,9 @@ extension ClientController {
             let matchesF = Match.query(on: req.db).group(.or) {
                 $0.filter(\.$homeTeam.$id == teamID)
                 $0.filter(\.$awayTeam.$id == teamID)
-            }.with(\.$season) { $0.with(\.$league) }.all()
+            }.with(\.$homeTeam)
+                .with(\.$awayTeam)
+                .with(\.$season) { $0.with(\.$league) }.all()
             let activeF: EventLoopFuture<[Season]> = league?.id == nil ? req.eventLoop.makeSucceededFuture([]) :
                 Season.query(on: req.db).filter(\.$league.$id == league?.id).filter(\.$primary == true).with(\.$league).all()
             return matchesF.and(activeF).map { matches, seasons in
@@ -861,6 +883,8 @@ extension ClientController {
                       .filter(\.$awayTeam.$id == teamID)
                 }
                 .filter(\.$status == .pending)
+                .with(\.$homeTeam)
+                .with(\.$awayTeam)
                 .all()
                 .flatMapThrowing { matches in
                     // Sort by gameday ascending and take the first pending match

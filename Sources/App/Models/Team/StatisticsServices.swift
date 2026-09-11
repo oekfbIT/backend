@@ -43,6 +43,8 @@ enum PlayerStatisticsService {
                 $0.filter(homePlayerPath, .subset(inverse: false), ids)
                 $0.filter(awayPlayerPath, .subset(inverse: false), ids)
             }
+            .with(\.$homeTeam)
+            .with(\.$awayTeam)
             .with(\.$season) { $0.with(\.$league) }
             .all()
         let events = MatchEvent.query(on: db).filter(\.$player.$id ~~ ids).all()
@@ -55,6 +57,8 @@ enum PlayerStatisticsService {
             // An event can outlive its deleted match. Fetching explicitly avoids
             // an eager-parent failure and excludes that orphan from all totals.
             return Match.query(on: db).filter(\.$id ~~ missingIDs)
+                .with(\.$homeTeam)
+                .with(\.$awayTeam)
                 .with(\.$season) { $0.with(\.$league) }.all()
                 .map { Snapshot(matches: matches + $0, events: events) }
         }
