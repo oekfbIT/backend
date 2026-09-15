@@ -7,7 +7,7 @@
 3. Deploy the admin frontend and open **Administration → Homepage → Homepage Analytics** (`/admin/homepage-analytics`).
 4. Select a range. Successful empty Google reports display an explicit empty state; failures display an error instead of fabricated zero metrics. A 404 means the backend route is not deployed; 503 means analytics is disabled/not configured; 401/403 requires an admin login.
 
-The browser only calls the authenticated backend. Google credentials stay on the server. The same selected range drives all cards, chart and tables.
+The browser only calls the authenticated backend. Google credentials stay on the server. The same selected range drives all historical cards, charts and tables; realtime uses its own fixed windows.
 
 ## API and data contract
 
@@ -45,3 +45,15 @@ Returning users come from Google's supported `newVsReturning=returning` breakdow
 - In the admin: `CI=true npm test -- --watchAll=false --runInBand --testPathPattern=homepageAnalytics` and `GENERATE_SOURCEMAP=false npm run build`.
 - Local browser preview used synthetic data, clearly labelled, to check the rendered chart and layout. Preview data is not part of the application or production bundle.
 - Verify production MongoDB cache writes and authenticated endpoint access after deployment.
+
+## Realtime activity
+
+`GET /admin/analytics/realtime` requires the same admin authentication and existing GA4 runtime settings. Deploy the backend (including `GoogleAnalyticsRealtime.swift`) before the admin frontend.
+
+- The separate **Live-Aktivität** panel shows active users over 30 and 5 minutes, page views and events over 30 minutes, a per-minute activity chart, and the five most frequent events. Historical range selections do not change these windows.
+- Reports use Google's Realtime API and filter to the configured Homepage stream. Whole-window distinct user totals are queried directly, never summed from minute buckets.
+- Response schema version 1 contains `schema_version`, `fetched_at`, `active_users30`, `active_users5`, `page_views30`, `event_count30`, `minutes`, and `events`. Row dictionaries use Google dimension/metric names.
+- The backend caches complete responses in memory for 30 seconds and coalesces concurrent requests. Realtime does not require MongoDB or alter the hourly snapshot importer.
+- The visible admin page refreshes realtime once per minute. Google can report activity with a short delay. A failed refresh keeps the last successful values with their timestamp and a visible error; an initial failure is not shown as zero traffic.
+- Historical freshness notices are short inline text with expandable details. Report definitions are also collapsed by default.
+- Realtime tests cover request filters, authentication, optional live Google reads, caching, polling, error states, and cleanup.

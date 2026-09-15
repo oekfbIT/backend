@@ -158,6 +158,8 @@ actor GoogleAnalyticsService {
     private let signer: JWTSigner
     private var token: (value: String, expires: Date)?
     private var running = false
+    var realtimeCache: (expires: Date, payload: GA4Realtime)?
+    var realtimePending: Task<GA4Realtime, Error>?
     var dashboardTimeZone: TimeZone?
     var dashboardPending: [String: Task<GA4Dashboard, Error>] = [:]
 
@@ -195,11 +197,12 @@ actor GoogleAnalyticsService {
         return try await fetchReport(client: client, report: report, body: body)
     }
 
-    func fetchReport(client: Client, report: GA4Report, body: Data) async throws -> GA4ReportResponse {
+    func fetchReport(client: Client, report: GA4Report, body: Data, realtime: Bool = false) async throws -> GA4ReportResponse {
         for attempt in 0..<3 {
             try Task.checkCancellation()
             let bearer = try await accessToken(client: client)
-            let response = try await client.post(URI(string: "https://analyticsdata.googleapis.com/v1beta/properties/\(configuration.propertyID):runReport")) { request in
+            let method = realtime ? "runRealtimeReport" : "runReport"
+            let response = try await client.post(URI(string: "https://analyticsdata.googleapis.com/v1beta/properties/\(configuration.propertyID):\(method)")) { request in
                 request.timeout = .seconds(60)
                 request.headers.bearerAuthorization = .init(token: bearer)
                 request.headers.contentType = .json
@@ -357,6 +360,21 @@ func configureGoogleAnalytics(_ app: Application) {
 
 extension AdminController {
     func setupAnalyticsRoutes(on routes: RoutesBuilder) {
+        routes.get("analytics", "realtime") { req async throws -> Response in
+            guard let service = req.application.storage[GA4ServiceKey.self] else {
+                throw Abort(.serviceUnavailable, reason: "Analytics ist im Backend nicht konfiguriert.")
+            }
+            do {
+                let payload = try await service.realtime(client: req.client)
+                let response = try await payload.encodeResponse(for: req)
+                response.headers.replaceOrAdd(name: .cacheControl, value: "no-store")
+                return response
+            } catch {
+                let code = (error as? GA4Error)?.safeCode ?? "network_error"
+                req.logger.warning("GA4 realtime failed: \(code)")
+                throw Abort(.badGateway, reason: "Live-Daten nicht verfügbar (\(code)).")
+            }
+        }
         routes.get("analytics", "dashboard") { req async throws -> Response in
             guard let service = req.application.storage[GA4ServiceKey.self] else {
                 throw Abort(.serviceUnavailable, reason: "Analytics ist nicht konfiguriert. GA4_ENABLED und Zugangsdaten im Backend prüfen.")
