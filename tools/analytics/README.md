@@ -1,5 +1,7 @@
 # Homepage analytics importer
 
+> Production now uses the native Swift importer inside the existing backend. Follow [production setup](../../docs/analytics-production.md). This older standalone option must not run alongside it.
+
 Runs separately from the Vapor HTTP process and writes aggregate reports to the same MongoDB database. A small Python job uses Google's official SDK for token refresh/retries rather than introducing custom Google authentication into Swift. No public analytics ingest endpoint is added. The worker is not enabled by adding these files.
 
 ## Configuration

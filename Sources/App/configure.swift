@@ -242,6 +242,8 @@ public func configure(_ app: Application) throws {
         .at(6, 0)
 
     
+    configureGoogleAnalytics(app)
+
     // Start the scheduled jobs
     try app.queues.startScheduledJobs()
     
