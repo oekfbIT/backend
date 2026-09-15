@@ -703,6 +703,7 @@ extension AppController {
 
     // PATCH /app/match/:matchID/teamcancel
     func teamCancelGame(req: Request) async throws -> HTTPStatus {
+        let fees = try await FeeService.forRequest(req)
         let matchId = try req.parameters.require("matchID", as: UUID.self)
 
         struct NoShowRequest: Content { let winningTeam: String }
@@ -756,20 +757,15 @@ extension AppController {
         winningTeam.points += 3
 
         let cancelled = losingTeam.cancelled ?? 0
-        guard cancelled < 3 else {
+        guard cancelled >= 0, cancelled < 3 else {
             throw Abort(.badRequest, reason: "Schon 3 Absagen gemacht diese Saison.")
         }
 
         let newCancelled = cancelled + 1
         losingTeam.cancelled = newCancelled
 
-        let rechnungAmount: Int
-        switch newCancelled {
-        case 1: rechnungAmount = 170
-        case 2: rechnungAmount = 270
-        case 3: rechnungAmount = 370
-        default: rechnungAmount = 0
-        }
+        let cancellationKey = FeeKey.cancellationTiers[newCancelled - 1]
+        let rechnungAmount = fees.fee(cancellationKey).euros
 
         let invoiceNumber = UUID().uuidString
         let balance = losingTeam.balance ?? 0
@@ -784,6 +780,7 @@ extension AppController {
             kennzeichen: "Spiel Absage: \(newCancelled)"
         )
 
+        rechnung.appliedFee = fees.fee(cancellationKey)
         try await rechnung.save(on: req.db)
         losingTeam.balance = balance - Double(rechnungAmount)
 

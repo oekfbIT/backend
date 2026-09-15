@@ -13,6 +13,12 @@ extension AppController {
         let body: String
         let newsId: UUID?
         let savedDeviceId: UUID?
+        let savedDeviceIds: [UUID]?
+    }
+
+    struct ManagedPushResponse: Content {
+        let notification: PushNotificationLog
+        let delivery: ExpoPushService.SendResult
     }
 
     struct PushRecipientCountResponse: Content {
@@ -56,16 +62,18 @@ extension AppController {
         let token = dto.expoPushToken.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !label.isEmpty else { throw Abort(.badRequest, reason: "Device label is required.") }
-        guard token.hasPrefix("ExpoPushToken[") || token.hasPrefix("ExponentPushToken[") else {
+        guard (token.hasPrefix("ExpoPushToken[") || token.hasPrefix("ExponentPushToken[")),
+              token.hasSuffix("]") else {
             throw Abort(.badRequest, reason: "Enter a valid Expo push token.")
         }
 
         if let existing = try await SavedPushDevice.query(on: req.db)
             .filter(\.$expoPushToken == token)
             .first() {
-            existing.label = label
-            try await existing.save(on: req.db)
-            return existing
+            throw Abort(
+                .conflict,
+                reason: "This Expo token is already saved as '\(existing.label)'. Each app installation must use its own token."
+            )
         }
 
         let device = SavedPushDevice(label: label, expoPushToken: token)
@@ -82,23 +90,31 @@ extension AppController {
         return .noContent
     }
 
-    func managedTestPush(req: Request) async throws -> PushNotificationLog {
+    func managedTestPush(req: Request) async throws -> ManagedPushResponse {
         let dto = try validatedManagedPush(req)
-        guard let deviceId = dto.savedDeviceId,
-              let device = try await SavedPushDevice.find(deviceId, on: req.db) else {
-            throw Abort(.badRequest, reason: "Choose a saved test device.")
+        var ids = dto.savedDeviceIds ?? []
+        if let legacyId = dto.savedDeviceId, !ids.contains(legacyId) { ids.append(legacyId) }
+        ids = Array(Set(ids))
+        guard !ids.isEmpty else {
+            throw Abort(.badRequest, reason: "Choose at least one saved test device.")
+        }
+        let devices = try await SavedPushDevice.query(on: req.db)
+            .filter(\.$id ~~ ids)
+            .all()
+        guard devices.count == ids.count else {
+            throw Abort(.badRequest, reason: "One or more selected test devices no longer exist.")
         }
 
         return try await sendManagedPush(
             dto,
-            tokens: [device.expoPushToken],
-            targetType: "singleDevice",
-            targetLabel: device.label,
+            tokens: devices.map(\.expoPushToken),
+            targetType: devices.count == 1 ? "singleDevice" : "selectedDevices",
+            targetLabel: devices.map(\.label).sorted().joined(separator: ", "),
             req: req
         )
     }
 
-    func managedBroadcastPush(req: Request) async throws -> PushNotificationLog {
+    func managedBroadcastPush(req: Request) async throws -> ManagedPushResponse {
         let dto = try validatedManagedPush(req)
         let devices = try await DeviceToken.query(on: req.db)
             .filter(\.$isActive == true)
@@ -132,7 +148,7 @@ extension AppController {
         targetType: String,
         targetLabel: String?,
         req: Request
-    ) async throws -> PushNotificationLog {
+    ) async throws -> ManagedPushResponse {
         let path = dto.newsId.map { "/news/\($0.uuidString)" }
         var data = ["type": dto.newsId == nil ? "broadcast" : "news.open"]
         if let newsId = dto.newsId?.uuidString {
@@ -153,10 +169,24 @@ extension AppController {
         try await log.save(on: req.db)
 
         do {
-            try await ExpoPushService.send(to: tokens, title: dto.title, body: dto.body, data: data, req: req)
-            log.status = "submitted"
+            let delivery = try await ExpoPushService.send(
+                to: tokens,
+                title: dto.title,
+                body: dto.body,
+                data: data,
+                req: req
+            )
+            log.acceptedCount = delivery.acceptedCount
+            log.failedCount = delivery.failedCount
+            log.ticketSummary = delivery.tickets
+                .filter { $0.status == "error" }
+                .map { "\($0.tokenPreview): \($0.error ?? $0.message ?? "Unknown Expo error")" }
+                .joined(separator: "\n")
+            log.status = delivery.failedCount == 0
+                ? "accepted"
+                : (delivery.acceptedCount == 0 ? "failed" : "partiallyFailed")
             try await log.save(on: req.db)
-            return log
+            return .init(notification: log, delivery: delivery)
         } catch {
             log.status = "failed"
             log.errorMessage = String(describing: error)

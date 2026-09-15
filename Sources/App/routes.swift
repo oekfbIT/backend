@@ -24,6 +24,7 @@ func routes(_ app: Application) throws {
         ConversationController(path: "chat"),
         NewsController(path: "news"),
         RechnungsController(path: "finanzen"),
+        TeamPaymentController(),
         ScraperDetailController(),
         TransferController(path: "transfers"),
         TransferSettingsController(path: "transferSettings"),

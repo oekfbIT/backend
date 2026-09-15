@@ -39,6 +39,19 @@ final class Team: Model, Content {
     @OptionalField(key: FieldKeys.captain) var captain: String?
     @Field(key: FieldKeys.trikot) var trikot: Trikot
     @OptionalField(key: FieldKeys.balance) var balance: Double?
+    // Snapshot used to apply existing balance edits as atomic deltas. Not part of JSON/BSON.
+    var loadedBalance: Double?
+    var hasLoadedBalance = false
+
+    func output(from output: DatabaseOutput) throws {
+        for property in properties.compactMap({ $0 as? AnyDatabaseProperty }) {
+            try property.output(from: output)
+        }
+        if output.contains(FieldKeys.balance) || !hasLoadedBalance {
+            loadedBalance = balance
+            hasLoadedBalance = true
+        }
+    }
     @OptionalField(key: FieldKeys.referCode) var referCode: String?
     @OptionalField(key: FieldKeys.cancelled) var cancelled: Int?
     @OptionalField(key: FieldKeys.postponed) var postponed: Int?

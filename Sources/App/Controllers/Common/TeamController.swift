@@ -10,26 +10,29 @@ final class TeamController: RouteCollection {
 
     func setupRoutes(on app: RoutesBuilder) throws {
         let route = app.grouped(PathComponent(stringLiteral: repository.path))
+        let adminWrites = route.grouped(Token.authenticator(), User.guardMiddleware(), AdminOnlyMiddleware())
         
-        route.post(use: repository.create)
-        route.post("batch", use: repository.createBatch)
+        adminWrites.post(use: repository.create)
+        adminWrites.post("batch", use: repository.createBatch)
 
         route.get(use: indexWithLeague)
         route.get(":id", use: getWithLeague)
         route.get(":id",  "matches" , use: getWithMatches)
         route.delete(":id", use: getWithMatches)
 
-        route.patch(":id", use: updateID)
-        route.patch("batch", use: repository.updateBatch)
+        adminWrites.patch(":id", use: updateID)
+        adminWrites.patch("batch", use: repository.updateBatch)
         
         route.get(":id", "players", use: getTeamWithPlayers)
-        route.get(":id", "rechungen", use: getTeamWithRechnungen)
+        route.grouped(Token.authenticator(), User.guardMiddleware())
+            .get(":id", "rechungen", use: getTeamWithRechnungen)
         
         route.get("withPlayers", use: getAllTeamsWithPlayers)
 
         route.get("search", ":value", use: searchByTeamName)
         
-        route.get(":id", "topup", ":amount", use: topUpBalance)
+        route.grouped(Token.authenticator(), User.guardMiddleware(), AdminOnlyMiddleware())
+            .get(":id", "topup", ":amount", use: topUpBalance)
         route.post(":id", "league", ":leagueID", use: assignNewLeague) 
         
         route.get("updateUser", ":teamID", ":newEmailAdress", use: updateUserEmail)
@@ -152,6 +155,10 @@ final class TeamController: RouteCollection {
             .with(\.$rechnungen)
             .first()
             .unwrap(or: Abort(.notFound))
+            .flatMapThrowing { team in
+                try TeamPaymentController.authorize(team: team, user: req.auth.require(User.self))
+                return team
+            }
     }
     
     // Function to get all teams with their players
@@ -277,69 +284,72 @@ final class TeamController: RouteCollection {
             throw Abort(.badRequest)
         }
         
-        return Team.find(teamID, on: req.db)
-            .unwrap(or: Abort(.notFound))
-            .flatMap { team in
-                // First, ensure the balance exists.
-                guard let balance = team.balance else {
-                    return req.eventLoop.future(error: Abort(.badRequest, reason: "Team balance not available"))
-                }
-                
-                // Check if the overdraft flag is already set.
-                guard team.overdraft == false else {
-                    return req.eventLoop.future(error: Abort(.badRequest, reason: "Overdraft already set"))
-                }
-                
-                // Ensure the balance is below 0.
-                guard balance < 0 else {
-                    return req.eventLoop.future(error: Abort(.badRequest, reason: "Balance is non-negative; overdraft cannot be applied"))
-                }
-                
-                // Set overdraft flag
-                team.overdraft = true
-                
-                // Calculate the next upcoming Tuesday at 12:00 Vienna/Austria Time
-                let calendar = Calendar(identifier: .gregorian)
-                let now = Date.viennaNow
-                var components = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: now)
-                let weekday = calendar.component(.weekday, from: now)
-                
-                let daysUntilTuesday = (3 - weekday + 7) % 7
-                let nextTuesday = calendar.date(byAdding: .day, value: daysUntilTuesday == 0 ? 7 : daysUntilTuesday, to: now)!
-                
-                var tuesdayComponents = calendar.dateComponents([.year, .month, .day], from: nextTuesday)
-                tuesdayComponents.hour = 12
-                tuesdayComponents.minute = 0
-                tuesdayComponents.second = 0
-                
-                let viennaTimeZone = TimeZone(identifier: "Europe/Vienna")!
-                let overdraftDate = calendar.date(from: tuesdayComponents)!
-                let viennaOverdraftDate = overdraftDate.addingTimeInterval(TimeInterval(viennaTimeZone.secondsFromGMT(for: overdraftDate)))
-                
-                team.overdraftDate = viennaOverdraftDate
-                
-                let year = calendar.component(.year, from: Date.viennaNow)
-                let randomFiveDigitNumber = String(format: "%05d", Int.random(in: 0..<100000))
-                let invoiceNumber = "\(year)\(randomFiveDigitNumber)"
-                let rechnungAmount: Double = 50.0
-                
-                let rechnung = Rechnung(
-                    team: team.id,
-                    teamName: team.teamName,
-                    number: invoiceNumber,
-                    summ: rechnungAmount,
-                    topay: nil,
-                    previousBalance: team.balance,
-                    kennzeichen: "Overdraft"
-                )
-                
-                return rechnung.save(on: req.db).flatMap {
-                    team.balance = balance - rechnungAmount
-                    return team.save(on: req.db).map {
-                        HTTPStatus.ok
+        return FeeService.load(req).flatMap { fees in
+            return Team.find(teamID, on: req.db)
+                .unwrap(or: Abort(.notFound))
+                .flatMap { team in
+                    // First, ensure the balance exists.
+                    guard let balance = team.balance else {
+                        return req.eventLoop.future(error: Abort(.badRequest, reason: "Team balance not available"))
+                    }
+
+                    // Check if the overdraft flag is already set.
+                    guard team.overdraft == false else {
+                        return req.eventLoop.future(error: Abort(.badRequest, reason: "Overdraft already set"))
+                    }
+
+                    // Ensure the balance is below 0.
+                    guard balance < 0 else {
+                        return req.eventLoop.future(error: Abort(.badRequest, reason: "Balance is non-negative; overdraft cannot be applied"))
+                    }
+
+                    // Set overdraft flag
+                    team.overdraft = true
+
+                    // Calculate the next upcoming Tuesday at 12:00 Vienna/Austria Time
+                    let calendar = Calendar(identifier: .gregorian)
+                    let now = Date.viennaNow
+                    var components = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: now)
+                    let weekday = calendar.component(.weekday, from: now)
+
+                    let daysUntilTuesday = (3 - weekday + 7) % 7
+                    let nextTuesday = calendar.date(byAdding: .day, value: daysUntilTuesday == 0 ? 7 : daysUntilTuesday, to: now)!
+
+                    var tuesdayComponents = calendar.dateComponents([.year, .month, .day], from: nextTuesday)
+                    tuesdayComponents.hour = 12
+                    tuesdayComponents.minute = 0
+                    tuesdayComponents.second = 0
+
+                    let viennaTimeZone = TimeZone(identifier: "Europe/Vienna")!
+                    let overdraftDate = calendar.date(from: tuesdayComponents)!
+                    let viennaOverdraftDate = overdraftDate.addingTimeInterval(TimeInterval(viennaTimeZone.secondsFromGMT(for: overdraftDate)))
+
+                    team.overdraftDate = viennaOverdraftDate
+
+                    let year = calendar.component(.year, from: Date.viennaNow)
+                    let randomFiveDigitNumber = String(format: "%05d", Int.random(in: 0..<100000))
+                    let invoiceNumber = "\(year)\(randomFiveDigitNumber)"
+                    let rechnungAmount = fees.fee(.overdraft).euros
+
+                    let rechnung = Rechnung(
+                        team: team.id,
+                        teamName: team.teamName,
+                        number: invoiceNumber,
+                        summ: rechnungAmount,
+                        topay: nil,
+                        previousBalance: team.balance,
+                        kennzeichen: "Overdraft"
+                    )
+
+                    rechnung.appliedFee = fees.fee(.overdraft)
+                    return rechnung.save(on: req.db).flatMap {
+                        team.balance = balance - rechnungAmount
+                        return team.save(on: req.db).map {
+                            HTTPStatus.ok
+                        }
                     }
                 }
-            }
+        }
     }
 
 }

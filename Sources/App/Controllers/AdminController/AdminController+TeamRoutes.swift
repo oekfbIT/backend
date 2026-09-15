@@ -671,6 +671,8 @@ extension AdminController {
             throw Abort(.badRequest, reason: "Rechnung does not belong to this team.")
         }
 
+        try original.requireManualEntry()
+
         let refundDelta = -original.summ
         team.balance = (team.balance ?? 0) + refundDelta
 

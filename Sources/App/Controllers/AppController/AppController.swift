@@ -50,6 +50,7 @@ final class AppController: RouteCollection {
         setupInvoiceRoutes(on: route)
         setupTransferSettingsRoutes(on: route)
         setupLeaderboardRoutes(on: route)
+        setupFeeRoutes(on: route)
         
         setupFollowRoutes(on: route)
         setupVotingRoutes(on: route)

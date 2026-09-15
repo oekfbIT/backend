@@ -39,7 +39,7 @@ final class PostponeRequestController: RouteCollection {
 
         // actions
         route.post(use: createNewRequest)
-        route.post(":id", "approve", use: approveRequest)
+        route.grouped(Token.authenticator(), User.guardMiddleware()).post(":id", "approve", use: approveRequest)
         route.post(":id", "deny", use: denyRequest)
         route.post(":id", "toggle", use: toggleStatus)
     }
@@ -182,61 +182,42 @@ final class PostponeRequestController: RouteCollection {
         }
     }
 
-    func approveRequest(req: Request) throws -> EventLoopFuture<PostponeRequest> {
+    func approveRequest(req: Request) async throws -> PostponeRequest {
         let id = try req.parameters.require("id", as: UUID.self)
-
-        return PostponeRequest.query(on: req.db)
-            .with(\.$match)
-            .filter(\.$id == id)
-            .first()
-            .unwrap(or: Abort(.notFound))
-            .flatMap { request in
-                guard let requesterID = request.requester.id else {
-                    return req.eventLoop.makeFailedFuture(
-                        Abort(.badRequest, reason: "Missing requester or match ID")
-                    )
-                }
-
-                let matchID = request.$match.id
-
-                let teamFuture = Team.find(requesterID, on: req.db)
-                    .unwrap(or: Abort(.notFound, reason: "Requester team not found"))
-
-                let matchFuture = Match.find(matchID, on: req.db)
-                    .unwrap(or: Abort(.notFound, reason: "Match not found"))
-
-                return teamFuture.and(matchFuture).flatMap { team, match in
-                    request.response = true
-                    request.responseDate = Date.viennaNow
-                    request.status = false
-
-                    return request.update(on: req.db)
-                        .flatMap {
-                            let emailFuture: EventLoopFuture<Void> = {
-                                guard let email = team.usremail else {
-                                    req.logger.warning("Postpone approval notification skipped: requester has no email")
-                                    return req.eventLoop.makeSucceededFuture(())
-                                }
-                                do {
-                                    return try self.emailController.approve(req: req, approverName: request.requestee.teamName, recipient: email, match: match).transform(to: ())
-                                } catch {
-                                    req.logger.warning("Unable to prepare postpone approval email: \(error)")
-                                    return req.eventLoop.makeSucceededFuture(())
-                                }
-                            }()
-
-                            let pushFuture = PostponePushNotifier.notifyRequestApproved(
-                                req: req,
-                                postponeRequest: request,
-                                targetTeamId: requesterID
-                            )
-
-                            return self.ignoreNotificationFailure(emailFuture.and(pushFuture).transform(to: ()), req: req, action: "Postpone approval")
-                                .transform(to: request)
-                        }
-                }
+        let user = try req.auth.require(User.self)
+        guard let request = try await PostponeRequest.find(id, on: req.db),
+              let requesterID = request.requester.id,
+              let requesteeID = request.requestee.id else { throw Abort(.notFound) }
+        if user.type != .admin {
+            guard user.type == .team,
+                  let recipient = try await Team.find(requesteeID, on: req.db),
+                  recipient.$user.id == user.id else { throw Abort(.forbidden) }
+        }
+        // Previously approved requests never acquire a retroactive charge.
+        if request.response == true { return request }
+        guard request.status, request.response == nil else {
+            throw Abort(.conflict, reason: "Die Anfrage ist bereits abgeschlossen.")
+        }
+        let fees = try await FeeService.forRequest(req)
+        guard let team = try await Team.find(requesterID, on: req.db),
+              let match = try await Match.find(request.$match.id, on: req.db) else { throw Abort(.notFound) }
+        try await PostponementFeeService(database: req.db).charge(requestID: id, team: team,
+            fee: fees.fee(.matchPostponement))
+        request.response = true
+        request.responseDate = Date.viennaNow
+        request.status = false
+        try await request.update(on: req.db)
+        do {
+            if let email = team.usremail {
+                try await self.emailController.approve(req: req, approverName: request.requestee.teamName,
+                    recipient: email, match: match).get()
             }
+            try await PostponePushNotifier.notifyRequestApproved(req: req,
+                postponeRequest: request, targetTeamId: requesterID).get()
+        } catch { req.logger.warning("Postpone approval notification failed: \(error)") }
+        return request
     }
+
 
     func denyRequest(req: Request) throws -> EventLoopFuture<PostponeRequest> {
         let id = try req.parameters.require("id", as: UUID.self)

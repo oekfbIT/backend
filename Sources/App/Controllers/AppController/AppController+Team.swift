@@ -341,6 +341,7 @@ extension AppController {
 
     // GET /app/team/:teamID/overdraft
     func setOverdraftLimit(req: Request) async throws -> HTTPStatus {
+        let fees = try await FeeService.forRequest(req)
         let teamID = try req.parameters.require("teamID", as: UUID.self)
 
         guard let team = try await Team.find(teamID, on: req.db) else {
@@ -395,7 +396,7 @@ extension AppController {
         let randomFiveDigitNumber = String(format: "%05d", Int.random(in: 0..<100000))
         let invoiceNumber = "\(year)\(randomFiveDigitNumber)"
 
-        let rechnungAmount: Double = 50.0
+        let rechnungAmount = fees.fee(.overdraft).euros
 
         let rechnung = Rechnung(
             team: team.id,
@@ -407,6 +408,7 @@ extension AppController {
             kennzeichen: "Overdraft"
         )
 
+        rechnung.appliedFee = fees.fee(.overdraft)
         try await rechnung.save(on: req.db)
 
         team.balance = balance - rechnungAmount

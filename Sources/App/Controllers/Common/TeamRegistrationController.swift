@@ -236,52 +236,55 @@ final class TeamRegistrationController: RouteCollection {
         let registrationID = try req.parameters.require("id", as: UUID.self)
         let leagueID = try req.parameters.require("leagueid", as: UUID.self)
 
-        return TeamRegistration.find(registrationID, on: req.db)
-            .unwrap(or: Abort(.notFound))
-            .flatMap { registration in
-                return League.find(leagueID, on: req.db)
-                    .unwrap(or: Abort(.notFound))
-                    .flatMap { league in
-                        let teamCount = league.teamcount ?? 0
-                        let topayAmount: Double
-                        let teamPrice = 80.0
+        return FeeService.load(req).flatMap { fees in
+            return TeamRegistration.find(registrationID, on: req.db)
+                .unwrap(or: Abort(.notFound))
+                .flatMap { registration in
+                    return League.find(leagueID, on: req.db)
+                        .unwrap(or: Abort(.notFound))
+                        .flatMap { league in
+                            let teamCount = league.teamcount ?? 0
+                            let topayAmount: Double
+                            let teamPrice = fees.fee(.registrationPerGame).euros
 
-                        switch teamCount {
-                        case 0...6:
-                            topayAmount = Double(teamCount - 1) * 2.0 * teamPrice
-                        case 7...9:
-                            topayAmount = Double(teamCount - 1) * 1.5 * teamPrice
-                        case 10...:
-                            topayAmount = Double(teamCount - 1) * teamPrice
-                        default:
-                            topayAmount = 0.0
+                            switch teamCount {
+                            case 0...6:
+                                topayAmount = Double(teamCount - 1) * 2.0 * teamPrice
+                            case 7...9:
+                                topayAmount = Double(teamCount - 1) * 1.5 * teamPrice
+                            case 10...:
+                                topayAmount = Double(teamCount - 1) * teamPrice
+                            default:
+                                topayAmount = 0.0
+                            }
+
+                            registration.assignedLeague = leagueID
+                            registration.kaution = fees.fee(.registrationDeposit).euros
+                            registration.appliedFees = [fees.fee(.registrationDeposit), fees.fee(.registrationPerGame)]
+
+                            // Always recalculate from scratch
+                            registration.paidAmount = -(topayAmount + (registration.kaution ?? 0.0))
+
+                            let registrationID = registration.id?.uuidString ?? "missing-id"
+                            req.logger.debug("Assign league calculation for registration \(registrationID)")
+                            req.logger.debug("teamCount: \(teamCount)")
+                            req.logger.debug("teamPrice: \(teamPrice)")
+                            req.logger.debug("topayAmount: \(topayAmount)")
+                            req.logger.debug("kaution: \(registration.kaution ?? 0.0)")
+                            req.logger.debug("paidAmount: \(registration.paidAmount ?? 0.0)")
+
+                            if let primaryContactEmail = registration.primary?.email, !primaryContactEmail.isEmpty {
+                                self.sendPaymentInstructionsInBackground(
+                                    req: req,
+                                    recipient: primaryContactEmail,
+                                    registration: registration
+                                )
+                            }
+
+                            return registration.save(on: req.db).transform(to: .ok)
                         }
-
-                        registration.assignedLeague = leagueID
-                        registration.kaution = 300.00
-
-                        // Always recalculate from scratch
-                        registration.paidAmount = -(topayAmount + (registration.kaution ?? 0.0))
-
-                        let registrationID = registration.id?.uuidString ?? "missing-id"
-                        req.logger.debug("Assign league calculation for registration \(registrationID)")
-                        req.logger.debug("teamCount: \(teamCount)")
-                        req.logger.debug("teamPrice: \(teamPrice)")
-                        req.logger.debug("topayAmount: \(topayAmount)")
-                        req.logger.debug("kaution: \(registration.kaution ?? 0.0)")
-                        req.logger.debug("paidAmount: \(registration.paidAmount ?? 0.0)")
-
-                        if let primaryContactEmail = registration.primary?.email, !primaryContactEmail.isEmpty {
-                            self.sendPaymentInstructionsInBackground(
-                                req: req,
-                                recipient: primaryContactEmail,
-                                registration: registration
-                            )
-                        }
-
-                        return registration.save(on: req.db).transform(to: .ok)
-                    }
-            }
+                }
+        }
     }
     private func sendPaymentInstructionsInBackground(req: Request, recipient: String, registration: TeamRegistration) {
         req.eventLoop.execute {

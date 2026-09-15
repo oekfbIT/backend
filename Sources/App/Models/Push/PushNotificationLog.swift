@@ -13,6 +13,9 @@ final class PushNotificationLog: Model, Content {
     @OptionalField(key: "path") var path: String?
     @Field(key: "status") var status: String
     @Field(key: "recipient_count") var recipientCount: Int
+    @OptionalField(key: "accepted_count") var acceptedCount: Int?
+    @OptionalField(key: "failed_count") var failedCount: Int?
+    @OptionalField(key: "ticket_summary") var ticketSummary: String?
     @OptionalField(key: "error_message") var errorMessage: String?
     @Timestamp(key: "created_at", on: .create) var createdAt: Date?
 
@@ -27,6 +30,9 @@ final class PushNotificationLog: Model, Content {
         path: String? = nil,
         status: String,
         recipientCount: Int,
+        acceptedCount: Int? = nil,
+        failedCount: Int? = nil,
+        ticketSummary: String? = nil,
         errorMessage: String? = nil
     ) {
         self.title = title
@@ -37,6 +43,9 @@ final class PushNotificationLog: Model, Content {
         self.path = path
         self.status = status
         self.recipientCount = recipientCount
+        self.acceptedCount = acceptedCount
+        self.failedCount = failedCount
+        self.ticketSummary = ticketSummary
         self.errorMessage = errorMessage
     }
 }
@@ -60,6 +69,24 @@ extension CreatePushNotificationLog: AsyncMigration {
 
     func revert(on database: Database) async throws {
         try await database.schema(PushNotificationLog.schema).delete()
+    }
+}
+
+extension AddPushNotificationResultFields: AsyncMigration {
+    func prepare(on database: Database) async throws {
+        try await database.schema(PushNotificationLog.schema)
+            .field("accepted_count", .int)
+            .field("failed_count", .int)
+            .field("ticket_summary", .string)
+            .update()
+    }
+
+    func revert(on database: Database) async throws {
+        try await database.schema(PushNotificationLog.schema)
+            .deleteField("accepted_count")
+            .deleteField("failed_count")
+            .deleteField("ticket_summary")
+            .update()
     }
 }
 

@@ -20,6 +20,17 @@ final class Rechnung: Model, Content, Codable {
     @Field(key: FieldKeys.kennzeichen) var kennzeichen: String
     @Field(key: FieldKeys.dueDate) var dueDate: String?
     @Timestamp(key: FieldKeys.created, on: .create) var created: Date?
+    @OptionalField(key: "paymentSource") var paymentSource: String?
+    @OptionalField(key: "stripeDeposit") var stripeDeposit: StripeDepositDetails?
+    @OptionalField(key: "appliedFee") var appliedFee: AppliedFee?
+    // Internal capability; Fluent does not encode ordinary stored properties.
+    var allowsStripeCreation = false
+
+    func requireManualEntry() throws {
+        guard paymentSource != "stripe", stripeDeposit == nil else {
+            throw Abort(.conflict, reason: "Stripe deposits are immutable and already credited.")
+        }
+    }
 
     struct FieldKeys {
         static var id: FieldKey { "id" }
@@ -59,6 +70,7 @@ final class Rechnung: Model, Content, Codable {
         self.previousBalance = previousBalance
         self.kennzeichen = kennzeichen
         self.created = created ?? Date.viennaNow
+        self.paymentSource = "manual"
         
         // Generate due date based on the created date
         let calendar = Calendar.current

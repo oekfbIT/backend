@@ -46,50 +46,53 @@ final class PlayerController: RouteCollection {
     func create(req: Request) throws -> EventLoopFuture<Player> {
         let player = try req.content.decode(Player.self)
 
-        return player.create(on: req.db).flatMap {
-            // Fetch the player again to access its properties, especially the $team relation
-            Player.find(player.id, on: req.db).flatMap { savedPlayer in
-                guard let savedPlayer = savedPlayer else {
-                    return req.eventLoop.future(error: Abort(.notFound, reason: "Player not found after creation."))
-                }
-                
-                guard let teamID = savedPlayer.$team.id else {
-                    return req.eventLoop.future(error: Abort(.badRequest, reason: "Player must belong to a team."))
-                }
-
-                return Team.find(teamID, on: req.db).flatMap { team in
-                    guard let team = team else {
-                        return req.eventLoop.future(error: Abort(.notFound, reason: "Team not found."))
+        return FeeService.load(req).flatMap { fees in
+            return player.create(on: req.db).flatMap {
+                // Fetch the player again to access its properties, especially the $team relation
+                Player.find(player.id, on: req.db).flatMap { savedPlayer in
+                    guard let savedPlayer = savedPlayer else {
+                        return req.eventLoop.future(error: Abort(.notFound, reason: "Player not found after creation."))
                     }
 
-                    // Generate invoice number: current year + a random 5-digit number
-                    let year = Calendar.current.component(.year, from: Date.viennaNow)
-                    let randomFiveDigitNumber = String(format: "%05d", Int.random(in: 0..<100000))
-                    let invoiceNumber = "\(year)\(randomFiveDigitNumber)"
-                    
-                    let rechnungAmount: Double = -5.0
+                    guard let teamID = savedPlayer.$team.id else {
+                        return req.eventLoop.future(error: Abort(.badRequest, reason: "Player must belong to a team."))
+                    }
 
-                    let rechnung = Rechnung(
-                        team: team.id!,
-                        teamName: team.teamName,
-                        number: invoiceNumber,
-                        summ: rechnungAmount,
-                        topay: nil,
-                        previousBalance: team.balance,
-                        kennzeichen: team.teamName + " " + savedPlayer.sid + ": Anmeldung"
-                    )
-
-                    // Save the Rechnung and update the team's balance
-                    return rechnung.save(on: req.db).flatMap {
-                        if let currentBalance = team.balance {
-                            team.balance = currentBalance - 5
-                        } else {
-                            team.balance = -5
+                    return Team.find(teamID, on: req.db).flatMap { team in
+                        guard let team = team else {
+                            return req.eventLoop.future(error: Abort(.notFound, reason: "Team not found."))
                         }
 
-                        return team.save(on: req.db).map {
-                            print("Rechnung created and team balance updated")
-                            return savedPlayer
+                        // Generate invoice number: current year + a random 5-digit number
+                        let year = Calendar.current.component(.year, from: Date.viennaNow)
+                        let randomFiveDigitNumber = String(format: "%05d", Int.random(in: 0..<100000))
+                        let invoiceNumber = "\(year)\(randomFiveDigitNumber)"
+
+                        let rechnungAmount = -fees.fee(.playerRegistration).euros
+
+                        let rechnung = Rechnung(
+                            team: team.id!,
+                            teamName: team.teamName,
+                            number: invoiceNumber,
+                            summ: rechnungAmount,
+                            topay: nil,
+                            previousBalance: team.balance,
+                            kennzeichen: team.teamName + " " + savedPlayer.sid + ": Anmeldung"
+                        )
+
+                        // Save the Rechnung and update the team's balance
+                        rechnung.appliedFee = fees.fee(.playerRegistration)
+                        return rechnung.save(on: req.db).flatMap {
+                            if let currentBalance = team.balance {
+                                team.balance = currentBalance + rechnungAmount
+                            } else {
+                                team.balance = rechnungAmount
+                            }
+
+                            return team.save(on: req.db).map {
+                                print("Rechnung created and team balance updated")
+                                return savedPlayer
+                            }
                         }
                     }
                 }

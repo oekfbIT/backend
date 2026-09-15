@@ -24,18 +24,62 @@ final class EmailController {
     }
     
     private func applySMTPConfig(_ req: Request) throws {
+        try applySMTPConfig(req.application)
+    }
+
+    private func applySMTPConfig(_ application: Application) throws {
         guard !smtpUser.isEmpty, !smtpPass.isEmpty else {
-            req.logger.error("SMTP credentials are not configured.")
+            application.logger.error("SMTP credentials are not configured.")
             throw Abort(.internalServerError, reason: "Email service not configured")
         }
         
-        req.application.smtp.configuration = SmtpServerConfiguration(
+        application.smtp.configuration = SmtpServerConfiguration(
             hostname: smtpHost,
             port: smtpPort,
             signInMethod: .credentials(username: smtpUser, password: smtpPass),
             secure: .startTls,
             helloMethod: .ehlo
         )
+    }
+
+    func sendTeamTopUpConfirmation(application: Application, topUp: TeamTopUp) async throws {
+        try applySMTPConfig(application)
+        let email = try Email(from: senderEmail(), to: [EmailAddress(address: topUp.recipient)],
+            subject: "ÖKFB – Guthaben Einzahlung \(topUp.invoiceNumber)",
+            body: try Self.teamTopUpBody(topUp))
+        try await application.smtp.send(email)
+    }
+
+    static func teamTopUpBody(_ topUp: TeamTopUp) throws -> String {
+        guard topUp.creditedAt != nil, let paidAt = topUp.paidAt,
+              let before = topUp.balanceBefore, let after = topUp.balanceAfter,
+              let transaction = topUp.paymentIntentID else {
+            throw Abort(.conflict, reason: "Cannot email an uncredited top-up.")
+        }
+        let date = DateFormatter()
+        date.locale = Locale(identifier: "de_AT")
+        date.timeZone = TimeZone(identifier: "Europe/Vienna")
+        date.dateFormat = "dd.MM.yyyy HH:mm zzz"
+        let money = NumberFormatter()
+        money.locale = Locale(identifier: "de_AT"); money.numberStyle = .currency; money.currencyCode = "EUR"
+        func amount(_ value: Double) -> String { money.string(from: NSNumber(value: value)) ?? String(format: "%.2f EUR", value) }
+        return """
+        Guten Tag,
+
+        die Einzahlung für \(topUp.teamName) wurde erfolgreich Ihrem Mannschaftskonto gutgeschrieben.
+
+        Eingezahlt und gutgeschrieben: \(amount(Double(topUp.amountMinor) / 100))
+        Bezahlt am: \(date.string(from: paidAt))
+        Belegnummer: \(topUp.invoiceNumber)
+        Transaktions-ID (Stripe): \(transaction)
+        Guthaben vorher: \(amount(before))
+        Guthaben nachher: \(amount(after))
+
+        Den bezahlten Einzahlungsbeleg finden Sie in Ihrer Finanzhistorie.
+        \(topUp.livemode ? "" : "SANDBOX: Dies war eine Testzahlung.")
+        Sportliche Grüße
+        Ihr ÖKFB Team
+        """
     }
 
     func sendTeamAccountPassword(req: Request, recipient: String, password: String) throws -> EventLoopFuture<HTTPStatus> {
@@ -257,7 +301,7 @@ final class EmailController {
             
             <ul>
                 <li>Teilbetrag der Saison: € \(amount)</li>
-                <li>Kaution: € 300.00 (Diese Kaution wird ihnen zur Saison \(year) auf ihr Guthaben dazugerechnet.)</li>
+                <li>Kaution: € \(String(format: "%.2f", registration.kaution ?? 0)) (Diese Kaution wird ihnen zur Saison \(year) auf ihr Guthaben dazugerechnet.)</li>
             </ul>
             
             <p>Bitte überweisen Sie die Summe von <strong>€ \(positivAmount)</strong> und verwenden Sie als Zahlungsreferenz bitte <strong>\(registration.teamName.uppercased())</strong>.</p>

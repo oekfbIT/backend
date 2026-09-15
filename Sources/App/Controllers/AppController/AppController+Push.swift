@@ -351,6 +351,35 @@ enum ExpoPushService {
     let title: String
     let body: String
     let data: [String: String]
+    let sound: String
+    let priority: String
+  }
+
+  struct TicketResult: Content {
+    let tokenPreview: String
+    let status: String
+    let id: String?
+    let message: String?
+    let error: String?
+  }
+
+  struct SendResult: Content {
+    let requestedCount: Int
+    let acceptedCount: Int
+    let failedCount: Int
+    let tickets: [TicketResult]
+  }
+
+  private struct ExpoResponse: Decodable {
+    let data: [ExpoTicket]
+  }
+
+  private struct ExpoTicket: Decodable {
+    struct Details: Decodable { let error: String? }
+    let status: String
+    let id: String?
+    let message: String?
+    let details: Details?
   }
 
   static func send(
@@ -359,22 +388,44 @@ enum ExpoPushService {
     body: String,
     data: [String: String],
     req: Request
-  ) async throws {
+  ) async throws -> SendResult {
     let logger = req.logger
 
     let cleaned = Array(Set(tokens.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }))
       .filter { !$0.isEmpty }
 
     if cleaned.isEmpty {
-      logger.warning("[push] No tokens provided.")
-      return
+      throw Abort(.badRequest, reason: "No push tokens provided.")
     }
 
-    for chunk in cleaned.chunked(into: chunkSize) {
-      let payload = chunk.map { ExpoMessage(to: $0, title: title, body: body, data: data) }
+    let valid = cleaned.filter(isExpoToken)
+    var results = cleaned.filter { !isExpoToken($0) }.map {
+      TicketResult(
+        tokenPreview: tokenPreview($0),
+        status: "error",
+        id: nil,
+        message: "Invalid Expo push token format.",
+        error: "InvalidCredentials"
+      )
+    }
+
+    for chunk in valid.chunked(into: chunkSize) {
+      let payload = chunk.map {
+        ExpoMessage(
+          to: $0,
+          title: title,
+          body: body,
+          data: data,
+          sound: "default",
+          priority: "high"
+        )
+      }
 
       let res = try await req.client.post(endpoint) { creq in
         creq.headers.replaceOrAdd(name: .contentType, value: "application/json")
+        if let accessToken = Environment.get("EXPO_ACCESS_TOKEN"), !accessToken.isEmpty {
+          creq.headers.bearerAuthorization = .init(token: accessToken)
+        }
         try creq.content.encode(payload, as: .json)
       }
 
@@ -382,13 +433,46 @@ enum ExpoPushService {
 
       if res.status != .ok {
         logger.warning("[push] Expo push non-200: \(res.status.code) \(raw)")
-        continue
+        throw Abort(.badGateway, reason: "Expo Push API returned HTTP \(res.status.code).")
       }
 
-      if !raw.isEmpty {
-        logger.debug("[push] Expo push response: \(raw)")
+      let expoResponse: ExpoResponse
+      do {
+        expoResponse = try res.content.decode(ExpoResponse.self)
+      } catch {
+        logger.error("[push] Could not decode Expo response: \(raw)")
+        throw Abort(.badGateway, reason: "Expo Push API returned an unreadable response.")
+      }
+      guard expoResponse.data.count == chunk.count else {
+        throw Abort(.badGateway, reason: "Expo Push API returned an unexpected ticket count.")
+      }
+      for (token, ticket) in zip(chunk, expoResponse.data) {
+        results.append(.init(
+          tokenPreview: tokenPreview(token),
+          status: ticket.status,
+          id: ticket.id,
+          message: ticket.message,
+          error: ticket.details?.error
+        ))
       }
     }
+
+    let accepted = results.filter { $0.status == "ok" }.count
+    return .init(
+      requestedCount: cleaned.count,
+      acceptedCount: accepted,
+      failedCount: results.count - accepted,
+      tickets: results
+    )
+  }
+
+  private static func isExpoToken(_ token: String) -> Bool {
+    (token.hasPrefix("ExpoPushToken[") || token.hasPrefix("ExponentPushToken[")) && token.hasSuffix("]")
+  }
+
+  private static func tokenPreview(_ token: String) -> String {
+    guard token.count > 12 else { return "••••" }
+    return "••••\(token.suffix(8))"
   }
 
   private static func bodyString(_ body: ByteBuffer?) -> String {

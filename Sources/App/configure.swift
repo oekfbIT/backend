@@ -49,6 +49,8 @@ public func configure(_ app: Application) throws {
     
     try app.databases.use(.mongo(connectionString: mongoConnectionString), as: .mongo)
     app.databases.middleware.use(TeamLeagueMiddleware(), on: .mongo)
+    app.databases.middleware.use(TeamBalanceWriteMiddleware(), on: .mongo)
+    app.databases.middleware.use(StripeInvoiceProtectionMiddleware(), on: .mongo)
     
     
     // MARK: - Leaf Configuration
@@ -175,7 +177,8 @@ public func configure(_ app: Application) throws {
             "User-Agent",
             "sec-ch-ua",
             "sec-ch-ua-mobile",
-            "sec-ch-ua-platform"
+            "sec-ch-ua-platform",
+            "X-Fee-Version"
         ],
         allowCredentials: true
     )
@@ -245,6 +248,7 @@ public func configure(_ app: Application) throws {
     configureGoogleAnalytics(app)
 
     // Start the scheduled jobs
+    app.queues.schedule(TeamTopUpRecoveryJob()).minutely().at(15)
     try app.queues.startScheduledJobs()
     
     app.routes.defaultMaxBodySize = "100mb"

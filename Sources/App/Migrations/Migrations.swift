@@ -28,6 +28,7 @@ let app_migrations: [Migration] = [
     CreateDeviceToken(),
     CreatePushNotificationLog(),
     CreateSavedPushDevice(),
+    AddPushNotificationResultFields(),
     SponsorMigration(),
     VerificationCodeMigration(),
     CreateFollowSubscription(),
@@ -41,7 +42,9 @@ let app_migrations: [Migration] = [
     StatsQueryIndexesMigration(),
     PrimaryLeagueOverviewIndexesMigration(),
     RefereeActiveMigration(),
-    AchievementMigration()
+    AchievementMigration(),
+    TeamStripeTopUpMigration(),
+    FeeSettingsMigration()
 ]
 
 struct UserMigration { }
@@ -67,6 +70,7 @@ struct RuleMigration {}
 struct CreateDeviceToken {}
 struct CreatePushNotificationLog {}
 struct CreateSavedPushDevice {}
+struct AddPushNotificationResultFields {}
 struct SponsorMigration {}
 struct VerificationCodeMigration {}
 struct VoteItemMigration {}

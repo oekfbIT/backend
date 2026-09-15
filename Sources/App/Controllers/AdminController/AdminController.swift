@@ -41,6 +41,8 @@ final class AdminController: RouteCollection {
         setupAchievementRoutes(on: admin)
         setupSearchRoutes(on: admin)
         setupAnalyticsRoutes(on: admin)
+        setupPushDeviceRoutes(on: admin)
+        setupFeeRoutes(on: admin)
 
     }
 

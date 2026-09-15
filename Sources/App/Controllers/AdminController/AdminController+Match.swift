@@ -623,6 +623,7 @@ extension AdminController {
 
     // MARK: PATCH /admin/matches/:id/teamcancel
     func teamCancelGame(req: Request) async throws -> HTTPStatus {
+        let fees = try await FeeService.forRequest(req)
         let matchID = try requireUUIDParam(req, "id")
         let body = try req.content.decode(NoShowRequest.self)
 
@@ -662,18 +663,13 @@ extension AdminController {
         }
 
         let cancelled = losingTeam.cancelled ?? 0
-        guard cancelled < 3 else {
+        guard cancelled >= 0, cancelled < 3 else {
             throw Abort(.badRequest, reason: "Schon 3 Absagen gemacht diese Saison.")
         }
 
         let newCancelled = cancelled + 1
-        let invoiceAmount: Int
-        switch newCancelled {
-        case 1: invoiceAmount = 170
-        case 2: invoiceAmount = 270
-        case 3: invoiceAmount = 370
-        default: invoiceAmount = 0
-        }
+        let cancellationKey = FeeKey.cancellationTiers[newCancelled - 1]
+        let invoiceAmount = fees.fee(cancellationKey).euros
 
         match.status = .cancelled
         winningTeam.points += 3
@@ -693,6 +689,7 @@ extension AdminController {
         )
 
         try await match.save(on: req.db)
+        invoice.appliedFee = fees.fee(cancellationKey)
         try await invoice.save(on: req.db)
         try await losingTeam.save(on: req.db)
         try await winningTeam.save(on: req.db)

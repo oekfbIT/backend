@@ -9,6 +9,7 @@ final class RechnungsController: RouteCollection {
 
     func setupRoutes(on app: RoutesBuilder) throws {
         let route = app.grouped(PathComponent(stringLiteral: repository.path))
+            .grouped(Token.authenticator(), User.guardMiddleware(), AdminOnlyMiddleware())
         
         route.post(use: create)
         route.post("batch", use: repository.createBatch)
@@ -35,6 +36,8 @@ final class RechnungsController: RouteCollection {
         return Rechnung.find(id, on: req.db)
             .unwrap(or: Abort(.notFound, reason: "Rechnung not found"))
             .flatMap { rechnung in
+                do { try rechnung.requireManualEntry() }
+                catch { return req.eventLoop.makeFailedFuture(error) }
                 return Team.find(rechnung.$team.id, on: req.db)
                     .unwrap(or: Abort(.notFound, reason: "Team not found"))
                     .flatMap { team in
@@ -54,6 +57,8 @@ final class RechnungsController: RouteCollection {
     func create(req: Request) throws -> EventLoopFuture<Rechnung> {
         // Decode the incoming Rechnung from the request body
         let rechnung = try req.content.decode(Rechnung.self)
+        try rechnung.requireManualEntry()
+        rechnung.paymentSource = "manual"
         
         // Fetch the associated team
         return Team.find(rechnung.$team.id, on: req.db)
@@ -76,6 +81,8 @@ final class RechnungsController: RouteCollection {
         return Rechnung.find(id, on: req.db)
             .unwrap(or: Abort(.notFound, reason: "Rechnung not found"))
             .flatMap { rechnung in
+                do { try rechnung.requireManualEntry() }
+                catch { return req.eventLoop.makeFailedFuture(error) }
                 // Update the status to .bezahlt
                 rechnung.status = .bezahlt
                 

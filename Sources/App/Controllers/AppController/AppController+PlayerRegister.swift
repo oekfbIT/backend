@@ -102,64 +102,67 @@ extension AppController {
 
         // --- Authenticate and upload both files ---
 
-        return firebaseManager.authenticate().flatMap {
-            let imgFuture = firebaseManager.uploadFile(
-                file: payload.playerImage,
-                to: playerImagePath
-            )
-            let idFuture = firebaseManager.uploadFile(
-                file: payload.identificationImage,
-                to: identificationImagePath
-            )
-            return imgFuture.and(idFuture)
-        }
-        .flatMap { playerImageURL, identificationURL in
-            // --- Build Player with defaults ---
-
-            let eligibility: PlayerEligibility = .Warten
-            let bank: Bool = false      // default, not exposed to client
-            let status: Bool = true     // assumption: new player is active
-
-            let registerDate = self.currentRegisterDateString()
-
-            let player = Player(
-                id: nil,
-                sid: sid,
-                image: playerImageURL,
-                team_oeid: nil,
-                email: payload.email,
-                balance: nil,
-                name: payload.name,
-                number: payload.number,
-                birthday: payload.birthday,
-                teamID: payload.teamID,
-                nationality: payload.nationality,
-                position: payload.position,
-                eligibility: eligibility,
-                registerDate: registerDate,
-                identification: identificationURL,
-                status: status,
-                isCaptain: false,
-                bank: bank,
-                blockdate: nil
-            )
-
-            // Save player, then run the same Rechnung logic as `create`
-            return player.create(on: req.db).flatMap {
-                self.createRegistrationInvoice(for: player, req: req)
+        return FeeService.load(req).flatMap { fees in
+            return firebaseManager.authenticate().flatMap {
+                let imgFuture = firebaseManager.uploadFile(
+                    file: payload.playerImage,
+                    to: playerImagePath
+                )
+                let idFuture = firebaseManager.uploadFile(
+                    file: payload.identificationImage,
+                    to: identificationImagePath
+                )
+                return imgFuture.and(idFuture)
             }
-            .map { savedPlayer in
-                savedPlayer.asPublic()
+            .flatMap { playerImageURL, identificationURL in
+                // --- Build Player with defaults ---
+
+                let eligibility: PlayerEligibility = .Warten
+                let bank: Bool = false      // default, not exposed to client
+                let status: Bool = true     // assumption: new player is active
+
+                let registerDate = self.currentRegisterDateString()
+
+                let player = Player(
+                    id: nil,
+                    sid: sid,
+                    image: playerImageURL,
+                    team_oeid: nil,
+                    email: payload.email,
+                    balance: nil,
+                    name: payload.name,
+                    number: payload.number,
+                    birthday: payload.birthday,
+                    teamID: payload.teamID,
+                    nationality: payload.nationality,
+                    position: payload.position,
+                    eligibility: eligibility,
+                    registerDate: registerDate,
+                    identification: identificationURL,
+                    status: status,
+                    isCaptain: false,
+                    bank: bank,
+                    blockdate: nil
+                )
+
+                // Save player, then run the same Rechnung logic as `create`
+                return player.create(on: req.db).flatMap {
+                    self.createRegistrationInvoice(for: player, req: req, fees: fees)
+                }
+                .map { savedPlayer in
+                    savedPlayer.asPublic()
+                }
             }
         }
     }
 
     // MARK: - Shared invoice logic (factored from create)
 
-    /// Same logic as your existing `create` function (5€ Rechnung per player).
+    /// Creates an invoice using the fee snapshot loaded before player registration.
     private func createRegistrationInvoice(
         for player: Player,
-        req: Request
+        req: Request,
+        fees: FeeSettings
     ) -> EventLoopFuture<Player> {
         // Fetch again to ensure relations are loaded (matches your existing pattern)
         return Player.find(player.id, on: req.db).flatMap { savedPlayer in
@@ -196,7 +199,7 @@ extension AppController {
                 )
                 let invoiceNumber = "\(year)\(randomFiveDigitNumber)"
 
-                let rechnungAmount: Double = -5.0
+                let rechnungAmount = -fees.fee(.playerRegistration).euros
 
                 let rechnung = Rechnung(
                     team: team.id!,
@@ -208,11 +211,12 @@ extension AppController {
                     kennzeichen: team.teamName + " " + savedPlayer.sid + ": Anmeldung"
                 )
 
+                rechnung.appliedFee = fees.fee(.playerRegistration)
                 return rechnung.save(on: req.db).flatMap {
                     if let currentBalance = team.balance {
-                        team.balance = currentBalance - 5
+                        team.balance = currentBalance + rechnungAmount
                     } else {
-                        team.balance = -5
+                        team.balance = rechnungAmount
                     }
 
                     return team.save(on: req.db).map {

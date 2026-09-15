@@ -18,7 +18,7 @@ import Fluent
 
 extension AppController {
     func setupInvoiceRoutes(on root: RoutesBuilder) {
-        let rechnungen = root.grouped("rechnungen")
+        let rechnungen = root.grouped("rechnungen").grouped(Token.authenticator(), User.guardMiddleware())
 
         rechnungen.get("team", ":teamID", use: getRechnungenByTeamID)
         rechnungen.get(":rechnungID", use: getRechnungDetailByID)
@@ -28,6 +28,7 @@ extension AppController {
     /// Returns all invoices for the team, newest first.
     func getRechnungenByTeamID(req: Request) async throws -> [Rechnung] {
         let teamID = try req.parameters.require("teamID", as: UUID.self)
+        _ = try await TeamPaymentController.team(teamID, on: req)
 
         // Optional: explicit 404 if team doesn't exist
         guard try await Team.find(teamID, on: req.db) != nil else {
@@ -50,6 +51,9 @@ extension AppController {
         guard let rechnung = try await Rechnung.find(rechnungID, on: req.db) else {
             throw Abort(.notFound, reason: "Rechnung not found.")
         }
+
+        guard let teamID = rechnung.$team.id else { throw Abort(.notFound) }
+        _ = try await TeamPaymentController.team(teamID, on: req)
 
         return rechnung
     }

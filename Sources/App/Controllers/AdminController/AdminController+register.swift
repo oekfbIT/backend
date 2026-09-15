@@ -28,7 +28,7 @@ import Foundation
 import Vapor
 import Fluent
 
-let leagueFixAmountPerGame = 80.00
+// Shared registration prices are provided by FeeService.
 
 // MARK: - Admin Registration Routes
 extension AdminController {
@@ -367,6 +367,8 @@ extension AdminController {
 
     // POST /admin/registrations/assign/:id/league/:leagueid
     func assignLeague(req: Request) async throws -> HTTPStatus {
+        let fees = try await FeeService.forRequest(req)
+        let leagueFixAmountPerGame = fees.fee(.registrationPerGame).euros
         let reg = try await requireRegistration(req: req, param: "id")
         guard let leagueID = req.parameters.get("leagueid", as: UUID.self) else {
             throw Abort(.badRequest, reason: "Missing or invalid leagueid.")
@@ -388,7 +390,8 @@ extension AdminController {
         }
 
         reg.assignedLeague = leagueID
-        reg.kaution = 300.00
+        reg.kaution = fees.fee(.registrationDeposit).euros
+        reg.appliedFees = [fees.fee(.registrationDeposit), fees.fee(.registrationPerGame)]
 
         if let currentPaidAmount = reg.paidAmount {
             reg.paidAmount = currentPaidAmount - topayAmount
