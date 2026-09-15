@@ -66,6 +66,26 @@
             value = "mongodb://admin:EF6mecfU-p2GMq@localhost:27018/oekfb_database?authSource=admin"
             isEnabled = "YES">
          </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "GA4_ENABLED"
+            value = "true"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "GA4_PROPERTY_ID"
+            value = "443444290"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "GA4_STREAM_ID"
+            value = "15781098262"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "GA4_SERVICE_ACCOUNT_JSON"
+            value = "{&quot;type&quot;:&quot;service_account&quot;,&quot;project_id&quot;:&quot;oekfbbucket&quot;,&quot;private_key_id&quot;:&quot;139a023884c61262a5c41a7b0d0a88158ed8d7d3&quot;,&quot;private_key&quot;:&quot;-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDIDtIEjJ1M1Bam\nDb/1m0B5mivoE6VMw9w9pxb5dBui90bOyUaJJsNBjKwSw7PCJ34bYROsQaK4c3OJ\no3fhFpfS551utcUO/FIOyKqdH6XSh7dc+pE9paOy6eZ5PdG8fUBdAzppyUZMuIkK\nygd33nxp1JgClAmemHtZ7VZPJtVggiNHBEa43btKyjMFAMn+6x86t+XwuP6G4Pu4\n5mkEyKvbQi0MbtYdkLZsrPHSGiIieIBdbMeS0IEN2CBam711CfxAx5QpRJ2SSVcd\nchSblhqPV991uzO1qy26LADHMoVDdopNUEkdJgGT4HWd2M7a7OMcLB8prMOQmFYz\nBYK1eKoBAgMBAAECggEAAZWtd/QBsHi7G7Je74P87yGnoKFcNTcVdOcQjWYMLH6r\nMMrjHEXCdO/XcpgagcqUiwS6Nkp4Tp/6fa/97HpkdjsXsgduUcuxnjScdl1ob7ob\nu5iwAxYfbXTBGruAwG6ZDouOoEUkAYpSKpPWWo6Ye3GfySBxUZBpZLlWrk6TUN3/\nbSGO2WWrI/ulEtUPW8h+10eh7UzgfV8y2t3omR6JR9ZnxEAb2251Ra1PaBSkHMIF\n8P8xjxPTu/2JgEiR5VGSlfM0s/4v57kTpj1qLwrz5GjgHkI7HgV1Uf/xCbl1pwh/\nHazDh1g3JSCXgogN4sVPyVhPRVcL4IxPWwjbZvM5uQKBgQD6wNpiH953jdmk5+vQ\nayujpTi0lWE/eQw8RSIKfI+Xby/3QfyPumHWJQwaKGZUDyas9uRpWSRCEmdTx4Ox\nYZanUjx+XTVKU0qo3ts2gNjf2wh3khHhBSSq7oRO4V7Wzx7tKzrc2NbIvPYuGRuy\nawaEd7EpC8FBrDK/qBNozJ5TqQKBgQDMPmt9bkU1u3FcAoKK0mMFGGBU1Y16gi4j\n9VUPjgNA/XR6YiXJHFL1qidN8ksaYG3GUo5CGyePwwcGe8IXWY2jc+qd3d3wOz5b\nu//hwyPVfnziTmB2IfiwTuKq+T7Qi9Dp6pp4O85FjcCabZddfoj0G/UEd6NHaKZ7\nrogbm32amQKBgQCxNwzgHl/OpJy11Aav1J4R2Jn73jrNbhI8oitNt/yPbNA8chE5\nzuKIQsSL1BOFwvN1eEOzRIHAhFssNawX971OYWtJbzxTXAw+zsmkemlLw/P29W/X\nVRg2Cb3ONa8eJ2FXAp9mJ4WcdxeROsN9U/BWPHUjaiBZ9oYjN3kILtySiQKBgCwW\nsVdjLVd6/e5xsEJNRgi8iVbmvmKapWEnvVPdQQCPdcxRUXzHO3VCZLejvOiVtjyg\nZ4sHl5Ol8udIYc5ui2+kPxoS4azQ7RYaUBMo75xPcJ/dcV8u2CMe9DkaEqAr/k3w\nUaXwqwdCoTf0vj71aJThUBPFy55HjeCW/VSQTR3JAoGAAfaD0y0RRZXy74m8ldEX\nTKopYcs6wXpqzDLJROWQJj6XtcmTxK8se7oMMLMQlMoAGwuaCLDUErt+EOlZuLCi\n+O7q5MD0KEyYZnP7xb+yruffoA1sEhWtQ6cRABmXoYl+qE7aRBJisjEx7sP/kVx1\n3q8z5EO67vkaZxM9/JxVKwI=\n-----END PRIVATE KEY-----\n&quot;,&quot;client_email&quot;:&quot;oekfb-analytics-reader@oekfbbucket.iam.gserviceaccount.com&quot;,&quot;client_id&quot;:&quot;105648248756221020027&quot;,&quot;auth_uri&quot;:&quot;https://accounts.google.com/o/oauth2/auth&quot;,&quot;token_uri&quot;:&quot;https://oauth2.googleapis.com/token&quot;,&quot;auth_provider_x509_cert_url&quot;:&quot;https://www.googleapis.com/oauth2/v1/certs&quot;,&quot;client_x509_cert_url&quot;:&quot;https://www.googleapis.com/robot/v1/metadata/x509/oekfb-analytics-reader%40oekfbbucket.iam.gserviceaccount.com&quot;,&quot;universe_domain&quot;:&quot;googleapis.com&quot;}"
+            isEnabled = "YES">
+         </EnvironmentVariable>
       </EnvironmentVariables>
    </LaunchAction>
    <ProfileAction

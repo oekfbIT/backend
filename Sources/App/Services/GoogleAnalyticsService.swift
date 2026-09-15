@@ -158,6 +158,8 @@ actor GoogleAnalyticsService {
     private let signer: JWTSigner
     private var token: (value: String, expires: Date)?
     private var running = false
+    var dashboardTimeZone: TimeZone?
+    var dashboardPending: [String: Task<GA4Dashboard, Error>] = [:]
 
     init(configuration: GA4Configuration) throws {
         self.configuration = configuration
@@ -165,7 +167,7 @@ actor GoogleAnalyticsService {
         catch { throw GA4Error.configuration }
     }
 
-    private func mongo(_ app: Application) throws -> MongoDatabase {
+    func mongo(_ app: Application) throws -> MongoDatabase {
         guard let database = app.db as? MongoDatabaseRepresentable else { throw GA4Error.configuration }
         return database.raw
     }
@@ -190,6 +192,10 @@ actor GoogleAnalyticsService {
     // Also used by an opt-in test to validate the downloaded credential without touching MongoDB.
     func fetchPage(client: Client, report: GA4Report, day: String, offset: Int) async throws -> GA4ReportResponse {
         let body = try report.request(configuration: configuration, day: day, offset: offset)
+        return try await fetchReport(client: client, report: report, body: body)
+    }
+
+    func fetchReport(client: Client, report: GA4Report, body: Data) async throws -> GA4ReportResponse {
         for attempt in 0..<3 {
             try Task.checkCancellation()
             let bearer = try await accessToken(client: client)
@@ -351,6 +357,22 @@ func configureGoogleAnalytics(_ app: Application) {
 
 extension AdminController {
     func setupAnalyticsRoutes(on routes: RoutesBuilder) {
+        routes.get("analytics", "dashboard") { req async throws -> Response in
+            guard let service = req.application.storage[GA4ServiceKey.self] else {
+                throw Abort(.serviceUnavailable, reason: "Analytics ist nicht konfiguriert. GA4_ENABLED und Zugangsdaten im Backend prüfen.")
+            }
+            do {
+                let payload = try await service.dashboard(app: req.application, preset: req.query[String.self, at: "range"] ?? "7d", from: req.query[String.self, at: "from"], to: req.query[String.self, at: "to"])
+                let response = try await payload.encodeResponse(for: req)
+                response.headers.replaceOrAdd(name: .cacheControl, value: "no-store")
+                return response
+            } catch let error as Abort { throw error }
+            catch {
+                let code = (error as? GA4Error)?.safeCode ?? "network_or_database_error"
+                req.logger.warning("GA4 dashboard failed: \(code)")
+                throw Abort(.badGateway, reason: "Analytics konnte nicht geladen werden (\(code)).")
+            }
+        }
         routes.get("analytics", "status") { req async throws -> GA4SyncStatus in
             guard let service = req.application.storage[GA4ServiceKey.self] else {
                 return .init(enabled: false, state: req.application.storage[GA4ConfigurationErrorKey.self] == true ? "invalid_configuration" : "disabled")
