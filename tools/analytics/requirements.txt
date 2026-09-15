@@ -1,0 +1,2 @@
+google-analytics-data>=0.18,<1
+pymongo>=4.10,<5
