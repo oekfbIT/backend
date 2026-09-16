@@ -16,7 +16,7 @@ STRIPE_SANDBOX_WEBHOOK_SECRET=whsec_...
 STRIPE_PRODUCTION_SECRET_KEY=sk_live_...
 STRIPE_PRODUCTION_PUBLISHABLE_KEY=pk_live_...
 STRIPE_PRODUCTION_WEBHOOK_SECRET=whsec_...
-# Required only for hosted Checkout; replace with pages in your app/site
+# Optional custom return pages; omit to use the built-in backend page
 STRIPE_CHECKOUT_SUCCESS_URL=https://YOUR-APP/finance/payment-return
 STRIPE_CHECKOUT_CANCEL_URL=https://YOUR-APP/finance/payment-cancel
 # Optional: maximum per payment in EUR cents; default €5,000
@@ -41,7 +41,7 @@ For simultaneous test and production app builds, deploy separate sandbox and pro
 
 You need a webhook signing secret for **each environment**. Both start with `whsec_`; they are not interchangeable, even if endpoint URLs match. For local CLI forwarding, use the secret printed by `stripe listen` as your local sandbox webhook secret; it differs from Dashboard endpoint secrets. See [Stripe API keys](https://docs.stripe.com/keys) and [webhook signing secrets](https://docs.stripe.com/webhooks/signature).
 
-**What to create:** register the webhook below in Stripe and provide these two return pages in your app/site. The backend creates each Checkout Session with a fixed amount and team reference, so there is no need to create Dashboard Payment Links, Products, or Prices yourself. HTTPS return URLs are required; sandbox also accepts HTTP on `localhost`/`127.0.0.1`. The backend appends `top_up_id` to both return URLs. Missing return URLs disable Checkout creation only; SDK payments and background recovery still work.
+**What to create:** register the webhook below in Stripe. The backend provides `/payments/checkout/return` by default; custom return pages are optional. The backend creates each Checkout Session with a fixed amount and team reference, so there is no need to create Dashboard Payment Links, Products, or Prices yourself. HTTPS return URLs are required; sandbox also accepts HTTP on `localhost`/`127.0.0.1`. The backend appends `top_up_id` to both return URLs. Missing return URLs default to `https://api.oekfb.eu/payments/checkout/return` (set `STRIPE_CHECKOUT_BASE_URL` for another backend). Explicit invalid URL overrides disable Checkout creation only; SDK payments and background recovery still work.
 
 Email uses the existing configuration:
 
@@ -195,3 +195,9 @@ STRIPE_TEST_MONGO_PORT=27028 swift test --filter TeamTopUpTests
 ```
 
 References: [Checkout Sessions](https://docs.stripe.com/api/checkout/sessions/create), [Checkout fulfillment and delayed payments](https://docs.stripe.com/checkout/fulfillment), [Stripe PaymentIntents](https://docs.stripe.com/payments/payment-intents), [webhooks](https://docs.stripe.com/webhooks), [test cards](https://docs.stripe.com/testing).
+
+### Deploying the fee-aware cashier
+
+Deploy this backend before the updated app. `/payments/config` must return `checkout_enabled: true` and `credit_policy: "stripe_net"`. Missing or blank `STRIPE_CHECKOUT_SUCCESS_URL` / `STRIPE_CHECKOUT_CANCEL_URL` variables use the built-in return page; set valid HTTPS values to override it. Sandbox deployments with another hostname should set `STRIPE_CHECKOUT_BASE_URL` to their own HTTPS origin. The return page never treats a redirect as payment confirmation.
+
+New net-credit payments require €10 and use the actual EUR Stripe balance transaction fee. The 1.5% + €0.25 rate in config is only an estimate for standard EEA cards. Success, invoices, and emails use the actual credit; old attempts retain gross-credit behavior. See [app integration](stripe-app-web-integration.md#fees-and-net-balance-credit-september-2026).

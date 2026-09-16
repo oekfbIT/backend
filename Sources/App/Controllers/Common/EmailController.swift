@@ -68,7 +68,9 @@ final class EmailController {
 
         die Einzahlung für \(topUp.teamName) wurde erfolgreich Ihrem Mannschaftskonto gutgeschrieben.
 
-        Eingezahlt und gutgeschrieben: \(amount(Double(topUp.amountMinor) / 100))
+        Eingezahlt: \(amount(Double(topUp.amountMinor) / 100))
+        Abgezogene Stripe-Gebühren: \(amount(Double(topUp.effectiveCreditPolicy == .stripeNet ? (topUp.feeMinor ?? 0) : 0) / 100))
+        Gutgeschrieben: \(amount(Double(try topUp.creditAmountMinor) / 100))
         Bezahlt am: \(date.string(from: paidAt))
         Belegnummer: \(topUp.invoiceNumber)
         Transaktions-ID (Stripe): \(transaction)

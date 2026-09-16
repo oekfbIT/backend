@@ -39,20 +39,33 @@ Example response (limits depend on backend configuration):
 {
   "publishable_key": "pk_test_...",
   "currency": "eur",
-  "minimum_amount_minor": 50,
+  "minimum_amount_minor": 1000,
   "maximum_amount_minor": 500000,
   "livemode": false,
   "stripe_mode": "sandbox",
-  "checkout_enabled": true
+  "checkout_enabled": true,
+  "credit_policy": "stripe_net",
+  "estimated_fee_basis_points": 150,
+  "estimated_fee_fixed_minor": 25
 }
 ```
 
 Validate the entered amount against these limits. Show a test-mode indicator when `livemode` is false. Only offer the hosted link option when `checkout_enabled` is true. Secret API keys and webhook secrets belong exclusively on the backend.
 
+## Fees and net balance credit (September 2026)
+
+New app payments send `credit_policy: "stripe_net"` and enforce a €10 minimum. Only enable new payments after `/payments/config` advertises this policy and `checkout_enabled: true`; deploy the backend before the updated app.
+
+For the preview, round `amount_minor * estimated_fee_basis_points / 10000` to the nearest cent and add `estimated_fee_fixed_minor`. The default is the published Austrian standard EEA card rate of 1.5% + €0.25: €20 gross → €0.55 estimated fee → €19.45 estimated credit. Label both fee and credit as **estimated**: premium/non-EEA cards, currency conversion, or account-specific pricing can differ. [Stripe Austrian pricing](https://stripe.com/at/pricing).
+
+After a successful payment, the backend retrieves `latest_charge.balance_transaction`, verifies its EUR amount/fee/net, stores the first verified fee, and credits the **actual net**. Stripe can populate this transaction asynchronously; confirmation remains 202 until the fee, balance credit, and receipt are complete. Scheduled recovery retries while fees are unavailable. The success screen and receipt must use `credited_amount_minor`, not `amount_minor`. Confirmation emails include gross, fee, and credit. [Stripe fee retrieval](https://docs.stripe.com/expand/use-cases).
+
+Legacy attempts with no `credit_policy` keep gross credit, including after a restart or app upgrade. Preserve that omission on retries; never change the policy or idempotency key of an unfinished attempt. Policy mismatches return 409. Existing invoices and balances are not recalculated. Non-EUR settlement or invalid fee records require investigation; the backend does not guess a fee or credit an unverified amount.
+
 ## 2A. Hosted payment link — simplest for web and mobile
 
 1. The user chooses an amount and presses **Top up**.
-2. Generate a UUID as the `idempotency_key`. Persist the key, amount, team ID, backend URL, and chosen flow **before sending the request**. Reuse them if the request times out or the app restarts.
+2. Generate a UUID as the `idempotency_key`. Persist the key, amount, credit policy, team ID, backend URL, and chosen flow **before sending the request**. Reuse them if the request times out or the app restarts.
 3. Send:
 
 ```http
@@ -60,6 +73,7 @@ POST /payments/teams/TEAM_UUID/top-ups/checkout
 
 {
   "amount_minor": 10000,
+  "credit_policy": "stripe_net",
   "idempotency_key": "ce29cbae-2cf3-4ec9-a135-e874de51ddae"
 }
 ```
@@ -84,7 +98,7 @@ Typical response, with optional fields omitted:
 ```
 
 4. Save `id`. On web, navigate to `checkout_url`; on mobile, open it in the system browser. This flow needs no Stripe client SDK.
-5. Stripe redirects to the backend-configured success/cancel URL with `?top_up_id=TOP_UP_ID` appended (or adds it to the existing query). Implement those return pages in your website. A mobile app can resume checking its saved attempt when it becomes active; you can also configure your own HTTPS universal/app link return page.
+5. Stripe redirects to the backend-configured success/cancel URL with `?top_up_id=TOP_UP_ID` appended (or adds it to the existing query). By default the backend serves a neutral return page at `/payments/checkout/return`, with an `oekfbapp://` link. Custom return URLs can override it. A mobile app can resume checking its saved attempt when it becomes active; you can also configure your own HTTPS universal/app link return page.
 6. Check confirmation as described below. The redirect itself is not payment confirmation.
 
 If creation returns `status: "creating"` without a URL, briefly wait and retry the same POST with the same key. If it returns `credited`, show the completed result instead of opening Checkout. Expired/completed sessions do not return an open payment URL.
@@ -107,6 +121,7 @@ async function openTopUpCheckout(apiBase, token, teamId, attempt) {
       },
       body: JSON.stringify({
         amount_minor: attempt.amountMinor,
+        ...(attempt.creditPolicy ? { credit_policy: attempt.creditPolicy } : {}),
         idempotency_key: attempt.idempotencyKey
       })
     }
@@ -162,11 +177,14 @@ A credited response adds:
   "paid_at": "2026-09-15T12:00:00Z",
   "credited_at": "2026-09-15T12:00:01Z",
   "balance_before": -50,
-  "balance_after": 50
+  "balance_after": 48.25,
+  "credit_policy": "stripe_net",
+  "fee_minor": 175,
+  "credited_amount_minor": 9825
 }
 ```
 
-This example is a €100 deposit against a −€50 balance. `balance_after` is the balance immediately after that deposit; fetch your existing team data for its current balance. `email_sent_at` appears when the backend sends the confirmation email. No additional invoice, balance-update, or email request is needed from the client.
+This example is a €100 payment minus a €1.75 Stripe fee, crediting €98.25 against a −€50 balance. `balance_after` is the balance immediately after that deposit; fetch your existing team data for its current balance. `email_sent_at` appears when the backend sends the confirmation email. No additional invoice, balance-update, or email request is needed from the client.
 
 `GET /payments/top-ups/:id` returns the same state with **200 whenever the record is readable**, even if payment is pending. Use `/confirmation` when you want HTTP codes to represent the outcome.
 
@@ -184,7 +202,7 @@ Display the existing invoice fields (`number`, `summ`, `status`, `created`) and 
 
 - `payment_source: "stripe"`: automatic Stripe deposit; already paid (`status: "bezahlt"`, `topay: 0`).
 - `payment_source: "manual"` or absent: existing manual entry.
-- `stripe_deposit`: includes `top_up_id`, `payment_intent_id`, optional `charge_id`, `amount_minor`, `currency`, `paid_at`, `balance_after`, and `livemode`.
+- `stripe_deposit`: includes `top_up_id`, `payment_intent_id`, optional `charge_id`, `amount_minor` (gross payment), `fee_minor`, `credited_amount_minor`, `currency`, `paid_at`, `balance_after`, and `livemode`. For net-credit receipts, `summ` is the credited amount in euros.
 
 Stripe deposit records cannot be manually completed, edited, deleted, or refunded through legacy invoice actions. These are local deposit receipts, not Stripe Billing PDF invoices. Pending/failed attempts do not appear as paid invoices; keep their IDs locally to resume their status. There is currently no endpoint listing all unfinished attempts.
 

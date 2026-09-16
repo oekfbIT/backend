@@ -661,6 +661,9 @@ a74a2aa8b3d380b36106b35a2c97940a855973d5	not-for-merge	'refs/pull/916/head' of h
 a0e5a4415c8aad44ae00e8eb9a4192a29612bf42	not-for-merge	'refs/pull/920/merge' of https://github.com/swift-server/async-http-client
 4140690dad7cb77e85ad64a7653e7965971f01e6	not-for-merge	'refs/pull/921/head' of https://github.com/swift-server/async-http-client
 b8ae8af79b42e5b59e5ec1e0ad303eaeb149493a	not-for-merge	'refs/pull/921/merge' of https://github.com/swift-server/async-http-client
+fc840121b007829a64b6b8407184f39bf90cf3e8	not-for-merge	'refs/pull/924/head' of https://github.com/swift-server/async-http-client
+cb6e0dfc9ddcbe21d02f2bea0f9941d8112d0a88	not-for-merge	'refs/pull/924/merge' of https://github.com/swift-server/async-http-client
+0f0734948bfda84429da259f67ad04376699ef9a	not-for-merge	'refs/pull/925/head' of https://github.com/swift-server/async-http-client
 395ef5d515e765c86581f28568794caabf743d45	not-for-merge	'refs/pull/93/head' of https://github.com/swift-server/async-http-client
 cdadc4fdb22e0bc4fe5bd659d718d0af15239680	not-for-merge	'refs/pull/94/head' of https://github.com/swift-server/async-http-client
 656008cb94dac0c29d0df1391400195e681fd42a	not-for-merge	'refs/pull/96/head' of https://github.com/swift-server/async-http-client

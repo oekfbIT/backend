@@ -22,8 +22,14 @@ struct TeamStripeConfiguration {
         publishableKey = environment("\(prefix)_PUBLISHABLE_KEY") ?? ""
         webhookSecret = environment("\(prefix)_WEBHOOK_SECRET") ?? ""
         maximumMinor = Int(environment("STRIPE_TOPUP_MAX_MINOR") ?? "500000") ?? 0
-        checkoutSuccessURL = environment("STRIPE_CHECKOUT_SUCCESS_URL")
-        checkoutCancelURL = environment("STRIPE_CHECKOUT_CANCEL_URL")
+        // A built-in neutral return page makes hosted Checkout usable without a separate website.
+        func configuredReturn(_ key: String) -> String? {
+            guard let value = environment(key)?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+            return value
+        }
+        let returnBase = configuredReturn("STRIPE_CHECKOUT_BASE_URL") ?? "https://api.oekfb.eu"
+        checkoutSuccessURL = configuredReturn("STRIPE_CHECKOUT_SUCCESS_URL") ?? "\(returnBase)/payments/checkout/return"
+        checkoutCancelURL = configuredReturn("STRIPE_CHECKOUT_CANCEL_URL") ?? "\(returnBase)/payments/checkout/return"
         guard ((mode == "sandbox" && secretKey.hasPrefix("sk_test_") && publishableKey.hasPrefix("pk_test_")) ||
                (mode == "production" && secretKey.hasPrefix("sk_live_") && publishableKey.hasPrefix("pk_live_"))),
               webhookSecret.hasPrefix("whsec_"), (50...99_999_999).contains(maximumMinor) else {
@@ -66,16 +72,34 @@ struct TeamStripeIntent: Decodable {
     struct Charge: Decodable {
         let id: String
         let created: Double?
+        let balance_transaction: BalanceTransaction?
         init(from decoder: Decoder) throws {
             let value = try decoder.singleValueContainer()
-            if let id = try? value.decode(String.self) { self.id = id; created = nil }
+            if let id = try? value.decode(String.self) { self.id = id; created = nil; balance_transaction = nil }
             else {
                 let object = try decoder.container(keyedBy: CodingKeys.self)
                 id = try object.decode(String.self, forKey: .id)
                 created = try object.decodeIfPresent(Double.self, forKey: .created)
+                // An unexpanded ID or a not-yet-created transaction means fees are still pending.
+                balance_transaction = try? object.decode(BalanceTransaction.self, forKey: .balance_transaction)
             }
         }
-        enum CodingKeys: String, CodingKey { case id, created }
+        enum CodingKeys: String, CodingKey { case id, created, balance_transaction }
+    }
+
+    struct BalanceTransaction: Decodable {
+        let id: String
+        let amount: Int
+        let currency: String
+        let fee: Int
+        let net: Int
+
+        func validate(amountMinor: Int) throws {
+            guard id.hasPrefix("txn_"), currency == "eur", amount == amountMinor,
+                  fee >= 0, fee < amount, net == amount - fee else {
+                throw Abort(.conflict, reason: "Stripe fee transaction does not match this EUR payment. Contact support.")
+            }
+        }
     }
 
     func validate(for topUp: TeamTopUp) throws {
@@ -144,7 +168,7 @@ struct TeamStripeClient {
         guard id.range(of: "^pi_[A-Za-z0-9]+$", options: .regularExpression) != nil else {
             throw Abort(.badRequest, reason: "Invalid Stripe payment ID.")
         }
-        let response = try await client.get(URI(string: "https://api.stripe.com/v1/payment_intents/\(id)?expand%5B%5D=latest_charge")) { req in
+        let response = try await client.get(URI(string: "https://api.stripe.com/v1/payment_intents/\(id)?expand%5B%5D=latest_charge.balance_transaction")) { req in
             headers(&req.headers)
         }.get()
         return try decode(response)

@@ -1,8 +1,8 @@
 e4b6b631fbf0b29297930ebcc5bd97dc533ea277	not-for-merge	branch 'Quaternions' of https://github.com/apple/swift-numerics
 0098c438ebc687aec80c7fef15482f4b38e3583d	not-for-merge	branch 'biginteger' of https://github.com/apple/swift-numerics
-899af71c0256d0ad181e3b7eb3453c1065d928a5	not-for-merge	branch 'main' of https://github.com/apple/swift-numerics
+a7d826ead09420d5e38221ff76c3e0ec9ea4ea8b	not-for-merge	branch 'main' of https://github.com/apple/swift-numerics
 876f439c4a165f01db8daf99f6ea71fa7546ebc7	not-for-merge	branch 'release/1.0' of https://github.com/apple/swift-numerics
-0c0290ff6b24942dadb83a929ffaaa1481df04a2	not-for-merge	branch 'release/1.1' of https://github.com/apple/swift-numerics
+cc1ddd89a237a0b1d1a25cd7032ae84d2f683017	not-for-merge	branch 'release/1.1' of https://github.com/apple/swift-numerics
 b97297c027d0332b4990d49306ac878f213667ae	not-for-merge	'refs/pull/1/head' of https://github.com/apple/swift-numerics
 33d10c02cd2026663220cf5e01a98e6f34c4fbfb	not-for-merge	'refs/pull/104/head' of https://github.com/apple/swift-numerics
 697e9351e82fd150fe178bc6e94fc247331163d7	not-for-merge	'refs/pull/105/head' of https://github.com/apple/swift-numerics
@@ -209,7 +209,7 @@ ddc8ce302bd8e2420660046db4334627981263de	not-for-merge	'refs/pull/297/head' of h
 4bc7b7723914d89f02ba7e1efe95ad002b2b64bb	not-for-merge	'refs/pull/31/head' of https://github.com/apple/swift-numerics
 1fca03baf589f881a711c9110ec8932aca69f48d	not-for-merge	'refs/pull/310/head' of https://github.com/apple/swift-numerics
 f9c995aa72369eec6665934f97badd0e9dc18891	not-for-merge	'refs/pull/312/head' of https://github.com/apple/swift-numerics
-ed9e75ba1aed62addc75da8acdcaa143c14bfe33	not-for-merge	'refs/pull/312/merge' of https://github.com/apple/swift-numerics
+01093260518b6f3cc480ab5bc2b45f073717b554	not-for-merge	'refs/pull/312/merge' of https://github.com/apple/swift-numerics
 b95ca135a664053c239120647c9d015aee706598	not-for-merge	'refs/pull/313/head' of https://github.com/apple/swift-numerics
 cd967fa90fac8c1c3c8cb10c765c958521b6108d	not-for-merge	'refs/pull/314/head' of https://github.com/apple/swift-numerics
 da6c7657950379364b52024cdb48e38a45590fdb	not-for-merge	'refs/pull/315/head' of https://github.com/apple/swift-numerics
@@ -234,16 +234,27 @@ fd82bc821ba8d950a1c6777c46020416f63cb197	not-for-merge	'refs/pull/329/merge' of 
 cc9f8e3c5f500c89a91567646dbc9ea715c8dd4c	not-for-merge	'refs/pull/331/head' of https://github.com/apple/swift-numerics
 50552bf86b4c075c15eb0845c984413eaab3441e	not-for-merge	'refs/pull/332/head' of https://github.com/apple/swift-numerics
 bfaba820d48458d4009aad894509ecd016ebb578	not-for-merge	'refs/pull/335/head' of https://github.com/apple/swift-numerics
-e7e52ff6141a657e00487e623256f3099cb76fe9	not-for-merge	'refs/pull/335/merge' of https://github.com/apple/swift-numerics
+9fd5dac312ccb25c003e466ca0c0f85e3c90f254	not-for-merge	'refs/pull/335/merge' of https://github.com/apple/swift-numerics
 63dc00f05363d83a494fc206d06b289a3f784fc7	not-for-merge	'refs/pull/336/head' of https://github.com/apple/swift-numerics
-bd72413e703ab6e8d6d38e95e449d7b4038370f7	not-for-merge	'refs/pull/336/merge' of https://github.com/apple/swift-numerics
+5844d56b7c2a86330ca8c91b34da6a5368ab031f	not-for-merge	'refs/pull/336/merge' of https://github.com/apple/swift-numerics
 8b819160c8b3b7094dde44eae5af58aa0701e21f	not-for-merge	'refs/pull/337/head' of https://github.com/apple/swift-numerics
-b3cd7dfe1a7f8f503d65352c1f11fb5ddfe9f7e0	not-for-merge	'refs/pull/337/merge' of https://github.com/apple/swift-numerics
+7e46d2affaf0999cc8eee1c83c6bba2857890112	not-for-merge	'refs/pull/337/merge' of https://github.com/apple/swift-numerics
 fb29eede5060d80cd5714bbb82cac75fd439b303	not-for-merge	'refs/pull/338/head' of https://github.com/apple/swift-numerics
 0fbbaa8df94b7f2205ce1840175142dd7e9c8181	not-for-merge	'refs/pull/339/head' of https://github.com/apple/swift-numerics
 43aac21560fed93a211027b9ae52b268704752b1	not-for-merge	'refs/pull/339/merge' of https://github.com/apple/swift-numerics
 6ac520ac59ec177fd45deafaac4b7c53b6ed9b30	not-for-merge	'refs/pull/34/head' of https://github.com/apple/swift-numerics
 658fbad6eaf31d684d9ce9525c53f04c71cd83ea	not-for-merge	'refs/pull/340/head' of https://github.com/apple/swift-numerics
+46ea24d783f69729f455216a8a6a27ae2befce49	not-for-merge	'refs/pull/341/head' of https://github.com/apple/swift-numerics
+0d05d2458d271e11a5fbf42346bdb70c79b428f0	not-for-merge	'refs/pull/343/head' of https://github.com/apple/swift-numerics
+89195f36205632fab105933e8ba4484c87e10d46	not-for-merge	'refs/pull/344/head' of https://github.com/apple/swift-numerics
+2d92c04e9634ef8dc8a65931ca55b2708ff66006	not-for-merge	'refs/pull/345/head' of https://github.com/apple/swift-numerics
+15eab09844b0ae8c2cfa7cd0d6094df18e0b4e12	not-for-merge	'refs/pull/348/head' of https://github.com/apple/swift-numerics
+4c42bc9145cddc361c23a32eea8c94cbadc2b580	not-for-merge	'refs/pull/349/head' of https://github.com/apple/swift-numerics
+f93cec244a941166f4ebd4973eb5a568a2a9eda8	not-for-merge	'refs/pull/349/merge' of https://github.com/apple/swift-numerics
+ea5d4cf4a55a0ccb7868aef3d6e6ff4984a604d8	not-for-merge	'refs/pull/350/head' of https://github.com/apple/swift-numerics
+3b272b08af9a19f0a396af08ec6f90dcbc4241d1	not-for-merge	'refs/pull/351/head' of https://github.com/apple/swift-numerics
+c2d05532d3a60fe3ba987bf12644368aff599af6	not-for-merge	'refs/pull/352/head' of https://github.com/apple/swift-numerics
+e21bdc8ff67a965559951e7cd7ea5c8c82eea339	not-for-merge	'refs/pull/353/head' of https://github.com/apple/swift-numerics
 0cc4950453ab30d7015585f3dfc2eaf2579c7e19	not-for-merge	'refs/pull/36/head' of https://github.com/apple/swift-numerics
 0308def714aeb125ec8f83cffd73d1a5c8f66410	not-for-merge	'refs/pull/43/head' of https://github.com/apple/swift-numerics
 04151f701ba921a3ba1e2451568601f32b896353	not-for-merge	'refs/pull/44/head' of https://github.com/apple/swift-numerics

@@ -33,8 +33,8 @@ struct TeamTopUpManager {
             proposed.checkoutSuccessURL = urls.success; proposed.checkoutCancelURL = urls.cancel
         }
         let existing = try await store.insertOrGet(proposed)
-        guard existing.amountMinor == input.amountMinor, existing.flow == flow else {
-            throw Abort(.conflict, reason: "This idempotency key was already used for a different amount or payment flow.")
+        guard existing.amountMinor == input.amountMinor, existing.flow == flow, existing.effectiveCreditPolicy == proposed.effectiveCreditPolicy else {
+            throw Abort(.conflict, reason: "This idempotency key was already used for a different amount, payment flow or credit policy.")
         }
         // Return a usable PaymentIntent or Checkout URL. Lost responses recover with the same key.
         try await process(id: existing.id, sendEmail: false)
@@ -187,11 +187,22 @@ struct TeamTopUpManager {
         if intent.status == "succeeded" {
             fields["paidAt"] = topUp.paidAt ?? intent.latest_charge?.created.map(Date.init(timeIntervalSince1970:)) ?? Date()
             if let charge = intent.latest_charge { fields["chargeID"] = charge.id }
+            if topUp.effectiveCreditPolicy == .stripeNet, let transaction = intent.latest_charge?.balance_transaction {
+                try transaction.validate(amountMinor: topUp.amountMinor)
+                // Save the first verified fee once; stale workers cannot change a credit in progress.
+                _ = try await store.collection(TeamTopUp.schema).stripeUpdate(where: ["_id": topUp.id,
+                    "creditedAt": Null(), "balanceTransactionID": Null(),
+                    "$or": [["paymentIntentID": Null()] as Document, ["paymentIntentID": intent.id] as Document]],
+                    to: ["$set": ["paymentIntentID": intent.id, "feeMinor": transaction.fee,
+                        "netAmountMinor": transaction.net, "balanceTransactionID": transaction.id] as Document]).get()
+            }
         }
         // A slow worker must not regress a previously confirmed success.
-        _ = try await store.collection(TeamTopUp.schema).stripeUpdate(where: ["_id": topUp.id,
-            "creditedAt": Null(), "$or": [["paymentIntentID": Null()] as Document, ["paymentIntentID": intent.id] as Document],
-            "stripeStatus": ["$ne": "succeeded"]], to: ["$set": fields]).get()
+        var filter: Document = ["_id": topUp.id, "creditedAt": Null(),
+            "$or": [["paymentIntentID": Null()] as Document, ["paymentIntentID": intent.id] as Document]]
+        // Stripe can populate fees AFTER succeeded. Permit that enrichment without regressing success.
+        if intent.status != "succeeded" { filter["stripeStatus"] = ["$ne": "succeeded"] as Document }
+        _ = try await store.collection(TeamTopUp.schema).stripeUpdate(where: filter, to: ["$set": fields]).get()
     }
 
     /// Checkout completion can still be unpaid. Only record the session/binding here; credit uses the verified intent.

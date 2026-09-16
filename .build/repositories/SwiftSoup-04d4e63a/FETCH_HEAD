@@ -1,9 +1,18 @@
+a8d78ecb72e53ffdaa32d6180c5ed14ce083115d	not-for-merge	branch 'codex/reader-hotfix-integration' of https://github.com/scinfu/SwiftSoup
 6bb3587aa9a858c09cff3168313fd190bf316e1d	not-for-merge	branch 'develop' of https://github.com/scinfu/SwiftSoup
 d61b7df1c9a00a45f92e90dc7f4ca29d50bec5e6	not-for-merge	branch 'feature/Bits' of https://github.com/scinfu/SwiftSoup
 f7da3abc12841a3714fbf88e4e3356522fff414f	not-for-merge	branch 'feature/Remove_Regex' of https://github.com/scinfu/SwiftSoup
 d0c9a886f2c158909158317fd8ff70da773559cd	not-for-merge	branch 'feature/Xcode_8.3_beta' of https://github.com/scinfu/SwiftSoup
 6e12e9238c4564ddb131d38e87fd87ce0415bdd6	not-for-merge	branch 'feature/connection' of https://github.com/scinfu/SwiftSoup
-18b80329749eca5ea29fc50211dca5c7eff5bfec	not-for-merge	branch 'master' of https://github.com/scinfu/SwiftSoup
+7f338879888600bc35c4fe85937bd53036c66ae3	not-for-merge	branch 'fix/upstream-01-contributor-tasks-20260912' of https://github.com/scinfu/SwiftSoup
+d52ca7576b8c87ef5f90412a1c70a5b9191bb56c	not-for-merge	branch 'fix/upstream-02-ordered-set-20260912' of https://github.com/scinfu/SwiftSoup
+142836a896b23c35b92c91a489402831956ce769	not-for-merge	branch 'fix/upstream-03-regex-matching-20260912' of https://github.com/scinfu/SwiftSoup
+c9963eea9f21a4f013f992d83fddbcb225ec9387	not-for-merge	branch 'fix/upstream-04-serialization-20260912' of https://github.com/scinfu/SwiftSoup
+f3e32c07a33c185932e823f7c57e326fbed715fb	not-for-merge	branch 'fix/upstream-05-text-and-byte-primitives-20260912' of https://github.com/scinfu/SwiftSoup
+fd2975e5a9e056dfac156ed2f37878ec1bd4c29e	not-for-merge	branch 'fix/upstream-06-dom-ownership-and-mutation-20260912' of https://github.com/scinfu/SwiftSoup
+f8898fd1810db64ba5db8a5d4c14b6e8c4e961a2	not-for-merge	branch 'fix/upstream-07-selectors-20260912' of https://github.com/scinfu/SwiftSoup
+9d65336fc5101732821576bb28c18fb21db29dd8	not-for-merge	branch 'fix/upstream-08-benchmark-evidence-20260912' of https://github.com/scinfu/SwiftSoup
+6778a6db3e1dc95a33fb16918c79221ea2db9000	not-for-merge	branch 'master' of https://github.com/scinfu/SwiftSoup
 b2e20da3146d049257dd4a9f8960cb2f3a1909cc	not-for-merge	branch 'pr/110' of https://github.com/scinfu/SwiftSoup
 f695dc797defefaca3d97b2453c3e20c95a345ee	not-for-merge	branch 'pr/70' of https://github.com/scinfu/SwiftSoup
 0dcbd17c32476d60b5ccaa42d6ff332667a24e54	not-for-merge	branch 'pr/71' of https://github.com/scinfu/SwiftSoup
@@ -161,6 +170,16 @@ b89e95315534685dc8566b0aa93a0e7dc421c307	not-for-merge	'refs/pull/404/head' of h
 166df397e9b8e81e20cb6b9d0ca9bf90cd70da6a	not-for-merge	'refs/pull/408/head' of https://github.com/scinfu/SwiftSoup
 32882c1d135bf81a5a3abd5b13cdf31376ce3adf	not-for-merge	'refs/pull/409/head' of https://github.com/scinfu/SwiftSoup
 0a1632044c01342ef6713e9c8a13c7cf09230948	not-for-merge	'refs/pull/41/head' of https://github.com/scinfu/SwiftSoup
+37b0caddee16df2c7ce786ab08605177196c7e71	not-for-merge	'refs/pull/410/head' of https://github.com/scinfu/SwiftSoup
+70f4e875618585b4f58c115018e373668f3b68ec	not-for-merge	'refs/pull/411/head' of https://github.com/scinfu/SwiftSoup
+7f338879888600bc35c4fe85937bd53036c66ae3	not-for-merge	'refs/pull/412/head' of https://github.com/scinfu/SwiftSoup
+d52ca7576b8c87ef5f90412a1c70a5b9191bb56c	not-for-merge	'refs/pull/413/head' of https://github.com/scinfu/SwiftSoup
+142836a896b23c35b92c91a489402831956ce769	not-for-merge	'refs/pull/414/head' of https://github.com/scinfu/SwiftSoup
+c9963eea9f21a4f013f992d83fddbcb225ec9387	not-for-merge	'refs/pull/415/head' of https://github.com/scinfu/SwiftSoup
+f3e32c07a33c185932e823f7c57e326fbed715fb	not-for-merge	'refs/pull/416/head' of https://github.com/scinfu/SwiftSoup
+fd2975e5a9e056dfac156ed2f37878ec1bd4c29e	not-for-merge	'refs/pull/417/head' of https://github.com/scinfu/SwiftSoup
+f8898fd1810db64ba5db8a5d4c14b6e8c4e961a2	not-for-merge	'refs/pull/418/head' of https://github.com/scinfu/SwiftSoup
+9d65336fc5101732821576bb28c18fb21db29dd8	not-for-merge	'refs/pull/419/head' of https://github.com/scinfu/SwiftSoup
 8933016796a9038ab4dd6bc0181793151a674acc	not-for-merge	'refs/pull/47/head' of https://github.com/scinfu/SwiftSoup
 d7541e2434a969bbd047b377f59ad8e29ce70172	not-for-merge	'refs/pull/50/head' of https://github.com/scinfu/SwiftSoup
 d77cf3453a2b202460f533f0b2b6ab2f89ff63d2	not-for-merge	'refs/pull/56/head' of https://github.com/scinfu/SwiftSoup

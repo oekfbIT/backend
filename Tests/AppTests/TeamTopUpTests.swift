@@ -113,15 +113,16 @@ final class TeamTopUpTests: XCTestCase {
     func testCheckoutConfigurationValidationAndLegacyRecordCompatibility() throws {
         let missing = try TeamStripeConfiguration { ["STRIPE_SANDBOX_SECRET_KEY": "sk_test_fixture", "STRIPE_SANDBOX_PUBLISHABLE_KEY": "pk_test_fixture",
             "STRIPE_SANDBOX_WEBHOOK_SECRET": "whsec_fixture"][$0] }
-        XCTAssertThrowsError(try missing.checkoutReturnURLs(topUpID: "test"))
+        XCTAssertEqual(try missing.checkoutReturnURLs(topUpID: "test").success, "https://api.oekfb.eu/payments/checkout/return?top_up_id=test")
         let config = try config(overrides: ["STRIPE_CHECKOUT_SUCCESS_URL": "http://localhost:3000/success?top_up_id=wrong&tab=finance"])
         let urls = try config.checkoutReturnURLs(topUpID: "actual")
         let query = try XCTUnwrap(URLComponents(string: urls.success)?.queryItems)
         XCTAssertEqual(query.filter { $0.name == "top_up_id" }.map(\.value), ["actual"])
         XCTAssertTrue(query.contains { $0.name == "tab" && $0.value == "finance" })
-        for unsafe in ["http://app.example.com/return", "javascript:alert(1)", "https://user:password@app.example.com/return", ""] {
+        for unsafe in ["http://app.example.com/return", "javascript:alert(1)", "https://user:password@app.example.com/return"] {
             XCTAssertThrowsError(try self.config(overrides: ["STRIPE_CHECKOUT_SUCCESS_URL": unsafe]).checkoutReturnURLs(topUpID: "test"))
         }
+        XCTAssertNoThrow(try self.config(overrides: ["STRIPE_CHECKOUT_SUCCESS_URL": "", "STRIPE_CHECKOUT_CANCEL_URL": " "]).checkoutReturnURLs(topUpID: "test"))
         let original = record()
         let decoded = try BSONDecoder().decode(TeamTopUp.self, from: BSONEncoder().encode(original))
         XCTAssertNil(decoded.paymentFlow); XCTAssertEqual(decoded.flow, .sdk)
@@ -204,6 +205,74 @@ final class TeamTopUpTests: XCTestCase {
         let reply = try BSONDecoder().decode(UpdateReply.self, from: ["ok": 1, "n": 0, "nModified": 0,
             "writeErrors": [["index": 0, "code": 13, "errmsg": "denied"] as Document]])
         XCTAssertThrowsError(try reply.requireStripeWriteSuccess())
+    }
+
+    func testNetCreditWaitsForStripeFeesAndPreservesLegacyCredit() throws {
+        var topUp = record(amount: 2000)
+        XCTAssertEqual(try topUp.creditAmountMinor, 2000)
+        topUp.creditPolicy = .stripeNet
+        XCTAssertThrowsError(try topUp.creditAmountMinor)
+        topUp.feeMinor = 55; topUp.netAmountMinor = 1945; topUp.balanceTransactionID = "txn_fixture"
+        XCTAssertEqual(try topUp.creditAmountMinor, 1945)
+        let result = TeamTopUpResponse(topUp, publishableKey: "pk_test_fixture")
+        XCTAssertEqual(result.creditedAmountMinor, 1945); XCTAssertEqual(result.feeMinor, 55)
+        topUp.netAmountMinor = 2000
+        XCTAssertThrowsError(try topUp.creditAmountMinor)
+        var input = TeamTopUpInput(amountMinor: 999, idempotencyKey: "net-test")
+        input.creditPolicy = .stripeNet
+        XCTAssertThrowsError(try input.validate(maximum: 500000))
+        XCTAssertThrowsError(try input.validate(maximum: 50))
+    }
+
+    func testFeeTransactionMustMatchGrossCurrencyAndNet() throws {
+        let valid = TeamStripeIntent.BalanceTransaction(id: "txn_fixture", amount: 2000, currency: "eur", fee: 55, net: 1945)
+        XCTAssertNoThrow(try valid.validate(amountMinor: 2000))
+        XCTAssertThrowsError(try valid.validate(amountMinor: 1000))
+        XCTAssertThrowsError(try TeamStripeIntent.BalanceTransaction(id: "txn_fixture", amount: 2000, currency: "usd", fee: 55, net: 1945).validate(amountMinor: 2000))
+        XCTAssertThrowsError(try TeamStripeIntent.BalanceTransaction(id: "txn_fixture", amount: 2000, currency: "eur", fee: -1, net: 2001).validate(amountMinor: 2000))
+        XCTAssertThrowsError(try TeamStripeIntent.BalanceTransaction(id: "txn_fixture", amount: 2000, currency: "eur", fee: 55, net: 2000).validate(amountMinor: 2000))
+    }
+
+    func testCheckoutReturnPageDoesNotClaimPaymentSucceeded() throws {
+        let app = Application(.testing)
+        defer { app.shutdown() }
+        try app.register(collection: TeamPaymentController())
+        try app.test(.GET, "payments/checkout/return?top_up_id=anything") {
+            XCTAssertEqual($0.status, .ok)
+            XCTAssertTrue($0.body.string.contains("oekfbapp://"))
+            XCTAssertFalse($0.body.string.contains("anything"))
+            XCTAssertFalse($0.body.string.contains("erfolgreich"))
+        }
+    }
+
+    func testMongoDelayedFeesCreditNetExactlyOnce() async throws {
+        try await withMongo { app, store, team, user in
+            var topUp = self.record(teamID: try team.requireID(), userID: try user.requireID(), amount: 2000)
+            topUp.creditPolicy = .stripeNet
+            _ = try await store.insertOrGet(topUp)
+            let manager = TeamTopUpManager(application: app, configuration: try self.config())
+            let pendingFees = try JSONDecoder().decode(TeamStripeIntent.self, from: self.intentData(topUp))
+            try await manager.recordVerified(pendingFees, for: topUp)
+            do { try await store.credit(topUp.id); XCTFail("Fees missing must not credit") } catch {}
+            let before = try await Team.find(team.id, on: app.db)
+            XCTAssertEqual(before?.balance, -50)
+            var json = try JSONSerialization.jsonObject(with: self.intentData(topUp)) as! [String: Any]
+            json["latest_charge"] = ["id": "ch_fixture", "created": 1789480800,
+                "balance_transaction": ["id": "txn_fixture", "amount": 2000, "currency": "eur", "fee": 55, "net": 1945]] as [String: Any]
+            let finalized = try JSONDecoder().decode(TeamStripeIntent.self, from: JSONSerialization.data(withJSONObject: json))
+            let succeeded = try await store.get(topUp.id)
+            try await manager.recordVerified(finalized, for: succeeded)
+            try await store.credit(topUp.id)
+            try await store.credit(topUp.id)
+            let current = try await Team.find(team.id, on: app.db)
+            XCTAssertEqual(current?.balance ?? 0, -30.55, accuracy: 0.00001)
+            let invoice = try await Rechnung.find(topUp.invoiceID, on: app.db)
+            XCTAssertEqual(invoice?.summ, 19.45)
+            XCTAssertEqual(invoice?.stripeDeposit?.feeMinor, 55)
+            let credited = try await store.get(topUp.id)
+            let email = try EmailController.teamTopUpBody(credited)
+            XCTAssertTrue(email.contains("Stripe-Gebühren")); XCTAssertTrue(email.contains("19,45"))
+        }
     }
 
     // These tests use a unique database on a loopback-only disposable MongoDB, never configure(app).

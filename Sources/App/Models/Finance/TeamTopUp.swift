@@ -2,13 +2,17 @@ import Crypto
 import Foundation
 import Vapor
 
+enum TeamTopUpCreditPolicy: String, Codable { case gross; case stripeNet = "stripe_net" }
+
 struct TeamTopUpInput: Content {
     let amountMinor: Int
     let idempotencyKey: String
+    var creditPolicy: TeamTopUpCreditPolicy? = nil
 
     func validate(maximum: Int) throws {
-        guard (50...maximum).contains(amountMinor) else {
-            throw Abort(.badRequest, reason: "amount_minor must be between 50 and \(maximum) EUR cents.")
+        let minimum = creditPolicy == .stripeNet ? 1000 : 50
+        guard maximum >= minimum, (minimum...maximum).contains(amountMinor) else {
+            throw Abort(.badRequest, reason: "amount_minor must be between \(minimum) and \(maximum) EUR cents.")
         }
         guard !idempotencyKey.isEmpty, idempotencyKey.utf8.count <= 128,
               idempotencyKey.range(of: "^[A-Za-z0-9_-]+$", options: .regularExpression) != nil else {
@@ -54,6 +58,23 @@ struct TeamTopUp: Codable {
     var checkoutSuccessURL: String?
     var checkoutCancelURL: String?
     var paymentFailed: Bool?
+    var creditPolicy: TeamTopUpCreditPolicy?
+    var feeMinor: Int?
+    var netAmountMinor: Int?
+    var balanceTransactionID: String?
+
+    // Legacy attempts keep the amount their users were promised when they started Checkout.
+    var effectiveCreditPolicy: TeamTopUpCreditPolicy { creditPolicy ?? .gross }
+    var creditAmountMinor: Int {
+        get throws {
+            guard effectiveCreditPolicy == .stripeNet else { return amountMinor }
+            guard let fee = feeMinor, let net = netAmountMinor, fee >= 0,
+                  net > 0, net == amountMinor - fee, balanceTransactionID != nil else {
+                throw Abort(.serviceUnavailable, reason: "Stripe fees are still processing. The balance will be credited automatically when confirmed.")
+            }
+            return net
+        }
+    }
 
     var flow: TeamTopUpPaymentFlow { paymentFlow ?? .sdk }
     var status: String {
@@ -82,12 +103,14 @@ struct TeamTopUp: Codable {
         case balanceBefore, balanceAfter, emailSentAt, lastError, needsReview, nextAttemptAt, leaseUntil
         case paymentFlow, checkoutSessionID, checkoutURL, checkoutStatus, checkoutExpiresAt
         case checkoutSuccessURL, checkoutCancelURL, paymentFailed
+        case creditPolicy, feeMinor, netAmountMinor, balanceTransactionID
     }
 
     init(teamID: UUID, userID: UUID, teamName: String, recipient: String, input: TeamTopUpInput, livemode: Bool, now: Date = Date()) {
         id = Self.identifier(teamID: teamID, userID: userID, key: input.idempotencyKey, livemode: livemode)
         self.teamID = teamID; self.userID = userID; self.teamName = teamName
         self.recipient = recipient; amountMinor = input.amountMinor; self.livemode = livemode
+        creditPolicy = input.creditPolicy
         createdAt = now; stripeStatus = "creating"; needsReview = false
         nextAttemptAt = now; leaseUntil = .distantPast
     }
@@ -129,9 +152,15 @@ struct TeamTopUpResponse: Content {
     let checkoutUrl: String?
     let checkoutStatus: String?
     let checkoutExpiresAt: Date?
+    let creditPolicy: TeamTopUpCreditPolicy
+    let feeMinor: Int?
+    let creditedAmountMinor: Int?
 
     init(_ topUp: TeamTopUp, publishableKey: String, includeSecret: Bool = true) {
         id = topUp.id; teamId = topUp.teamID; amountMinor = topUp.amountMinor; currency = "eur"
+        creditPolicy = topUp.effectiveCreditPolicy
+        feeMinor = topUp.feeMinor
+        creditedAmountMinor = try? topUp.creditAmountMinor
         status = topUp.status
         stripeStatus = topUp.stripeStatus; paymentIntentId = topUp.paymentIntentID
         clientSecret = includeSecret && topUp.flow == .sdk && topUp.creditedAt == nil ? topUp.clientSecret : nil
@@ -154,4 +183,6 @@ struct StripeDepositDetails: Content {
     let paidAt: Date
     let balanceAfter: Double
     let livemode: Bool
+    var feeMinor: Int? = nil
+    var creditedAmountMinor: Int? = nil
 }

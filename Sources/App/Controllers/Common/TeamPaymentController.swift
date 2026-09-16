@@ -5,6 +5,7 @@ struct TeamPaymentController: RouteCollection {
     func boot(routes: RoutesBuilder) throws {
         let payments = routes.grouped("payments")
         payments.on(.POST, "stripe", "webhook", body: .collect(maxSize: "256kb"), use: webhook)
+        payments.get("checkout", "return", use: checkoutReturn)
         let authed = payments.grouped(Token.authenticator(), User.guardMiddleware())
         authed.get("config", use: config)
         authed.post("teams", ":teamID", "top-ups", use: create)
@@ -35,13 +36,34 @@ struct TeamPaymentController: RouteCollection {
         let livemode: Bool
         let stripeMode: String
         let checkoutEnabled: Bool
+        let creditPolicy: TeamTopUpCreditPolicy
+        let estimatedFeeBasisPoints: Int
+        let estimatedFeeFixedMinor: Int
     }
     func config(req: Request) throws -> ConfigurationResponse {
         let config = try TeamStripeConfiguration()
         return ConfigurationResponse(publishableKey: config.publishableKey, currency: "eur",
-            minimumAmountMinor: 50, maximumAmountMinor: config.maximumMinor, livemode: config.livemode, stripeMode: config.mode,
-            checkoutEnabled: (try? config.checkoutReturnURLs(topUpID: "configuration")) != nil)
+            minimumAmountMinor: 1000, maximumAmountMinor: config.maximumMinor, livemode: config.livemode, stripeMode: config.mode,
+            checkoutEnabled: (try? config.checkoutReturnURLs(topUpID: "configuration")) != nil,
+            creditPolicy: .stripeNet, estimatedFeeBasisPoints: 150, estimatedFeeFixedMinor: 25)
     }
+    // The redirect is informational only. No payment or personal data is exposed here.
+    func checkoutReturn(req: Request) -> Response {
+        let response = Response(status: .ok)
+        response.headers.contentType = .html
+        response.headers.replaceOrAdd(name: .cacheControl, value: "no-store")
+        response.headers.replaceOrAdd(name: "Referrer-Policy", value: "no-referrer")
+        response.body = .init(string: """
+        <!doctype html><html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>ÖKFB · Zahlung prüfen</title><body style="font:18px system-ui;background:#f7f8fa;padding:32px;max-width:480px;margin:auto">
+        <h1>Zurück zur ÖKFB App</h1><p>Öffne „Guthaben aufladen“, um den Status deiner Zahlung zu prüfen.
+        Dein Guthaben wird erst nach Zahlungsbestätigung und Ermittlung der Stripe-Gebühren aktualisiert.</p>
+        <p>Auch nach einem Abbruch prüft die App eine bereits gestartete Zahlung, bevor du erneut zahlst.</p>
+        <a href="oekfbapp://" style="display:block;padding:16px;background:#ff8214;color:#111;border-radius:16px;text-align:center">ÖKFB App öffnen</a></body></html>
+        """)
+        return response
+    }
+
     func create(req: Request) async throws -> TeamTopUpResponse {
         let team = try await Self.team(req.parameters.require("teamID", as: UUID.self), on: req)
         return try await TeamTopUpManager(application: req.application).create(team: team,

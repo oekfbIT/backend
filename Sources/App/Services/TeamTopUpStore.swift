@@ -97,9 +97,10 @@ struct TeamTopUpStore {
             guard topUp.stripeStatus == "succeeded", topUp.paidAt != nil else {
                 throw Abort(.conflict, reason: "Stripe has not confirmed this top-up.")
             }
+            let creditedMinor = try topUp.creditAmountMinor
             let before = try Self.balance(in: team)
             let pending = PendingTeamStripeCredit(topUpID: id, before: before,
-                after: before + Double(topUp.amountMinor) / 100, creditedAt: Date())
+                after: before + Double(creditedMinor) / 100, creditedAt: Date())
             let filter: Document = ["_id": teamKey,
                 "balance": team["balance"] ?? Null(),
                 "stripeCreditVersion": team["stripeCreditVersion"] ?? Null(),
@@ -121,13 +122,14 @@ struct TeamTopUpStore {
         }
         if try await Rechnung.find(topUp.invoiceID, on: database) == nil {
             let invoice = Rechnung(id: topUp.invoiceID, team: topUp.teamID, teamName: topUp.teamName,
-                status: .bezahlt, number: topUp.invoiceNumber, summ: Double(topUp.amountMinor) / 100,
+                status: .bezahlt, number: topUp.invoiceNumber, summ: Double(try topUp.creditAmountMinor) / 100,
                 topay: 0, previousBalance: pending.before, kennzeichen: "Guthaben Einzahlung – Stripe", created: paidAt)
             invoice.paymentSource = "stripe"
             invoice.dueDate = nil
             invoice.stripeDeposit = StripeDepositDetails(topUpId: topUp.id, paymentIntentId: intentID,
                 chargeId: topUp.chargeID, amountMinor: topUp.amountMinor, currency: "eur", paidAt: paidAt,
-                balanceAfter: pending.after, livemode: topUp.livemode)
+                balanceAfter: pending.after, livemode: topUp.livemode,
+                feeMinor: topUp.feeMinor, creditedAmountMinor: try topUp.creditAmountMinor)
             invoice.allowsStripeCreation = true
             do { try await invoice.create(on: database) }
             catch {

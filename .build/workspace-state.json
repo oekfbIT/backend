@@ -160,6 +160,23 @@
       {
         "basedOn" : null,
         "packageRef" : {
+          "identity" : "jwt-kit",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/vapor/jwt-kit.git",
+          "name" : "jwt-kit"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "13e7513b3ba0afa13967daf77af2fb4ad087306c",
+            "version" : "4.13.5"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "jwt-kit"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
           "identity" : "leaf",
           "kind" : "remoteSourceControl",
           "location" : "https://github.com/vapor/leaf.git",
