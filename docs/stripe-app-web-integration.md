@@ -98,7 +98,7 @@ Typical response, with optional fields omitted:
 ```
 
 4. Save `id`. On web, navigate to `checkout_url`; on mobile, open it in the system browser. This flow needs no Stripe client SDK.
-5. Stripe redirects to the backend-configured success/cancel URL with `?top_up_id=TOP_UP_ID` appended (or adds it to the existing query). By default the backend serves a neutral return page at `/payments/checkout/return`, with an `oekfbapp://` link. Custom return URLs can override it. A mobile app can resume checking its saved attempt when it becomes active; you can also configure your own HTTPS universal/app link return page.
+5. Stripe redirects to the backend-configured success/cancel URL with `?top_up_id=TOP_UP_ID` appended (or adds it to the existing query). By default the backend serves a neutral return page at `/payments/checkout/return`, with instructions to dismiss the in-app browser sheet. It does not launch a custom URL scheme, so it also works in Expo Go. Custom return URLs can override it. A mobile app can resume checking its saved attempt when it becomes active; you can also configure your own HTTPS universal/app link return page.
 6. Check confirmation as described below. The redirect itself is not payment confirmation.
 
 If creation returns `status: "creating"` without a URL, briefly wait and retry the same POST with the same key. If it returns `credited`, show the completed result instead of opening Checkout. Expired/completed sessions do not return an open payment URL.

@@ -239,7 +239,10 @@ final class TeamTopUpTests: XCTestCase {
         try app.register(collection: TeamPaymentController())
         try app.test(.GET, "payments/checkout/return?top_up_id=anything") {
             XCTAssertEqual($0.status, .ok)
-            XCTAssertTrue($0.body.string.contains("oekfbapp://"))
+            XCTAssertFalse($0.body.string.contains("oekfbapp://"))
+            XCTAssertFalse($0.body.string.contains("<a "))
+            XCTAssertTrue($0.body.string.contains("Häkchen"))
+            XCTAssertTrue($0.body.string.contains("Fertig"))
             XCTAssertFalse($0.body.string.contains("anything"))
             XCTAssertFalse($0.body.string.contains("erfolgreich"))
         }

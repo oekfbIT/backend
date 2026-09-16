@@ -54,12 +54,38 @@ struct TeamPaymentController: RouteCollection {
         response.headers.replaceOrAdd(name: .cacheControl, value: "no-store")
         response.headers.replaceOrAdd(name: "Referrer-Policy", value: "no-referrer")
         response.body = .init(string: """
-        <!doctype html><html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-        <title>ÖKFB · Zahlung prüfen</title><body style="font:18px system-ui;background:#f7f8fa;padding:32px;max-width:480px;margin:auto">
-        <h1>Zurück zur ÖKFB App</h1><p>Öffne „Guthaben aufladen“, um den Status deiner Zahlung zu prüfen.
-        Dein Guthaben wird erst nach Zahlungsbestätigung und Ermittlung der Stripe-Gebühren aktualisiert.</p>
-        <p>Auch nach einem Abbruch prüft die App eine bereits gestartete Zahlung, bevor du erneut zahlst.</p>
-        <a href="oekfbapp://" style="display:block;padding:16px;background:#ff8214;color:#111;border-radius:16px;text-align:center">ÖKFB App öffnen</a></body></html>
+        <!doctype html>
+        <html lang="de">
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width,initial-scale=1">
+          <title>ÖKFB · Zurück zur Aufladung</title>
+          <style>
+            :root { color-scheme: light dark; }
+            * { box-sizing: border-box; }
+            body { margin: 0; padding: 40px 24px; background: #f7f8fa; color: #111; font: 16px/1.55 system-ui, sans-serif; }
+            main { max-width: 420px; margin: 0 auto; }
+            .label { color: #6b7280; font-size: 13px; font-weight: 600; margin-bottom: 24px; }
+            h1 { font-size: 28px; line-height: 1.2; margin: 0 0 20px; }
+            .hint { padding: 16px; border: 1px solid #e5e7eb; border-radius: 16px; background: #fff; }
+            .note { color: #6b7280; font-size: 14px; margin-top: 20px; }
+            @media (prefers-color-scheme: dark) {
+              body { background: #15181c; color: #f9fafb; }
+              .hint { background: #20252b; border-color: #374151; }
+              .label, .note { color: #c3c8d0; }
+            }
+          </style>
+        </head>
+        <body><main>
+          <div class="label">ÖKFB · Guthaben aufladen</div>
+          <h1>Zurück zur Aufladung</h1>
+          <p class="hint">Schließe dieses Fenster über das Häkchen oder „Fertig“ oben links.
+          Auf Android kannst du die Zurück-Taste verwenden.</p>
+          <p>Die App prüft danach automatisch den Status deiner Zahlung.</p>
+          <p class="note">Dein Guthaben wird erst nach Bestätigung der Zahlung und der Stripe-Gebühren aktualisiert.
+          Das Schließen dieses Fensters bestätigt oder storniert keine Zahlung.</p>
+          <p class="note">Falls du diese Seite in einem separaten Browser geöffnet hast, wechsle zurück zur ÖKFB App.</p>
+        </main></body></html>
         """)
         return response
     }
@@ -80,8 +106,18 @@ struct TeamPaymentController: RouteCollection {
             user: req.auth.require(User.self), input: req.content.decode(TeamTopUpInput.self), flow: .checkout)
     }
     func confirmation(req: Request) async throws -> Response {
-        let topUp = try await TeamTopUpStore(database: req.db).get(req.parameters.require("topUpID"))
+        let store = TeamTopUpStore(database: req.db)
+        var topUp = try await store.get(req.parameters.require("topUpID"))
         _ = try await Self.team(topUp.teamID, on: req)
+        if topUp.creditedAt == nil {
+            // Reconcile under the existing worker lease instead of waiting for webhook delivery.
+            do {
+                try await TeamTopUpManager(application: req.application).process(id: topUp.id)
+            } catch {
+                req.logger.warning("Top-up confirmation reconciliation deferred")
+            }
+            topUp = try await store.get(topUp.id)
+        }
         let response = Response(status: topUp.confirmationHTTPStatus)
         try response.content.encode(TeamTopUpResponse(topUp,
             publishableKey: try TeamStripeConfiguration().publishableKey, includeSecret: false))
