@@ -59,7 +59,7 @@ struct TeamPaymentController: RouteCollection {
         <head>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width,initial-scale=1">
-          <title>ÖKFB · Zurück zur Aufladung</title>
+          <title>ÖKFB · Zahlungsbestätigung wird erwartet</title>
           <style>
             :root { color-scheme: light dark; }
             * { box-sizing: border-box; }
@@ -68,6 +68,10 @@ struct TeamPaymentController: RouteCollection {
             .label { color: #6b7280; font-size: 13px; font-weight: 600; margin-bottom: 24px; }
             h1 { font-size: 28px; line-height: 1.2; margin: 0 0 20px; }
             .hint { padding: 16px; border: 1px solid #e5e7eb; border-radius: 16px; background: #fff; }
+            .waiting { display: flex; align-items: center; gap: 14px; }
+            .spinner { width: 28px; height: 28px; flex-shrink: 0; border: 3px solid #e5e7eb; border-top-color: #ff8410; border-radius: 50%; animation: spin 1s linear infinite; }
+            @keyframes spin { to { transform: rotate(360deg); } }
+            @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
             .note { color: #6b7280; font-size: 14px; margin-top: 20px; }
             @media (prefers-color-scheme: dark) {
               body { background: #15181c; color: #f9fafb; }
@@ -78,13 +82,21 @@ struct TeamPaymentController: RouteCollection {
         </head>
         <body><main>
           <div class="label">ÖKFB · Guthaben aufladen</div>
-          <h1>Zurück zur Aufladung</h1>
-          <p class="hint">Schließe dieses Fenster über das Häkchen oder „Fertig“ oben links.
-          Auf Android kannst du die Zurück-Taste verwenden.</p>
-          <p>Die App prüft danach automatisch den Status deiner Zahlung.</p>
-          <p class="note">Dein Guthaben wird erst nach Bestätigung der Zahlung und der Stripe-Gebühren aktualisiert.
-          Das Schließen dieses Fensters bestätigt oder storniert keine Zahlung.</p>
-          <p class="note">Falls du diese Seite in einem separaten Browser geöffnet hast, wechsle zurück zur ÖKFB App.</p>
+          <h1>Zahlungsbestätigung wird erwartet</h1>
+          <div class="hint waiting" role="status" aria-live="polite">
+            <span class="spinner" aria-hidden="true"></span>
+            <strong>Warten auf die Bestätigung in der App …</strong>
+          </div>
+          <p>Bitte warte einen Moment. Die ÖKFB App prüft deine Zahlung und aktualisiert
+          dein Guthaben, sobald die Zahlung und die Stripe-Gebühren bestätigt sind.</p>
+          <p class="note">Bitte nicht erneut bezahlen. Die Rückkehr von Stripe allein ist noch keine Zahlungsbestätigung.</p>
+          <details class="note">
+            <summary>Dieses Fenster bleibt geöffnet?</summary>
+            <p>Schließe es über das Häkchen oder „Fertig“ oben links. Auf Android verwende die Zurück-Taste.
+            In der Finanzübersicht wird die Bestätigung automatisch weiter geprüft.
+            Das Schließen bestätigt oder storniert keine Zahlung.</p>
+            <p>In einem separaten Browser: Wechsle zurück zur ÖKFB App.</p>
+          </details>
         </main></body></html>
         """)
         return response

@@ -243,6 +243,10 @@ final class TeamTopUpTests: XCTestCase {
             XCTAssertFalse($0.body.string.contains("<a "))
             XCTAssertTrue($0.body.string.contains("Häkchen"))
             XCTAssertTrue($0.body.string.contains("Fertig"))
+            XCTAssertTrue($0.body.string.contains("Zahlungsbestätigung wird erwartet"))
+            XCTAssertTrue($0.body.string.contains("role=\"status\""))
+            XCTAssertTrue($0.body.string.contains("class=\"spinner\""))
+            XCTAssertTrue($0.body.string.contains("prefers-reduced-motion"))
             XCTAssertFalse($0.body.string.contains("anything"))
             XCTAssertFalse($0.body.string.contains("erfolgreich"))
         }

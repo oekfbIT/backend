@@ -23,7 +23,9 @@ extension AdminController {
 
     func setupPushDeviceRoutes(on root: RoutesBuilder) {
         root.get("push-devices", use: registeredPushDevices)
-        root.get("teams", ":teamId", "push-devices", use: registeredPushDevicesForTeam)
+        // Keep the parameter name aligned with every other /admin/teams/:id route.
+        // RoutingKit shares this path node and rejects conflicting parameter names.
+        root.get("teams", ":id", "push-devices", use: registeredPushDevicesForTeam)
     }
 
     func registeredPushDevices(req: Request) async throws -> [RegisteredPushDeviceResponse] {
@@ -34,7 +36,7 @@ extension AdminController {
     }
 
     func registeredPushDevicesForTeam(req: Request) async throws -> [RegisteredPushDeviceResponse] {
-        guard let teamId = req.parameters.get("teamId", as: UUID.self),
+        guard let teamId = req.parameters.get("id", as: UUID.self),
               try await Team.find(teamId, on: req.db) != nil
         else {
             throw Abort(.notFound, reason: "Team not found.")
