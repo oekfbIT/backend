@@ -167,14 +167,33 @@ extension AppController {
       throw Abort(.badRequest, reason: "pushToken is empty.")
     }
 
+    // Treat the app's current identity snapshot as the source of truth. For player
+    // logins, derive the team from the player record so a stale/missing team ID
+    // in an older app build cannot leave the device detached from its team.
+    var resolvedTeamId = dto.teamId
+    if let playerId = dto.playerId {
+      guard let player = try await Player.find(playerId, on: req.db) else {
+        throw Abort(.badRequest, reason: "Unknown playerId.")
+      }
+      resolvedTeamId = player.$team.id
+    }
+
+    if let teamId = resolvedTeamId,
+       try await Team.find(teamId, on: req.db) == nil {
+      throw Abort(.badRequest, reason: "Unknown teamId.")
+    }
+
     let existing = try await DeviceToken.query(on: req.db)
       .filter(\.$fcmToken == token)
       .first()
 
     if let device = existing {
       device.guestId = dto.guestId
-      device.playerId = dto.playerId ?? device.playerId
-      device.teamId = dto.teamId ?? device.teamId
+      // A registration is a complete identity snapshot. Assigning nil here is
+      // intentional: it clears a previous user when the physical device logs
+      // into a different account or returns to guest mode.
+      device.playerId = dto.playerId
+      device.teamId = resolvedTeamId
       device.platform = dto.platform
       device.appVersion = dto.appVersion ?? device.appVersion
       device.locale = dto.locale ?? device.locale
@@ -184,7 +203,7 @@ extension AppController {
       let new = DeviceToken(
         guestId: dto.guestId,
         playerId: dto.playerId,
-        teamId: dto.teamId,
+        teamId: resolvedTeamId,
         fcmToken: token,
         platform: dto.platform,
         appVersion: dto.appVersion,
