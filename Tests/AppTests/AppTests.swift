@@ -283,6 +283,26 @@ final class AppTests: XCTestCase {
         XCTAssertFalse(PublicHomepageAccess.allows(code: "MC26", visibility: nil))
     }
 
+    func testPublicHomepageLeagueCanExposeYouTubeWithoutPrivateLeagueFields() throws {
+        let overview = PublicLeagueOverview(
+            id: UUID(),
+            state: .wien,
+            code: "HME",
+            logo: nil,
+            youtube: "https://www.youtube.com/watch?v=public",
+            teamcount: 0,
+            name: "HOMEPAGE",
+            visibility: false
+        )
+
+        let json = String(decoding: try JSONEncoder().encode(overview), as: UTF8.self)
+        XCTAssertTrue(json.contains("youtube"))
+        XCTAssertTrue(json.contains("watch?v=public"))
+        for forbidden in ["hourly", "homepageData", "nameLower"] {
+            XCTAssertFalse(json.contains(forbidden))
+        }
+    }
+
     func testSwaggerDocsAreServed() async throws {
         let app = Application(.testing)
         defer { app.shutdown() }

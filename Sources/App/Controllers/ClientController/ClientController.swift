@@ -135,6 +135,7 @@ final class ClientController: RouteCollection {
                         state: league.state,
                         code: league.code,
                         logo: league.logo,
+                        youtube: league.youtube,
                         teamcount: league.teamcount,
                         name: league.name,
                         visibility: league.visibility

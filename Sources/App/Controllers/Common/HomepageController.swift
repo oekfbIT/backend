@@ -544,6 +544,7 @@ struct PublicLeagueOverview: Content, Codable {
     var state: Bundesland?
     var code: String?
     var logo: String?
+    var youtube: String? = nil
     var teamcount: Int?
     var name: String
     var visibility: Bool?
