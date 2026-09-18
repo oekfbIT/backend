@@ -28,6 +28,7 @@ final class ClientController: RouteCollection {
         route.get("news", "strafsenat", use: fetchStrafsenatNews)
         route.get("transfers", use: fetchTransfers)
         route.get("sponsors", use: fetchSponsors)
+        route.get("appversion", use: fetchMinimumAppVersion)
         route.get("news", "detail", ":id", use: fetchNewsItem)
         route.get("matches", "league", ":code", use: fetchFirstSeasonMatches)
         // First, define a route that fetches a single match by its ID and includes the events:
@@ -55,6 +56,19 @@ final class ClientController: RouteCollection {
 //        route.get("leaderboard", ":id", "yellowCard", "primary", use: getYellowCardLeaderBoardPrimarySeason)
 //        route.get("leaderboard", ":id", "yellowRedCard", "primary", use: getYellowRedCardLeaderBoardPrimarySeason)
 
+    }
+
+    struct PublicMinimumAppVersionResponse: Content {
+        let minAppVersion: String?
+    }
+
+    /// Public bootstrap configuration contains only the minimum supported app
+    /// version. The full transfer settings model remains authenticated.
+    func fetchMinimumAppVersion(req: Request) async throws -> PublicMinimumAppVersionResponse {
+        guard let settings = try await TransferSettings.query(on: req.db).first() else {
+            throw Abort(.notFound, reason: "No TransferSettings found.")
+        }
+        return .init(minAppVersion: settings.minAppVersion)
     }
     
     // MARK: Current Season Table (Primary Season)
