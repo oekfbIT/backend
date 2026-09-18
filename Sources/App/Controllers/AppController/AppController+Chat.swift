@@ -62,7 +62,7 @@ extension AppController {
         // ✅ ONE universal message route (JSON OR multipart)
         conversation.grouped(":id")
             .grouped(ConversationParameterAccessMiddleware(parameter: "id"))
-            .post("message", use: sendMessageUniversalApp)
+            .on(.POST, "message", body: .collect(maxSize: "10mb"), use: sendMessageUniversalApp)
 
         conversation.post("message", ":messageId", "read", use: markMessageAsReadApp)
         admin.get("status", ":conversationID", use: toggleStatusApp)
@@ -144,6 +144,9 @@ extension AppController {
 
         let trimmedText = (payload.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let hasFile = (payload.file?.data.readableBytes ?? 0) > 0
+        if let file = payload.file, hasFile {
+            try UploadValidation.validate(file, allowed: [.jpeg, .png, .pdf])
+        }
 
         // must send either text or a file
         guard !trimmedText.isEmpty || hasFile else {

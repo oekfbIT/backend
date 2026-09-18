@@ -55,6 +55,10 @@ final class AppTests: XCTestCase {
             "payments/config",
             "app/player/\(id)",
             "app/team/\(id)",
+            "app/account",
+            "app/match/\(id)",
+            "app/transfer/\(id)",
+            "app/referee/me",
             "app/conversation",
             "app/transferSettings/toggle"
         ]
@@ -68,6 +72,27 @@ final class AppTests: XCTestCase {
         try app.test(.POST, "admin/uploads", afterResponse: { res in
             XCTAssertEqual(res.status, .unauthorized, "Expected /admin/uploads to require an administrator bearer token")
         })
+
+        try app.test(.DELETE, "app/match/\(id)/event/\(UUID())", afterResponse: { res in
+            XCTAssertEqual(res.status, .unauthorized, "Expected referee event deletion to require a bearer token")
+        })
+    }
+
+    func testRefereeSelfResponseOmitsSensitiveFields() throws {
+        let response = AppController.RefereeSelfResponse(
+            id: UUID(),
+            name: "Referee",
+            image: "image.jpg",
+            nationality: "AT",
+            balance: 12.5,
+            assignments: []
+        )
+        let json = String(decoding: try JSONEncoder().encode(response), as: UTF8.self)
+
+        XCTAssertTrue(json.contains("balance"))
+        for forbidden in ["identification", "phone", "userId", "email", "password"] {
+            XCTAssertFalse(json.contains(forbidden))
+        }
     }
 
     func testPublicResponseDTOsDoNotEncodeSensitiveModelFields() throws {
@@ -195,6 +220,8 @@ final class AppTests: XCTestCase {
             XCTAssertTrue(body.contains("'/admin/auth/login':"))
             XCTAssertTrue(body.contains("'/admin/uploads':"))
             XCTAssertTrue(body.contains("'/app/auth/login':"))
+            XCTAssertTrue(body.contains("'/app/referee/me':"))
+            XCTAssertTrue(body.contains("'/app/match/{matchID}/event/{id}':"))
             XCTAssertTrue(body.contains("'/app/player/{playerID}':"))
             XCTAssertTrue(body.contains("'/app/player/{playerID}/email':"))
             XCTAssertTrue(body.contains("'/app/leaderboard/league/{id}/primary/goals':"))
@@ -220,9 +247,40 @@ final class AppTests: XCTestCase {
             XCTAssertTrue(pathBlock("/admin/auth/login").contains("- basicAuth: []"))
             XCTAssertTrue(pathBlock("/admin/uploads").contains("- bearerAuth: []"))
             XCTAssertTrue(pathBlock("/app/auth/login").contains("- basicAuth: []"))
+            XCTAssertTrue(pathBlock("/app/referee/me").contains("- bearerAuth: []"))
+            XCTAssertTrue(pathBlock("/app/match/{matchID}/event/{id}").contains("- bearerAuth: []"))
             XCTAssertFalse(pathBlock("/status").contains("security:"))
             XCTAssertFalse(pathBlock("/client/home/league/{code}").contains("security:"))
+            XCTAssertFalse(pathBlock("/webClient/sponsors").contains("security:"))
+            XCTAssertFalse(pathBlock("/webClient/news/strafsenat").contains("security:"))
+            XCTAssertFalse(pathBlock("/client/homepage/register").contains("security:"))
         })
+    }
+
+    func testPublicSponsorDTOOnlyContainsDisplayFields() throws {
+        let sponsor = Sponsor(
+            id: UUID(),
+            name: "Sponsor",
+            link: "https://example.com",
+            logo: "https://example.com/logo.png",
+            footerLogo: "https://example.com/footer.png",
+            description: "internal notes",
+            type: .sponsor,
+            position: 1
+        )
+
+        let json = String(decoding: try JSONEncoder().encode(PublicSponsor(sponsor)), as: UTF8.self)
+        XCTAssertFalse(json.contains("description"))
+        XCTAssertFalse(json.contains("internal notes"))
+        XCTAssertFalse(json.contains("created"))
+        XCTAssertFalse(json.contains("updated"))
+    }
+
+    func testPublicHomepageAccessAllowsOnlyVisibleLeaguesAndHiddenHME() {
+        XCTAssertTrue(PublicHomepageAccess.allows(code: "WPL", visibility: true))
+        XCTAssertTrue(PublicHomepageAccess.allows(code: "HME", visibility: false))
+        XCTAssertFalse(PublicHomepageAccess.allows(code: "NAT", visibility: false))
+        XCTAssertFalse(PublicHomepageAccess.allows(code: "MC26", visibility: nil))
     }
 
     func testSwaggerDocsAreServed() async throws {

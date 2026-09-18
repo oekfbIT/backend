@@ -37,10 +37,13 @@ final class AppController: RouteCollection {
             ProtectedResponseMiddleware()
         )
 
+        setupAccountRoutes(on: authenticated)
+
         // MARK: - SEARCH ROUTES
         try setupSearchRoutes(on: authenticated)
         try setupChatRoutes(on: authenticated)
         setupMatchRoutes(on: authenticated)
+        setupRefereeRoutes(on: authenticated)
         setupSponsorRoutes(on: authenticated)
         setupTeamRegistrationRoutes(on: authenticated)
         // MARK: - TEAM ROUTES

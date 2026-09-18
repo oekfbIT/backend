@@ -25,7 +25,9 @@ final class ClientController: RouteCollection {
         route.get("table", "league", ":code", use: fetchtable)
         route.get("team", "league", ":id", use: fetchLeague)
         route.get("news", "league", ":code", use: fetchNews)
+        route.get("news", "strafsenat", use: fetchStrafsenatNews)
         route.get("transfers", use: fetchTransfers)
+        route.get("sponsors", use: fetchSponsors)
         route.get("news", "detail", ":id", use: fetchNewsItem)
         route.get("matches", "league", ":code", use: fetchFirstSeasonMatches)
         // First, define a route that fetches a single match by its ID and includes the events:
@@ -101,13 +103,17 @@ final class ClientController: RouteCollection {
             .all()
     }
 
+    func fetchSponsors(req: Request) async throws -> [PublicSponsor] {
+        try await SponsorSupport.all(on: req.db).map(PublicSponsor.init)
+    }
+
     // MARK: Homepage
     func fetchHomepageData(req: Request) throws -> EventLoopFuture<HomepageResponse> {
         guard let leagueCode = req.parameters.get("code", as: String.self) else {
             throw Abort(.badRequest, reason: "Invalid or missing league code")
         }
         
-        let leagueFuture = fetchLeagueByCode(leagueCode, db: req.db) // Wrapped Value
+        let leagueFuture = fetchHomepageLeagueByCode(leagueCode, db: req.db)
         let teamsFuture = leagueFuture.flatMap { self.fetchTeams(for: $0, db: req.db) }
         let newsFuture = leagueFuture.flatMap { self.fetchLeagueNews(league: $0, code: leagueCode, db: req.db) }
         let seasonsFuture = leagueFuture.flatMap { self.fetchSeasons(for: $0, db: req.db) }
@@ -179,6 +185,15 @@ final class ClientController: RouteCollection {
         return fetchLeagueByCode(leagueCode, db: req.db).flatMap { league in
             self.fetchLeagueNews(league: league, code: leagueCode, db: req.db)
         }
+    }
+
+    func fetchStrafsenatNews(req: Request) throws -> EventLoopFuture<[NewsItem]> {
+        let per = min(max(req.query[Int.self, at: "per"] ?? 250, 1), 250)
+        return NewsItem.query(on: req.db)
+            .filter(\.$tag == "strafsenat")
+            .sort(\.$created, .descending)
+            .range(..<per)
+            .all()
     }
     
     // MARK: News Detail

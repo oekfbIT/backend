@@ -32,7 +32,12 @@ extension AppController {
             .put("email", use: updatePlayerEmailAddress)
 
         // Team registration via app
-        root.post("register", "team", use: registerTeamPlayer)
+        root.on(
+            .POST,
+            "register", "team",
+            body: .collect(maxSize: "20mb"),
+            use: registerTeamPlayer
+        )
     }
 
     // GET /app/player/:playerID

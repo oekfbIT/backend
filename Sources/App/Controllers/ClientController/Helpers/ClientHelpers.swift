@@ -1,6 +1,12 @@
 import Vapor
 import Fluent
 
+enum PublicHomepageAccess {
+    static func allows(code: String?, visibility: Bool?) -> Bool {
+        visibility == true || code == "HME"
+    }
+}
+
 // MARK: - Helper Fetch Methods (DB Calls)
 extension ClientController {
     func fetchLeagueByCode(_ code: String, db: Database) -> EventLoopFuture<League> {
@@ -9,6 +15,22 @@ extension ClientController {
             .filter(\.$visibility == true)
             .first()
             .unwrap(or: Abort(.notFound, reason: "League not found"))
+    }
+
+    /// The hidden HME record stores global landing-page content and is not a
+    /// selectable competition. Permit that one record for the allowlisted
+    /// homepage DTO without making any other hidden league publicly readable.
+    func fetchHomepageLeagueByCode(_ code: String, db: Database) -> EventLoopFuture<League> {
+        League.query(on: db)
+            .filter(\.$code == code)
+            .first()
+            .unwrap(or: Abort(.notFound, reason: "League not found"))
+            .flatMapThrowing { league in
+                guard PublicHomepageAccess.allows(code: league.code, visibility: league.visibility) else {
+                    throw Abort(.notFound, reason: "League not found")
+                }
+                return league
+            }
     }
 
     func fetchTeams(for league: League, db: Database) -> EventLoopFuture<[Team]> {

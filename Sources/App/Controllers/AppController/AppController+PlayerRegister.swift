@@ -82,12 +82,8 @@ extension AppController {
         }
 
         // Quick sanity check for files (non-empty)
-        guard payload.playerImage.data.readableBytes > 0 else {
-            throw Abort(.badRequest, reason: "Player image file is required.")
-        }
-        guard payload.identificationImage.data.readableBytes > 0 else {
-            throw Abort(.badRequest, reason: "Identification image file is required.")
-        }
+        try UploadValidation.validate(payload.playerImage, allowed: [.jpeg, .png])
+        try UploadValidation.validate(payload.identificationImage, allowed: [.jpeg, .png, .pdf])
 
         // --- Firebase upload setup ---
 

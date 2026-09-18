@@ -12,6 +12,51 @@ import Fluent
 // MARK: - AUTH / AUTHENTICATION ROUTES
 extension AppController {
 
+    struct UpdateAccountEmailRequest: Content {
+        let email: String
+    }
+
+    func setupAccountRoutes(on route: RoutesBuilder) {
+        let account = route.grouped("account")
+        account.get(use: getAccount)
+        account.patch("email", use: updateAccountEmail)
+    }
+
+    func getAccount(req: Request) throws -> User.Public {
+        try req.auth.require(User.self).asPublic()
+    }
+
+    func updateAccountEmail(req: Request) async throws -> User.Public {
+        let payload = try req.content.decode(UpdateAccountEmailRequest.self)
+        let email = payload.email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard email.contains("@"), email.count <= 254 else {
+            throw Abort(.badRequest, reason: "A valid email address is required.")
+        }
+
+        let user = try req.auth.require(User.self)
+        let userID = try user.requireID()
+        let duplicate = try await User.query(on: req.db)
+            .filter(\.$email == email)
+            .filter(\.$id != userID)
+            .first()
+        guard duplicate == nil else {
+            throw Abort(.conflict, reason: "This email address is already in use.")
+        }
+
+        user.email = email
+        try await user.save(on: req.db)
+
+        let teams = try await Team.query(on: req.db)
+            .filter(\.$user.$id == userID)
+            .all()
+        for team in teams {
+            team.usremail = email
+            try await team.save(on: req.db)
+        }
+
+        return try user.asPublic()
+    }
+
     /// /app/auth/login
     /// Uses `User.authenticator()` to authenticate by email/password and returns a `NewSession`.
     func setupAuthRoutes(on route: RoutesBuilder) throws {

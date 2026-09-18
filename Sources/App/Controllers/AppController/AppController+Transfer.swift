@@ -30,7 +30,7 @@ extension AppController {
         let transfers = root.grouped("transfer")
 
         // listing
-        transfers.get(use: indexTransfers)
+        transfers.grouped(AdminOnlyMiddleware()).get(use: indexTransfers)
 
         // single
         transfers.get(":id", use: getTransferByID)
@@ -72,7 +72,24 @@ extension AppController {
             throw Abort(.notFound, reason: "Transfer not found.")
         }
 
+        try await authorize(transfer: transfer, req: req)
+
         return transfer
+    }
+
+    private func authorize(transfer: Transfer, req: Request) async throws {
+        let user = try req.auth.require(User.self)
+        if user.type == .admin { return }
+
+        let userID = try user.requireID()
+        let candidateIDs = [transfer.team, transfer.origin].compactMap { $0 }
+        let ownsParticipant = try await Team.query(on: req.db)
+            .filter(\.$id ~~ candidateIDs)
+            .filter(\.$user.$id == userID)
+            .count() > 0
+        guard ownsParticipant else {
+            throw Abort(.forbidden, reason: "This transfer does not belong to your account.")
+        }
     }
 
     // MARK: - POST /app/transfer/create

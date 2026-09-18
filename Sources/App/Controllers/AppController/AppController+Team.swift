@@ -33,8 +33,8 @@ extension AppController {
         // Trainer (kept as-is but grouped neatly)
         let trainer = root.grouped("trainer", ":teamID")
             .grouped(TeamParameterAccessMiddleware(parameter: "teamID"))
-        trainer.put(use: updateTeamTrainer)
-        trainer.put("alt", use: updateTeamAltTrainer)
+        trainer.on(.PUT, body: .collect(maxSize: "10mb"), use: updateTeamTrainer)
+        trainer.on(.PUT, "alt", body: .collect(maxSize: "10mb"), use: updateTeamAltTrainer)
         trainer.get(use: getTrainer)
         trainer.get("alt", use: getAltTrainer)
 
@@ -286,6 +286,7 @@ extension AppController {
         var finalImageURL: String? = existingCoach?.image
 
         if let imageFile = payload.image, imageFile.data.readableBytes > 0 {
+            try UploadValidation.validate(imageFile, allowed: [.jpeg, .png])
             let firebaseManager = req.application.firebaseManager
 
             // e.g. trainers/<teamUUID>/trainer_image
@@ -450,6 +451,7 @@ extension AppController {
         var finalImageURL: String? = existingAltCoach?.image
 
         if let imageFile = payload.image, imageFile.data.readableBytes > 0 {
+            try UploadValidation.validate(imageFile, allowed: [.jpeg, .png])
             let firebaseManager = req.application.firebaseManager
 
             // e.g. trainers/<teamUUID>/alt_trainer_image

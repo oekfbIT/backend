@@ -125,10 +125,9 @@ extension AppController {
 
         // ✅ single param name for everything under here: :matchID
         route.group("match", ":matchID") { match in
-            match.get(use: getMatchByID)
-            match.get("league", use: getLeagueFromMatch)
-
             let assigned = match.grouped(MatchAccessMiddleware())
+            assigned.get(use: getMatchByID)
+            assigned.get("league", use: getLeagueFromMatch)
             assigned.get("resetGame", use: resetGame)
             assigned.get("resetHalftime", use: resetHalftime)
 
@@ -154,10 +153,16 @@ extension AppController {
             assigned.patch("spielabbruch", use: spielabbruch)
             assigned.patch("done", use: done)
 
+            // Referees may only remove events from matches assigned to them.
+            // MatchAccessMiddleware runs before the event mutation handler.
+            assigned.delete("event", ":id", use: deleteAssignedMatchEvent)
+
         }
 
         // legacy keep (same param name)
-        route.get("match", "league", ":matchID", use: getLeagueFromMatch)
+        route.grouped("match", "league", ":matchID")
+            .grouped(MatchAccessMiddleware())
+            .get(use: getLeagueFromMatch)
     }
 
     // GET /app/match/livescore
@@ -236,6 +241,22 @@ extension AppController {
 
         try await match.save(on: req.db)
         return .ok
+    }
+
+    /// DELETE /app/match/:matchID/event/:id
+    /// Both ids are checked so an assigned referee cannot pair an authorized
+    /// match id with an event belonging to a different match.
+    func deleteAssignedMatchEvent(req: Request) async throws -> HTTPStatus {
+        let matchID = try req.parameters.require("matchID", as: UUID.self)
+        let eventID = try req.parameters.require("id", as: UUID.self)
+        guard let event = try await MatchEvent.find(eventID, on: req.db) else {
+            throw Abort(.notFound, reason: "Event not found.")
+        }
+        guard event.$match.id == matchID else {
+            throw Abort(.forbidden, reason: "Event does not belong to this match.")
+        }
+
+        return try await MatchEventController(path: "events").deleteEvent(req: req).get()
     }
 
     // POST /app/match/:matchID/goal
@@ -1248,12 +1269,12 @@ extension AppController {
 
     // MARK: - Safe Mapping (no eager-load)
 
-    private struct MatchLookup {
+    struct MatchLookup {
         let teamsByID: [UUID: Team]
         let seasonsByID: [UUID: Season] // league preloaded
     }
 
-    private func buildMatchLookup(matches: [Match], on db: Database) async throws -> MatchLookup {
+    func buildMatchLookup(matches: [Match], on db: Database) async throws -> MatchLookup {
         let teamIDs = Array(Set(matches.flatMap { [ $0.$homeTeam.id, $0.$awayTeam.id ] }))
         let seasonIDs = Array(Set(matches.compactMap { $0.$season.id }))
 
@@ -1281,7 +1302,7 @@ extension AppController {
 
     /// Converts a `Match` to `AppMatchOverview` without relying on eager-loaded parents.
     /// Returns nil when required references are missing.
-    private func toAppMatchOverviewSafe(
+    func toAppMatchOverviewSafe(
         match: Match,
         lookup: MatchLookup,
         req: Request

@@ -44,6 +44,8 @@ struct AppModels {
         let captain: UUID
         let trikot: Trikot
         let balance: Double?
+        let cancelled: Int?
+        let postponed: Int?
         let players: [AppPlayer]
         let stats: TeamStats?
         var seasonStats: TeamStats? = nil
@@ -150,6 +152,93 @@ struct AppModels {
         let position: String
         let birthDate: String
 
+    }
+
+    /// Public player payload used by the unauthenticated app experience. Keep
+    /// this allowlist separate from `AppPlayer`: account email, balance, and
+    /// date of birth must never be serialized by a public route.
+    struct PublicAppPlayer: Content, Codable {
+        let id: UUID
+        let sid: String
+        let name: String
+        let number: String
+        let nationality: String
+        let eligilibity: PlayerEligibility
+        let image: String
+        let status: Bool
+        let team: AppTeamOverview
+        let events: [AppMatchEvent]
+        let stats: PlayerStats?
+        let seasonStats: PlayerStats?
+        let matches: [PublicSeasonMatches]?
+        let nextMatch: [NextMatch]
+        let position: String
+
+        init(_ player: AppPlayer) {
+            id = player.id
+            sid = player.sid
+            name = player.name
+            number = player.number
+            nationality = player.nationality
+            eligilibity = player.eligilibity
+            image = player.image
+            status = player.status
+            team = player.team
+            events = player.events
+            stats = player.stats
+            seasonStats = player.seasonStats
+            matches = player.matches
+            nextMatch = player.nextMatch
+            position = player.position
+        }
+    }
+
+    /// Public team payload. Financial data and trainer contact details remain
+    /// available only from authenticated, ownership-checked endpoints.
+    struct PublicAppTeam: Content, Codable {
+        let id: UUID
+        let sid: String
+        let league: AppLeagueOverview
+        let points: Int
+        let logo: String
+        let teamImage: String
+        let name: String
+        let shortName: String?
+        let foundation: String
+        let membership: String
+        let coach: PublicTrainer
+        let altCoach: PublicTrainer?
+        let captain: UUID
+        let trikot: Trikot
+        let cancelled: Int?
+        let postponed: Int?
+        let players: [PublicAppPlayer]
+        let stats: TeamStats?
+        var seasonStats: TeamStats?
+        let form: [FormItem]?
+
+        init(_ team: AppTeam) {
+            id = team.id
+            sid = team.sid
+            league = team.league
+            points = team.points
+            logo = team.logo
+            teamImage = team.teamImage
+            name = team.name
+            shortName = team.shortName
+            foundation = team.foundation
+            membership = team.membership
+            coach = team.coach.asPublic()
+            altCoach = team.altCoach?.asPublic()
+            captain = team.captain
+            trikot = team.trikot
+            cancelled = team.cancelled
+            postponed = team.postponed
+            players = team.players.map(PublicAppPlayer.init)
+            stats = team.stats
+            seasonStats = team.seasonStats
+            form = team.form
+        }
     }
 
     struct AppPlayerOverview: Content, Codable {

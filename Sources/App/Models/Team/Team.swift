@@ -351,6 +351,8 @@ extension Team {
                     captain: UUID(uuidString: self.captain ?? "") ?? UUID(),
                     trikot: self.trikot,
                     balance: self.balance,
+                    cancelled: self.cancelled,
+                    postponed: self.postponed,
                     players: players,
                     stats: pair.all,
                     seasonStats: pair.season,

@@ -90,9 +90,14 @@ final class HomepageController: RouteCollection {
     private func findLeague(byCode code: String, db: Database) -> EventLoopFuture<League> {
         return League.query(on: db)
             .filter(\League.$code == code)
-            .filter(\League.$visibility == true)
             .first()
             .unwrap(or: Abort(.notFound, reason: "League not found"))
+            .flatMapThrowing { league in
+                guard PublicHomepageAccess.allows(code: league.code, visibility: league.visibility) else {
+                    throw Abort(.notFound, reason: "League not found")
+                }
+                return league
+            }
     }
 
     private func fetchTeams(for league: League, db: Database) -> EventLoopFuture<[Team]> {
@@ -430,13 +435,13 @@ final class HomepageController: RouteCollection {
                 try emailController.sendWelcomeMail(req: req, recipient: recipient, registration: registration).whenComplete { result in
                     switch result {
                     case .success:
-                        print("Welcome email sent successfully to \(recipient)")
+                        req.logger.info("Registration welcome email sent")
                     case .failure(let error):
-                        print("Failed to send welcome email to \(recipient): \(error)")
+                        req.logger.warning("Registration welcome email failed: \(error.localizedDescription)")
                     }
                 }
             } catch {
-                print("Failed to initiate sending welcome email to \(recipient): \(error)")
+                req.logger.warning("Failed to initiate registration welcome email: \(error.localizedDescription)")
             }
         }
     }
