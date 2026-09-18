@@ -15,7 +15,7 @@ extension AppController {
     /// /app/auth/login
     /// Uses `User.authenticator()` to authenticate by email/password and returns a `NewSession`.
     func setupAuthRoutes(on route: RoutesBuilder) throws {
-        let auth = route.grouped("auth")
+        let auth = route.grouped("auth").grouped(ProtectedResponseMiddleware())
 
         // POST /app/auth/login
         let loginRoute = auth.grouped(User.authenticator())
@@ -42,11 +42,12 @@ extension AppController {
                 .all()
         }
         .flatMapThrowing { teams in
-            // 3) Build AppSession including full Team models
+            // 3) Build an allowlisted session payload. Full Team models contain
+            // credentials and administrative contact data and must not be encoded.
             try AppSession(
                 token: token.value,
                 user: user.asPublic(),
-                teams: teams
+                teams: teams.map { $0.asAppSessionTeam() }
             )
         }
     }

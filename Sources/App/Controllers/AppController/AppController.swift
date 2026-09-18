@@ -25,35 +25,45 @@ final class AppController: RouteCollection {
 
     func setupRoutes(on app: RoutesBuilder) throws {
         let route = app.grouped(PathComponent(stringLiteral: path))
-        // MARK: - AUTH ROUTES
+
+        // Login and the first account-verification step are the only anonymous
+        // routes in the application namespace.
         try setupAuthRoutes(on: route)
+        setupPublicTeamRegistrationRoutes(on: route)
+
+        let authenticated = route.grouped(
+            Token.authenticator(),
+            User.guardMiddleware(),
+            ProtectedResponseMiddleware()
+        )
+
         // MARK: - SEARCH ROUTES
-        try setupSearchRoutes(on: route)
-        try setupChatRoutes(on: route)
-        setupMatchRoutes(on: route)
-        setupSponsorRoutes(on: route)
-        setupTeamRegistrationRoutes(on: route)
+        try setupSearchRoutes(on: authenticated)
+        try setupChatRoutes(on: authenticated)
+        setupMatchRoutes(on: authenticated)
+        setupSponsorRoutes(on: authenticated)
+        setupTeamRegistrationRoutes(on: authenticated)
         // MARK: - TEAM ROUTES
-        setupTeamRoutes(on: route)
+        setupTeamRoutes(on: authenticated)
         // MARK: - LEAGUE ROUTES
-        setupLeagueRoutes(on: route)
+        setupLeagueRoutes(on: authenticated)
         // MARK: - PLAYER ROUTES
-        setupPlayerRoutes(on: route) 
+        setupPlayerRoutes(on: authenticated)
         // MARK: - NEWS ROUTES
-        setupNewsRoutes(on: route)
+        setupNewsRoutes(on: authenticated)
         // MARK: - STADIUM ROUTES
-        setupStadiumRoutes(on: route)
+        setupStadiumRoutes(on: authenticated)
         // MARK: PUSH NOTIFICATIONS
-        setupPushRoutes(on: route)
-        setupTransferRoutes(on: route)
+        setupPushRoutes(on: authenticated)
+        setupTransferRoutes(on: authenticated)
         // MARK: 💸 Team invoices (Rechnungen)
-        setupInvoiceRoutes(on: route)
-        setupTransferSettingsRoutes(on: route)
-        setupLeaderboardRoutes(on: route)
-        setupFeeRoutes(on: route)
+        setupInvoiceRoutes(on: authenticated)
+        setupTransferSettingsRoutes(on: authenticated)
+        setupLeaderboardRoutes(on: authenticated)
+        setupFeeRoutes(on: authenticated)
         
-        setupFollowRoutes(on: route)
-        setupVotingRoutes(on: route)
+        setupFollowRoutes(on: authenticated)
+        setupVotingRoutes(on: authenticated)
         
     }
 

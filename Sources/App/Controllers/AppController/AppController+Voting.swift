@@ -26,7 +26,8 @@ extension AppController {
         vote.post("uncast", use: uncastVote)
 
         vote.get("match", ":matchid", "counts", use: getVoteCountsForMatch)
-        vote.get("match", ":matchid", "all", use: getAllVotesForMatch)
+        vote.grouped(AdminOnlyMiddleware())
+            .get("match", ":matchid", "all", use: getAllVotesForMatch)
 
         vote.get("match", ":matchid", "hasVoted", ":deviceid", use: hasDeviceVotedOnMatch)
     }

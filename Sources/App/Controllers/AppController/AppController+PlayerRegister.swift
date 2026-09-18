@@ -102,7 +102,11 @@ extension AppController {
 
         // --- Authenticate and upload both files ---
 
-        return FeeService.load(req).flatMap { fees in
+        return req.eventLoop.makeFutureWithTask {
+            _ = try await ApplicationAccess.requireTeam(payload.teamID, req: req)
+        }.flatMap {
+          FeeService.load(req)
+        }.flatMap { fees in
             return firebaseManager.authenticate().flatMap {
                 let imgFuture = firebaseManager.uploadFile(
                     file: payload.playerImage,

@@ -147,11 +147,12 @@ extension AppController {
     route.post("device", "register", use: registerDevice)
     route.post("device", "unbind", use: unbindDevice)
 
-    route.post("notifications", "send", use: sendNotification)
-    route.post("notifications", "sendToTokens", use: sendToTokens)
-    route.post("notifications", "broadcast", use: broadcastNotification)
-    setupDirectTokenPushRoute(on: route)
-    setupPushManagerRoutes(on: route)
+    let admin = route.grouped(AdminOnlyMiddleware())
+    admin.post("notifications", "send", use: sendNotification)
+    admin.post("notifications", "sendToTokens", use: sendToTokens)
+    admin.post("notifications", "broadcast", use: broadcastNotification)
+    setupDirectTokenPushRoute(on: admin)
+    setupPushManagerRoutes(on: admin)
 
   }
 
@@ -179,7 +180,9 @@ extension AppController {
     }
 
     if let teamId = resolvedTeamId,
-       try await Team.find(teamId, on: req.db) == nil {
+       let team = try await Team.find(teamId, on: req.db) {
+      try ApplicationAccess.authorize(team: team, req: req)
+    } else if resolvedTeamId != nil {
       throw Abort(.badRequest, reason: "Unknown teamId.")
     }
 

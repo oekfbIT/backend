@@ -9,8 +9,6 @@ import Vapor
 import Smtp
 import NIO
 
-let vertragLink = "https://firebasestorage.googleapis.com/v0/b/oekfbbucket.appspot.com/o/adminfiles%2FOEKFB%20Anmelde%20Vertrag.pdf.pdf?alt=media&token=23ab12e2-f360-48f5-b4f9-aa1cb3d64305"
-
 final class EmailController {
     private var smtpHost: String { Environment.get("SMTP_HOST") ?? "smtp.easyname.com" }
     private var smtpPort: Int { Int(Environment.get("SMTP_PORT") ?? "587") ?? 587 }
@@ -204,7 +202,16 @@ final class EmailController {
     func sendWelcomeMail(req: Request, recipient: String, registration: TeamRegistration?) throws -> EventLoopFuture<HTTPStatus> {
         // Apply the SMTP configuration
         try applySMTPConfig(req)
-        guard let registrationID = registration?.id else {
+        guard
+            let configuredContractURL = Environment.get("REGISTRATION_CONTRACT_URL"),
+            let contractURL = URL(string: configuredContractURL),
+            contractURL.scheme == "https",
+            contractURL.host != nil
+        else {
+            req.logger.error("REGISTRATION_CONTRACT_URL is not configured with a valid HTTPS URL.")
+            throw Abort(.internalServerError, reason: "Registration contract is not configured")
+        }
+        guard registration?.id != nil else {
             throw Abort(.notFound)
         }
 
@@ -226,7 +233,7 @@ final class EmailController {
         </p>
 
         <ul>
-          <li>Ausweiskopie beider Personen am Vertrag (<a href="\(vertragLink)" style="font-size: 16px; color: #007bff; text-decoration: none;">Vertrag downloaden</a>)</li>
+          <li>Ausweiskopie beider Personen am Vertrag (<a href="\(contractURL.absoluteString)" style="font-size: 16px; color: #007bff; text-decoration: none;">Vertrag downloaden</a>)</li>
           <li>Logo des Teams</li>
           <li>Bilder der Trikots (Heim und Auswärts komplett inklusive Stutzen)</li>
         </ul>

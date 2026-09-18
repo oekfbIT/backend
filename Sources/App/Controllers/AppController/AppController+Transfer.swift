@@ -12,6 +12,20 @@ import Fluent
 // MARK: - Transfer Endpoints (App)
 extension AppController {
 
+    struct TransferPlayerOption: Content {
+        let id: UUID?
+        let sid: String
+        let image: String?
+        let name: String
+        let number: String
+        let team: UUID?
+        let nationality: String
+        let position: String
+        let eligibility: PlayerEligibility
+        let status: Bool?
+        let isCaptain: Bool?
+    }
+
     func setupTransferRoutes(on root: RoutesBuilder) {
         let transfers = root.grouped("transfer")
 
@@ -95,6 +109,7 @@ extension AppController {
         guard let targetTeam = try await Team.find(dto.team, on: req.db) else {
             throw Abort(.notFound, reason: "Target team not found.")
         }
+        try ApplicationAccess.authorize(team: targetTeam, req: req)
 
         let transfer = Transfer(
             team: dto.team,
@@ -133,6 +148,10 @@ extension AppController {
         else {
             throw Abort(.notFound, reason: "Transfer not found.")
         }
+        guard let originID = transfer.origin else {
+            throw Abort(.forbidden, reason: "Transfer has no originating team.")
+        }
+        _ = try await ApplicationAccess.requireTeam(originID, req: req)
 
         transfer.status = .abgelehnt
         try await transfer.save(on: req.db)
@@ -140,7 +159,7 @@ extension AppController {
     }
 
     // MARK: - GET /app/transfer/confirm/:id
-    func confirmTransfer(req: Request) async throws -> Player {
+    func confirmTransfer(req: Request) async throws -> Player.Public {
         guard let settings = try await TransferSettings.query(on: req.db).first(),
               settings.isTransferOpen == true
         else {
@@ -153,6 +172,10 @@ extension AppController {
         else {
             throw Abort(.notFound, reason: "Transfer or player not found.")
         }
+        guard let originID = transfer.origin ?? player.$team.id else {
+            throw Abort(.forbidden, reason: "Transfer has no originating team.")
+        }
+        _ = try await ApplicationAccess.requireTeam(originID, req: req)
 
         transfer.origin = player.$team.id
         transfer.status = .angenommen
@@ -163,7 +186,7 @@ extension AppController {
         try await transfer.save(on: req.db)
         try await player.save(on: req.db)
 
-        return player
+        return player.asPublic()
     }
 
     // MARK: - GET /app/transfer/team/:teamID
@@ -171,6 +194,7 @@ extension AppController {
         guard let teamID = req.parameters.get("teamID", as: UUID.self) else {
             throw Abort(.badRequest, reason: "Invalid team ID.")
         }
+        _ = try await ApplicationAccess.requireTeam(teamID, req: req)
 
         return try await Transfer.query(on: req.db)
             .filter(\.$team == teamID)
@@ -182,6 +206,7 @@ extension AppController {
         guard let playerID = req.parameters.get("playerID", as: UUID.self) else {
             throw Abort(.badRequest, reason: "Invalid player ID.")
         }
+        _ = try await ApplicationAccess.requirePlayer(playerID, req: req)
 
         return try await Transfer.query(on: req.db)
             .filter(\.$player == playerID)
@@ -189,7 +214,7 @@ extension AppController {
     }
 
     // MARK: - GET /app/transfer/options/:teamID
-    func getTransfersOptions(req: Request) async throws -> [Player] {
+    func getTransfersOptions(req: Request) async throws -> [TransferPlayerOption] {
         guard let settings = try await TransferSettings.query(on: req.db).first(),
               settings.isTransferOpen == true
         else {
@@ -199,6 +224,7 @@ extension AppController {
         guard let teamID = req.parameters.get("teamID", as: UUID.self) else {
             throw Abort(.badRequest, reason: "Invalid team ID.")
         }
+        _ = try await ApplicationAccess.requireTeam(teamID, req: req)
 
         return try await Player.query(on: req.db)
             .filter(\.$team.$id != teamID)
@@ -210,6 +236,21 @@ extension AppController {
             .filter(\.$transferred != true)
             .limit(200)
             .all()
+            .map {
+                TransferPlayerOption(
+                    id: $0.id,
+                    sid: $0.sid,
+                    image: $0.image,
+                    name: $0.name,
+                    number: $0.number,
+                    team: $0.$team.id,
+                    nationality: $0.nationality,
+                    position: $0.position,
+                    eligibility: $0.eligibility,
+                    status: $0.status,
+                    isCaptain: $0.isCaptain
+                )
+            }
     }
     
     // MARK: - GET /app/transfer/isOpen

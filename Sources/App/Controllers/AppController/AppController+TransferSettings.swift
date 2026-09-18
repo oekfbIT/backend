@@ -23,7 +23,7 @@ extension AppController {
         settings.get("settings", use: getFirstTransferSettings)
 
         // GET /transferSettings/toggle
-        settings.get("toggle", use: toggleIsTransferOpen)
+        settings.grouped(AdminOnlyMiddleware()).get("toggle", use: toggleIsTransferOpen)
 
         // GET /transferSettings/isDressChangeOpen
         settings.get("isDressChangeOpen", use: isDressChangeOpen)

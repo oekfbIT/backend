@@ -40,25 +40,32 @@ extension AppController {
     func setupChatRoutes(on route: RoutesBuilder) throws {
         // base: /app/conversation
         let conversation = route.grouped("conversation")
+        let admin = conversation.grouped(AdminOnlyMiddleware())
 
         // CRUD + index
         conversation.post(use: createConversationApp)
-        conversation.get(use: indexConversationsApp)
-        conversation.get(":id", use: getConversationByIDApp)
-        conversation.delete(":id", use: deleteConversationApp)
-        conversation.patch(":id", use: updateConversationApp)
+        admin.get(use: indexConversationsApp)
+        conversation.grouped(":id")
+            .grouped(ConversationParameterAccessMiddleware(parameter: "id"))
+            .get(use: getConversationByIDApp)
+        admin.delete(":id", use: deleteConversationApp)
+        admin.patch(":id", use: updateConversationApp)
 
         // team-specific
-        conversation.get("team", ":teamId", use: getConversationsForTeamApp)
+        conversation.grouped("team", ":teamId")
+            .grouped(TeamParameterAccessMiddleware(parameter: "teamId"))
+            .get(use: getConversationsForTeamApp)
 
         // all with team info (if needed)
-        conversation.get("teams", use: getAllConversationsWithTeamApp)
+        admin.get("teams", use: getAllConversationsWithTeamApp)
 
         // ✅ ONE universal message route (JSON OR multipart)
-        conversation.post(":id", "message", use: sendMessageUniversalApp)
+        conversation.grouped(":id")
+            .grouped(ConversationParameterAccessMiddleware(parameter: "id"))
+            .post("message", use: sendMessageUniversalApp)
 
         conversation.post("message", ":messageId", "read", use: markMessageAsReadApp)
-        conversation.get("status", ":conversationID", use: toggleStatusApp)
+        admin.get("status", ":conversationID", use: toggleStatusApp)
     }
 
     /// GET /app/conversation/team/:teamId
@@ -130,6 +137,10 @@ extension AppController {
         }
 
         let payload = try req.content.decode(SendMessagePayload.self)
+        let user = try req.auth.require(User.self)
+        guard user.type == .admin || payload.senderTeam else {
+            throw Abort(.forbidden, reason: "Only an administrator can send an administrator message.")
+        }
 
         let trimmedText = (payload.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let hasFile = (payload.file?.data.readableBytes ?? 0) > 0
@@ -249,23 +260,26 @@ extension AppController {
 
     /// POST /app/conversation/message/:messageId/read
     /// Mark a single message as read.
-    func markMessageAsReadApp(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+    func markMessageAsReadApp(req: Request) async throws -> HTTPStatus {
         guard let messageID = req.parameters.get("messageId", as: UUID.self) else {
             throw Abort(.badRequest)
         }
 
-        return Conversation.query(on: req.db)
+        let conversations = try await Conversation.query(on: req.db)
             .all()
-            .flatMap { conversations in
-                if let conversationIndex = conversations.firstIndex(where: { $0.messages.contains(where: { $0.id == messageID }) }) {
-                    var conversation = conversations[conversationIndex]
-                    if let messageIndex = conversation.messages.firstIndex(where: { $0.id == messageID }) {
-                        conversation.messages[messageIndex].read = true
-                        return conversation.save(on: req.db).transform(to: .ok)
-                    }
-                }
-                return req.eventLoop.makeFailedFuture(Abort(.notFound))
-            }
+        guard let conversation = conversations.first(where: {
+            $0.messages.contains(where: { $0.id == messageID })
+        }), let messageIndex = conversation.messages.firstIndex(where: { $0.id == messageID }) else {
+            throw Abort(.notFound)
+        }
+        guard let teamID = conversation.$team.id else {
+            throw Abort(.forbidden, reason: "Conversation has no owning team.")
+        }
+        _ = try await ApplicationAccess.requireTeam(teamID, req: req)
+
+        conversation.messages[messageIndex].read = true
+        try await conversation.save(on: req.db)
+        return .ok
     }
 
     // MARK: - CRUD + status (APP)
@@ -290,7 +304,11 @@ extension AppController {
         // ✅ IMPORTANT: messages must be initialized (your DB stores JSON array)
         conversation.messages = []
 
-        return conversation.create(on: req.db).flatMap {
+        return req.eventLoop.makeFutureWithTask {
+            _ = try await ApplicationAccess.requireTeam(payload.teamId, req: req)
+        }.flatMap {
+            conversation.create(on: req.db)
+        }.flatMap {
             conversation.$team.load(on: req.db).map {
                 let teamInfo: TeamInfo? = {
                     if let team = conversation.team,

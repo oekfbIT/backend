@@ -39,10 +39,143 @@ final class AppTests: XCTestCase {
         defer { app.shutdown() }
         try routes(app)
 
-        for path in ["admin/sponsors", "admin/legal/privacy"] {
+        let id = UUID().uuidString
+        let protectedPaths = [
+            "admin/sponsors",
+            "admin/legal/privacy",
+            "teams",
+            "players",
+            "users",
+            "registrations",
+            "referees",
+            "people-events",
+            "sendTestEmail",
+            "scraper/league/\(id)",
+            "postpone",
+            "payments/config",
+            "app/player/\(id)",
+            "app/team/\(id)",
+            "app/conversation",
+            "app/transferSettings/toggle"
+        ]
+
+        for path in protectedPaths {
             try app.test(.GET, path, afterResponse: { res in
-                XCTAssertEqual(res.status, .unauthorized, "Expected /\(path) to require an admin bearer token")
+                XCTAssertEqual(res.status, .unauthorized, "Expected /\(path) to require a bearer token")
             })
+        }
+
+        try app.test(.POST, "admin/uploads", afterResponse: { res in
+            XCTAssertEqual(res.status, .unauthorized, "Expected /admin/uploads to require an administrator bearer token")
+        })
+    }
+
+    func testPublicResponseDTOsDoNotEncodeSensitiveModelFields() throws {
+        func json<T: Encodable>(_ value: T) throws -> String {
+            String(decoding: try JSONEncoder().encode(value), as: UTF8.self)
+        }
+
+        let userID = UUID()
+        let user = User(
+            id: userID,
+            userID: userID.uuidString,
+            type: .team,
+            firstName: "Team",
+            lastName: "Owner",
+            email: "owner@example.com",
+            tel: "+431234",
+            passwordHash: "SECRET_PASSWORD_HASH"
+        )
+        let userJSON = try json(user.asPublic())
+        XCTAssertFalse(userJSON.contains("passwordHash"))
+        XCTAssertFalse(userJSON.contains("SECRET_PASSWORD_HASH"))
+
+        let referee = Referee(
+            id: UUID(),
+            userId: userID,
+            balance: 999,
+            name: "Referee",
+            identification: "SECRET_ID_DOCUMENT",
+            image: "image.jpg",
+            nationality: "AT",
+            phone: "SECRET_PHONE"
+        )
+        let refereeJSON = try json(referee.asPublic())
+        for forbidden in ["identification", "SECRET_ID_DOCUMENT", "phone", "SECRET_PHONE", "balance"] {
+            XCTAssertFalse(refereeJSON.contains(forbidden))
+        }
+
+        let trainerJSON = try json(Trainer(
+            name: "Trainer",
+            email: "SECRET_COACH_EMAIL",
+            image: "coach.jpg"
+        ).asPublic())
+        XCTAssertFalse(trainerJSON.contains("email"))
+        XCTAssertFalse(trainerJSON.contains("SECRET_COACH_EMAIL"))
+
+        let player = Player(
+            id: UUID(),
+            sid: "42",
+            image: "player.jpg",
+            team_oeid: "private-external-id",
+            email: "SECRET_PLAYER_EMAIL",
+            balance: 500,
+            name: "Player",
+            number: "7",
+            birthday: "2000-01-01",
+            teamID: UUID(),
+            nationality: "AT",
+            position: "FW",
+            eligibility: .Spielberechtigt,
+            registerDate: "2020-01-01",
+            identification: "SECRET_PLAYER_ID",
+            status: true
+        )
+        let playerJSON = try json(player.asPublic())
+        for forbidden in ["email", "SECRET_PLAYER_EMAIL", "identification", "SECRET_PLAYER_ID", "balance"] {
+            XCTAssertFalse(playerJSON.contains(forbidden))
+        }
+
+        let transferOption = AppController.TransferPlayerOption(
+            id: player.id,
+            sid: player.sid,
+            image: player.image,
+            name: player.name,
+            number: player.number,
+            team: player.$team.id,
+            nationality: player.nationality,
+            position: player.position,
+            eligibility: player.eligibility,
+            status: player.status,
+            isCaptain: player.isCaptain
+        )
+        let optionJSON = try json(transferOption)
+        for forbidden in ["birthday", "registerDate", "team_oeid", "bank", "email", "identification", "balance"] {
+            XCTAssertFalse(optionJSON.contains(forbidden))
+        }
+
+        let invoice = Rechnung(
+            id: UUID(),
+            team: UUID(),
+            teamName: "Team",
+            number: "INV-1",
+            summ: 10,
+            topay: 10,
+            kennzeichen: "Test"
+        )
+        invoice.stripeDeposit = StripeDepositDetails(
+            topUpId: "SECRET_TOPUP_ID",
+            paymentIntentId: "SECRET_PAYMENT_INTENT",
+            chargeId: "SECRET_CHARGE_ID",
+            amountMinor: 1_000,
+            currency: "eur",
+            paidAt: Date(),
+            balanceAfter: 10,
+            livemode: true
+        )
+        let invoiceJSON = try json(invoice.asPublic())
+        for forbidden in ["stripeDeposit", "SECRET_TOPUP_ID", "SECRET_PAYMENT_INTENT", "SECRET_CHARGE_ID"] {
+            XCTAssertFalse(invoiceJSON.contains(forbidden))
         }
     }
 
@@ -60,6 +193,7 @@ final class AppTests: XCTestCase {
             XCTAssertTrue(body.contains("title: OEKFB Backend API"))
             XCTAssertTrue(body.contains("'/status':"))
             XCTAssertTrue(body.contains("'/admin/auth/login':"))
+            XCTAssertTrue(body.contains("'/admin/uploads':"))
             XCTAssertTrue(body.contains("'/app/auth/login':"))
             XCTAssertTrue(body.contains("'/app/player/{playerID}':"))
             XCTAssertTrue(body.contains("'/app/player/{playerID}/email':"))
@@ -71,6 +205,23 @@ final class AppTests: XCTestCase {
             XCTAssertTrue(body.contains("name: 'Guest List'"))
             XCTAssertTrue(body.contains("bearerAuth:"))
             XCTAssertTrue(body.contains("basicAuth:"))
+
+            func pathBlock(_ path: String) -> String {
+                let marker = "  '\(path)':"
+                guard let start = body.range(of: marker) else { return "" }
+                let tail = body[start.lowerBound...]
+                let next = tail.dropFirst(marker.count).range(of: "\n  '")
+                return next.map { String(tail[..<$0.lowerBound]) } ?? String(tail)
+            }
+
+            XCTAssertTrue(pathBlock("/teams").contains("- bearerAuth: []"))
+            XCTAssertTrue(pathBlock("/players").contains("- bearerAuth: []"))
+            XCTAssertTrue(pathBlock("/app/player/{playerID}").contains("- bearerAuth: []"))
+            XCTAssertTrue(pathBlock("/admin/auth/login").contains("- basicAuth: []"))
+            XCTAssertTrue(pathBlock("/admin/uploads").contains("- bearerAuth: []"))
+            XCTAssertTrue(pathBlock("/app/auth/login").contains("- basicAuth: []"))
+            XCTAssertFalse(pathBlock("/status").contains("security:"))
+            XCTAssertFalse(pathBlock("/client/home/league/{code}").contains("security:"))
         })
     }
 

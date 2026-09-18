@@ -6,6 +6,7 @@ extension ClientController {
     func fetchLeagueByCode(_ code: String, db: Database) -> EventLoopFuture<League> {
         League.query(on: db)
             .filter(\.$code == code)
+            .filter(\.$visibility == true)
             .first()
             .unwrap(or: Abort(.notFound, reason: "League not found"))
     }
@@ -53,17 +54,13 @@ extension ClientController {
                     id: player.id,
                     sid: player.sid,
                     image: player.image,
-                    team_oeid: player.team_oeid,
                     name: player.name,
                     number: player.number,
-                    birthday: player.birthday,
                     nationality: player.nationality,
                     position: player.position,
                     eligibility: player.eligibility,
-                    registerDate: player.registerDate,
                     status: player.status,
-                    isCaptain: player.isCaptain,
-                    bank: player.bank
+                    isCaptain: player.isCaptain
                 )
         }
         return db.eventLoop.makeSucceededFuture(result)

@@ -138,7 +138,7 @@ extension Player {
         var name: String
         var number: String
         var birthday: String
-        var team: Team?
+        var team: UUID?
         var nationality: String
         var position: String
         var eligibility: PlayerEligibility
@@ -158,7 +158,7 @@ extension Player {
             name: self.name,
             number: self.number,
             birthday: self.birthday,
-            team: self.team,
+            team: self.$team.id,
             nationality: self.nationality,
             position: self.position,
             eligibility: self.eligibility,

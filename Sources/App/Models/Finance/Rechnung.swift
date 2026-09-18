@@ -94,6 +94,45 @@ final class Rechnung: Model, Content, Codable {
     }
 }
 
+extension Rechnung {
+    /// Team-facing invoice representation. Stripe intent, charge and top-up
+    /// identifiers are deliberately omitted; administrators retain the full
+    /// model through the protected admin endpoints.
+    struct Public: Content {
+        let id: UUID?
+        let teamID: UUID?
+        let status: RechnungStatus
+        let teamName: String
+        let number: String
+        let summ: Double
+        let topay: Double?
+        let previousBalance: Double?
+        let kennzeichen: String
+        let dueDate: String?
+        let created: Date?
+        let paymentSource: String?
+        let appliedFee: AppliedFee?
+    }
+
+    func asPublic() -> Public {
+        Public(
+            id: id,
+            teamID: $team.id,
+            status: status,
+            teamName: teamName,
+            number: number,
+            summ: summ,
+            topay: topay,
+            previousBalance: previousBalance,
+            kennzeichen: kennzeichen,
+            dueDate: dueDate,
+            created: created,
+            paymentSource: paymentSource,
+            appliedFee: appliedFee
+        )
+    }
+}
+
 extension Rechnung: Mergeable {
     func merge(from other: Rechnung) -> Rechnung {
         var merged = self

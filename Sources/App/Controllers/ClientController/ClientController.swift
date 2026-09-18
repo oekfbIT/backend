@@ -77,7 +77,9 @@ final class ClientController: RouteCollection {
     }
     // MARK: League Selection
     func fetchLeagueSelection(req: Request) throws -> EventLoopFuture<[PublicLeagueOverview]> {
-        return League.query(on: req.db).all().mapEach { league in
+        return League.query(on: req.db)
+            .filter(\.$visibility == true)
+            .all().mapEach { league in
             PublicLeagueOverview(
                 id: league.id,
                 state: league.state,
@@ -122,7 +124,15 @@ final class ClientController: RouteCollection {
                     teams: publicTeams,
                     news: newsItems,
                     upcoming: upcomingMatchesShort,
-                    league: league // Pass the actual league object here
+                    league: PublicLeagueOverview(
+                        id: league.id,
+                        state: league.state,
+                        code: league.code,
+                        logo: league.logo,
+                        teamcount: league.teamcount,
+                        name: league.name,
+                        visibility: league.visibility
+                    )
                 )
             }
         }
@@ -264,7 +274,7 @@ final class ClientController: RouteCollection {
                             PublicMatch(
                                 id: match.id,
                                 details: match.details,
-                                referee: match.$referee.wrappedValue,
+                                referee: match.$referee.wrappedValue?.asPublic(),
                                 season: match.$season.wrappedValue,
                                 homeBlanket: self.publicBlanket(match.homeBlanket, team: match.homeTeam),
                                 awayBlanket: self.publicBlanket(match.awayBlanket, team: match.awayTeam),
@@ -347,7 +357,7 @@ final class ClientController: RouteCollection {
                 guard let coach = team?.coach else {
                     throw Abort(.notFound, reason: "Coach not found for the given team")
                 }
-                return coach
+                return coach.asPublic()
             }
             .encodeResponse(for: req) // Ensures proper encoding of the response
     }
@@ -471,17 +481,13 @@ extension ClientController {
                         id: player.id,
                         sid: player.sid,
                         image: player.image,
-                        team_oeid: player.team_oeid,
                         name: player.name,
                         number: player.number,
-                        birthday: player.birthday,
                         nationality: player.nationality,
                         position: player.position,
                         eligibility: player.eligibility,
-                        registerDate: player.registerDate,
                         status: player.status,
-                        isCaptain: player.isCaptain,
-                        bank: player.bank
+                        isCaptain: player.isCaptain
                     )
                 }
             }
@@ -528,7 +534,7 @@ extension ClientController {
                     foundationYear: team.foundationYear,
                     membershipSince: team.membershipSince,
                     averageAge: team.averageAge,
-                    coach: team.coach,
+                    coach: team.coach?.asPublic(),
                     captain: team.captain,
                     trikot: team.trikot,
                     players: players,
@@ -559,17 +565,13 @@ extension ClientController {
                         id: player.id,
                         sid: player.sid,
                         image: player.image,
-                        team_oeid: player.team_oeid,
                         name: player.name,
                         number: player.number,
-                        birthday: player.birthday,
                         nationality: player.nationality,
                         position: player.position,
                         eligibility: player.eligibility,
-                        registerDate: player.registerDate,
                         status: player.status,
-                        isCaptain: player.isCaptain,
-                        bank: player.bank
+                        isCaptain: player.isCaptain
                     )
                 }
             }
@@ -594,7 +596,7 @@ extension ClientController {
                     foundationYear: team.foundationYear,
                     membershipSince: team.membershipSince,
                     averageAge: team.averageAge,
-                    coach: team.coach,
+                    coach: team.coach?.asPublic(),
                     captain: team.captain,
                     trikot: team.trikot,
                     players: players,
@@ -732,18 +734,14 @@ extension ClientController {
                 id: player.id,
                 sid: player.sid,
                 image: player.image,
-                team_oeid: player.team_oeid,
                 name: player.name,
                 number: player.number,
-                birthday: player.birthday,
                 team: player.team?.asPublicTeam(),
                 nationality: player.nationality,
                 position: player.position,
                 eligibility: player.eligibility,
-                registerDate: player.registerDate,
                 status: player.status,
                 isCaptain: player.isCaptain,
-                bank: player.bank,
                 allstats: stats.all,
                 seasonstats: stats.season
             )
@@ -834,7 +832,10 @@ extension ClientController {
             throw Abort(.badRequest, reason: "Invalid or missing league ID")
         }
 
-        return League.find(leagueID, on: req.db)
+        return League.query(on: req.db)
+            .filter(\.$id == leagueID)
+            .filter(\.$visibility == true)
+            .first()
             .unwrap(or: Abort(.notFound, reason: "League not found"))
             .map { league in
                 PublicLeagueOverview(

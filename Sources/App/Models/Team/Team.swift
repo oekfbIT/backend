@@ -305,8 +305,8 @@ extension Team {
             foundationYear: self.foundationYear,
             membershipSince: self.membershipSince,
             averageAge: self.averageAge,
-            coach: self.coach,
-            altCoach: self.altCoach,
+            coach: self.coach?.asPublic(),
+            altCoach: self.altCoach?.asPublic(),
             captain: self.captain,
             trikot: self.trikot,
             stats: nil

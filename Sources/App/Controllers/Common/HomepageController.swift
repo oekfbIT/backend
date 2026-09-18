@@ -90,6 +90,7 @@ final class HomepageController: RouteCollection {
     private func findLeague(byCode code: String, db: Database) -> EventLoopFuture<League> {
         return League.query(on: db)
             .filter(\League.$code == code)
+            .filter(\League.$visibility == true)
             .first()
             .unwrap(or: Abort(.notFound, reason: "League not found"))
     }
@@ -204,17 +205,13 @@ final class HomepageController: RouteCollection {
                                 id: p.id,
                                 sid: p.sid,
                                 image: p.image,
-                                team_oeid: p.team_oeid,
                                 name: p.name,
                                 number: p.number,
-                                birthday: p.birthday,
                                 nationality: p.nationality,
                                 position: p.position,
                                 eligibility: p.eligibility,
-                                registerDate: p.registerDate,
                                 status: p.status,
-                                isCaptain: p.isCaptain,
-                                bank: p.bank
+                                isCaptain: p.isCaptain
                             )
                         }
                     }
@@ -234,7 +231,7 @@ final class HomepageController: RouteCollection {
                         foundationYear: team.foundationYear,
                         membershipSince: team.membershipSince,
                         averageAge: team.averageAge,
-                        coach: team.coach,
+                        coach: team.coach?.asPublic(),
                         captain: team.captain,
                         trikot: team.trikot,
                         players: publicPlayers,
@@ -259,10 +256,10 @@ final class HomepageController: RouteCollection {
                     PublicMatch(
                         id: match.id,
                         details: match.details,
-                        referee: match.$referee.wrappedValue,
+                        referee: match.$referee.wrappedValue?.asPublic(),
                         season: match.$season.wrappedValue,
-                        homeBlanket: match.homeBlanket,
-                        awayBlanket: match.awayBlanket,
+                        homeBlanket: match.homeBlanket?.asPublic(),
+                        awayBlanket: match.awayBlanket?.asPublic(),
                         events: match.events,
                         score: match.score,
                         status: match.status,
@@ -289,10 +286,10 @@ final class HomepageController: RouteCollection {
                     PublicMatch(
                         id: match.id,
                         details: match.details,
-                        referee: match.$referee.wrappedValue,
+                        referee: match.$referee.wrappedValue?.asPublic(),
                         season: match.$season.wrappedValue,
-                        homeBlanket: match.homeBlanket,
-                        awayBlanket: match.awayBlanket,
+                        homeBlanket: match.homeBlanket?.asPublic(),
+                        awayBlanket: match.awayBlanket?.asPublic(),
                         events: match.events,
                         score: match.score,
                         status: match.status,
@@ -316,18 +313,14 @@ final class HomepageController: RouteCollection {
                         id: player.id,
                         sid: player.sid,
                         image: player.image,
-                        team_oeid: player.team_oeid,
                         name: player.name,
                         number: player.number,
-                        birthday: player.birthday,
                         team: nil,
                         nationality: player.nationality,
                         position: player.position,
                         eligibility: player.eligibility,
-                        registerDate: player.registerDate,
                         status: player.status,
                         isCaptain: player.isCaptain,
-                        bank: player.bank,
                         allstats: pairstats.all,
                         seasonstats: pairstats.season
                     )
@@ -390,10 +383,10 @@ final class HomepageController: RouteCollection {
                             PublicMatch(
                                 id: match.id,
                                 details: match.details,
-                                referee: match.$referee.wrappedValue,
+                                referee: match.$referee.wrappedValue?.asPublic(),
                                 season: match.$season.wrappedValue,
-                                homeBlanket: match.homeBlanket,
-                                awayBlanket: match.awayBlanket,
+                                homeBlanket: match.homeBlanket?.asPublic(),
+                                awayBlanket: match.awayBlanket?.asPublic(),
                                 events: events,
                                 score: match.score,
                                 status: match.status,
@@ -570,8 +563,8 @@ struct PublicTeam: Content, Codable {
     var foundationYear: String?
     var membershipSince: String?
     var averageAge: String
-    var coach: Trainer?
-    var altCoach: Trainer?
+    var coach: PublicTrainer?
+    var altCoach: PublicTrainer?
     var captain: String?
     var trikot: Trikot
     var stats: TeamStats?
@@ -600,7 +593,7 @@ struct PublicTeamFull: Content, Codable {
     var foundationYear: String?
     var membershipSince: String?
     var averageAge: String
-    var coach: Trainer?
+    var coach: PublicTrainer?
     var captain: String?
     var trikot: Trikot
     var players: [MiniPlayer]
@@ -611,17 +604,13 @@ struct MiniPlayer: Content, Codable {
     var id: UUID?
     var sid: String
     var image: String?
-    var team_oeid: String?
     var name: String
     var number: String
-    var birthday: String
     var nationality: String
     var position: String
     var eligibility: PlayerEligibility
-    var registerDate: String
     var status: Bool?
     var isCaptain: Bool?
-    var bank: Bool?
 }
 
 
@@ -629,18 +618,14 @@ struct PublicPlayer: Content, Codable {
     var id: UUID?
     var sid: String
     var image: String?
-    var team_oeid: String?
     var name: String
     var number: String
-    var birthday: String
     var team: PublicTeam?
     var nationality: String
     var position: String
     var eligibility: PlayerEligibility
-    var registerDate: String
     var status: Bool?
     var isCaptain: Bool?
-    var bank: Bool?
     var allstats: PlayerStats?
     var seasonstats: PlayerStats?
 }
@@ -654,7 +639,7 @@ struct PublicClubPage: Content, Codable {
 struct PublicMatch: Content, Codable {
     var id: UUID?
     var details: MatchDetails
-    var referee: Referee?
+    var referee: PublicReferee?
     var season: Season?
     var homeBlanket: Blankett?
     var awayBlanket: Blankett?
@@ -664,6 +649,38 @@ struct PublicMatch: Content, Codable {
     var bericht: String?
     var firstHalfDate: Date?
     var secondHalfDate: Date?
+}
+
+struct PublicTrainer: Content, Codable {
+    let name: String
+    let image: String?
+}
+
+struct PublicReferee: Content, Codable {
+    let id: UUID?
+    let name: String?
+    let image: String?
+    let nationality: String?
+}
+
+extension Trainer {
+    func asPublic() -> PublicTrainer {
+        PublicTrainer(name: name, image: image)
+    }
+}
+
+extension Referee {
+    func asPublic() -> PublicReferee {
+        PublicReferee(id: id, name: name, image: image, nationality: nationality)
+    }
+}
+
+extension Blankett {
+    func asPublic() -> Blankett {
+        var copy = self
+        copy.coach = coach.map { Trainer(name: $0.name, email: nil, image: $0.image) }
+        return copy
+    }
 }
 
 struct PublicMatchShort: Content, Codable {

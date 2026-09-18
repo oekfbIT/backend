@@ -18,7 +18,6 @@ struct PublicSearchPlayer: Content {
     let image: String
     let name: String
     let number: String
-    let birthday: String
     let nationality: String
     let eligibility: PlayerEligibility
     let team_id: UUID?
@@ -119,7 +118,6 @@ extension ClientController {
                     image: player.image ?? "",
                     name: player.name,
                     number: player.number,
-                    birthday: player.birthday,
                     nationality: player.nationality,
                     eligibility: player.eligibility,
                     team_id: team?.id,

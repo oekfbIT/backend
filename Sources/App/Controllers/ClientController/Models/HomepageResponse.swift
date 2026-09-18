@@ -6,5 +6,5 @@ struct HomepageResponse: Codable, Content {
     var teams: [PublicTeamShort]?
     var news: [NewsItem]?
     var upcoming: [PublicMatchShort]?
-    let league: League?
+    let league: PublicLeagueOverview?
 }

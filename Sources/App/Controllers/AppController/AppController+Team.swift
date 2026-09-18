@@ -23,18 +23,20 @@ extension AppController {
         let team = root.grouped("team")
 
         team.get("sid", ":sid", use: getTeamBySID)
-        team.get(":teamID", use: getTeamByID)
-        team.get(":teamID", "fixtures", use: getFixturesByTeamID)
-        team.get(":teamID", "balance", use: getTeamBalance)
+        let ownedTeam = team.grouped(":teamID").grouped(TeamParameterAccessMiddleware(parameter: "teamID"))
+        ownedTeam.get(use: getTeamByID)
+        ownedTeam.get("fixtures", use: getFixturesByTeamID)
+        ownedTeam.get("balance", use: getTeamBalance)
+        ownedTeam.get("overdraft", use: setOverdraftLimit)
+        ownedTeam.get("overdraftInfo", use: getOverdraftInfo)
 
         // Trainer (kept as-is but grouped neatly)
-        let trainer = root.grouped("trainer")
-        trainer.put(":teamID", use: updateTeamTrainer)
-        trainer.put(":teamID", "alt", use: updateTeamAltTrainer)
-        trainer.get(":teamID", use: getTrainer)
-        trainer.get(":teamID","alt", use: getTrainer)
-        team.get(":teamID", "overdraft", use: setOverdraftLimit)
-        team.get(":teamID", "overdraftInfo", use: getOverdraftInfo)
+        let trainer = root.grouped("trainer", ":teamID")
+            .grouped(TeamParameterAccessMiddleware(parameter: "teamID"))
+        trainer.put(use: updateTeamTrainer)
+        trainer.put("alt", use: updateTeamAltTrainer)
+        trainer.get(use: getTrainer)
+        trainer.get("alt", use: getAltTrainer)
 
     }
 
@@ -74,6 +76,7 @@ extension AppController {
         else {
             throw Abort(.notFound, reason: "Team not found.")
         }
+        try ApplicationAccess.authorize(team: team, req: req)
 
         let leagueOverview = try team.league?.toAppLeagueOverview()
         ?? AppModels.AppLeagueOverview(id: UUID(), name: "Unknown", code: "", state: .wien, logo: nil)
@@ -122,6 +125,7 @@ extension AppController {
         else {
             throw Abort(.notFound, reason: "Team not found.")
         }
+        try ApplicationAccess.authorize(team: team, req: req)
 
         let leagueOverview = try team.league?.toAppLeagueOverview()
         ?? AppModels.AppLeagueOverview(id: UUID(), name: "Unknown", code: "", state: .wien, logo: nil)

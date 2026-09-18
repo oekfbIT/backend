@@ -26,7 +26,7 @@ extension AppController {
 
     // GET /app/rechnungen/team/:teamID
     /// Returns all invoices for the team, newest first.
-    func getRechnungenByTeamID(req: Request) async throws -> [Rechnung] {
+    func getRechnungenByTeamID(req: Request) async throws -> [Rechnung.Public] {
         let teamID = try req.parameters.require("teamID", as: UUID.self)
         _ = try await TeamPaymentController.team(teamID, on: req)
 
@@ -40,12 +40,12 @@ extension AppController {
             .sort(\.$created, .descending)
             .all()
 
-        return rechnungen
+        return rechnungen.map { $0.asPublic() }
     }
 
     // GET /app/rechnungen/:rechnungID
     /// Returns a single invoice by its ID.
-    func getRechnungDetailByID(req: Request) async throws -> Rechnung {
+    func getRechnungDetailByID(req: Request) async throws -> Rechnung.Public {
         let rechnungID = try req.parameters.require("rechnungID", as: UUID.self)
 
         guard let rechnung = try await Rechnung.find(rechnungID, on: req.db) else {
@@ -55,6 +55,6 @@ extension AppController {
         guard let teamID = rechnung.$team.id else { throw Abort(.notFound) }
         _ = try await TeamPaymentController.team(teamID, on: req)
 
-        return rechnung
+        return rechnung.asPublic()
     }
 }

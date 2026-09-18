@@ -79,18 +79,18 @@ extension AppController {
             season: appSeason,
             away: awayOverview,
             home: homeOverview,
-            homeBlanket: match.homeBlanket ?? Blankett(
+            homeBlanket: (match.homeBlanket ?? Blankett(
                 name: home.teamName,
                 dress: home.trikot.home,
                 logo: home.logo,
                 players: []
-            ),
-            awayBlanket: match.awayBlanket ?? Blankett(
+            )).asPublic(),
+            awayBlanket: (match.awayBlanket ?? Blankett(
                 name: away.teamName,
                 dress: away.trikot.away,
                 logo: away.logo,
                 players: []
-            ),
+            )).asPublic(),
             events: appEvents,
             status: match.status,
             firstHalfStartDate: match.firstHalfStartDate,
@@ -128,30 +128,31 @@ extension AppController {
             match.get(use: getMatchByID)
             match.get("league", use: getLeagueFromMatch)
 
-            match.get("resetGame", use: resetGame)
-            match.get("resetHalftime", use: resetHalftime)
+            let assigned = match.grouped(MatchAccessMiddleware())
+            assigned.get("resetGame", use: resetGame)
+            assigned.get("resetHalftime", use: resetHalftime)
 
-            match.post("toggle", use: toggleDress)
-            match.post("goal", use: addGoal)
-            match.post("redCard", use: addRedCard)
-            match.post("yellowCard", use: addYellowCard)
-            match.post("yellowRedCard", use: addYellowRedCard)
+            assigned.post("toggle", use: toggleDress)
+            assigned.post("goal", use: addGoal)
+            assigned.post("redCard", use: addRedCard)
+            assigned.post("yellowCard", use: addYellowCard)
+            assigned.post("yellowRedCard", use: addYellowRedCard)
 
-            match.post("homeBlankett", "addPlayer", use: addPlayerToHomeBlankett)
-            match.post("awayBlankett", "addPlayer", use: addPlayerToAwayBlankett)
+            assigned.post("homeBlankett", "addPlayer", use: addPlayerToHomeBlankett)
+            assigned.post("awayBlankett", "addPlayer", use: addPlayerToAwayBlankett)
 
-            match.delete(":playerId", "homeBlankett", "removePlayer", use: removePlayerFromHomeBlankett)
-            match.delete(":playerId", "awayBlankett", "removePlayer", use: removePlayerFromAwayBlankett)
+            assigned.delete(":playerId", "homeBlankett", "removePlayer", use: removePlayerFromHomeBlankett)
+            assigned.delete(":playerId", "awayBlankett", "removePlayer", use: removePlayerFromAwayBlankett)
 
-            match.patch("startGame", use: startGame)
-            match.patch("endFirstHalf", use: endFirstHalf)
-            match.patch("startSecondHalf", use: startSecondHalf)
-            match.patch("endGame", use: endGame)
-            match.patch("submit", use: completeGame)
-            match.patch("noShowGame", use: noShowGame)
-            match.patch("teamcancel", use: teamCancelGame)
-            match.patch("spielabbruch", use: spielabbruch)
-            match.patch("done", use: done)
+            assigned.patch("startGame", use: startGame)
+            assigned.patch("endFirstHalf", use: endFirstHalf)
+            assigned.patch("startSecondHalf", use: startSecondHalf)
+            assigned.patch("endGame", use: endGame)
+            assigned.patch("submit", use: completeGame)
+            assigned.patch("noShowGame", use: noShowGame)
+            assigned.patch("teamcancel", use: teamCancelGame)
+            assigned.patch("spielabbruch", use: spielabbruch)
+            assigned.patch("done", use: done)
 
         }
 

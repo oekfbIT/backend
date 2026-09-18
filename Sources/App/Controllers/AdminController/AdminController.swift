@@ -18,7 +18,8 @@ final class AdminController: RouteCollection {
 
         let authed = route.grouped(
             Token.authenticator(),
-            User.guardMiddleware()
+            User.guardMiddleware(),
+            ProtectedResponseMiddleware()
         )
 
         let admin = authed.grouped(AdminOnlyMiddleware())
@@ -43,6 +44,7 @@ final class AdminController: RouteCollection {
         setupAnalyticsRoutes(on: admin)
         setupPushDeviceRoutes(on: admin)
         setupFeeRoutes(on: admin)
+        setupUploadRoutes(on: admin)
 
     }
 

@@ -20,12 +20,16 @@ extension AppController {
     func setupPlayerRoutes(on root: RoutesBuilder) {
         let player = root.grouped("player")
 
-        player.get(":playerID", use: getPlayerByID)
+        let ownedPlayer = player.grouped(":playerID")
+            .grouped(PlayerParameterAccessMiddleware(parameter: "playerID"))
+        ownedPlayer.get(use: getPlayerByID)
+        ownedPlayer.put("email", use: updatePlayerEmailAddress)
         player.get("sid", ":sid", use: getPlayerBySID)
-        player.put(":playerID", "email", use: updatePlayerEmailAddress)
 
         // Backwards-compatible alias used by older app versions.
-        root.put(":playerID", "email", use: updatePlayerEmailAddress)
+        root.grouped(":playerID")
+            .grouped(PlayerParameterAccessMiddleware(parameter: "playerID"))
+            .put("email", use: updatePlayerEmailAddress)
 
         // Team registration via app
         root.post("register", "team", use: registerTeamPlayer)
@@ -46,6 +50,7 @@ extension AppController {
         guard let player = playerOptional else {
             throw Abort(.notFound, reason: "Player not found.")
         }
+        _ = try await ApplicationAccess.requirePlayer(try player.requireID(), req: req)
 
         guard let teamModel = player.team else {
             throw Abort(.notFound, reason: "Team not found for this player.")
@@ -96,6 +101,7 @@ extension AppController {
         guard let player = playerOptional else {
             throw Abort(.notFound, reason: "Player not found.")
         }
+        _ = try await ApplicationAccess.requirePlayer(try player.requireID(), req: req)
 
         guard let teamModel = player.team else {
             throw Abort(.notFound, reason: "Team not found for this player.")

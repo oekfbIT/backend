@@ -12,17 +12,14 @@ import Fluent
 
 extension AppController {
 
+    func setupPublicTeamRegistrationRoutes(on root: RoutesBuilder) {
+        let application = root.grouped("application").grouped(ProtectedResponseMiddleware())
+        application.post("request", use: requestTeamRegistration)
+        application.grouped("user", "verify").get(":code", use: verifyEmailByCode)
+    }
+
     func setupTeamRegistrationRoutes(on root: RoutesBuilder) {
         let teamregistration = root.grouped("application")
-
-        // ✅ create team-user + send verification email
-        teamregistration.post("request", use: requestTeamRegistration)
-
-        // ✅ verification route
-        let user = teamregistration.grouped("user")
-        let verify = user.grouped("verify")
-        verify.get(":code", use: verifyEmailByCode)
-        // => GET /app/application/user/verify/:code
 
         // ✅ NEW: apply -> create TeamRegistration + upload docs
         teamregistration.post("apply", use: applyTeamApplication)
@@ -45,18 +42,20 @@ extension AppController {
 
     // POST /app/application/apply
     func applyTeamApplication(req: Request) async throws -> TeamAppApplicationResponse {
-
-        // ✅ must be logged in user
-//        let user = try req.auth.require(User.self)
-//        let userId = try user.requireID()
         let input = try req.content.decode(TeamAppApplicationRequest.self)
-        let userId = input.userid
+        let authenticatedUser = try req.auth.require(User.self)
+        let authenticatedUserID = try authenticatedUser.requireID()
+        let userId = authenticatedUser.type == .admin ? input.userid : authenticatedUserID
 
-        guard let user = try await User.find(userId, on: req.db) else {
-            throw Abort(.unauthorized, reason: "User not found.")
+        guard authenticatedUser.type == .admin || input.userid == authenticatedUserID else {
+            throw Abort(.forbidden, reason: "You can only submit an application for your own account.")
         }
+        let user = authenticatedUser.type == .admin
+            ? try await User.find(userId, on: req.db)
+            : authenticatedUser
+        guard let user else { throw Abort(.unauthorized, reason: "User not found.") }
         guard user.type == .team else {
-            throw Abort(.unauthorized, reason: "Only team users can apply.")
+            throw Abort(.forbidden, reason: "Only team users can apply.")
         }
 
 
@@ -169,7 +168,7 @@ extension AppController {
     }
 
     // GET /app/application/registrations/user/:userId
-    func getTeamRegistrationsByUser(req: Request) async throws -> [TeamRegistration] {
+    func getTeamRegistrationsByUser(req: Request) async throws -> [TeamApplicationDetail] {
         guard
             let userIdParam = req.parameters.get("userId"),
             let userId = UUID(uuidString: userIdParam)
@@ -177,11 +176,14 @@ extension AppController {
             throw Abort(.badRequest, reason: "Invalid or missing userId.")
         }
 
+        try authorizeApplicationUser(userId, req: req)
+
         return try await TeamRegistration.query(on: req.db)
             .filter(\.$user == userId)
             .filter(\.$status != .completed)
             .sort(\.$dateCreated, .descending) // optional
             .all()
+            .map { $0.asApplicationDetail() }
     }
 
     // POST /app/teamregistration/request
@@ -215,8 +217,12 @@ extension AppController {
         try await user.save(on: req.db)
         let userId = try user.requireID()
 
-        // Create and store verification code
-        let code = String.randomNum(length: 6)
+        // Link tokens must not be guessable. Keep the value URL-safe so it can
+        // be embedded directly in the client verification route.
+        let code = [UInt8].random(count: 32).base64
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
         let verification = VerificationCode(
             code: code,
             userid: userId,
@@ -251,7 +257,10 @@ extension AppController {
             .sort(\.$created, .descending)
             .all()
 
-        guard let verification = matches.first else {
+        guard let verification = matches.first,
+              verification.status == .sent,
+              let created = verification.created,
+              created > Date.viennaNow.addingTimeInterval(-24 * 60 * 60) else {
             throw Abort(.badRequest, reason: "Invalid or expired verification link.")
         }
 
@@ -275,14 +284,14 @@ extension AppController {
             return .ok
         }
 
-        // mark user + all matching verifications as verified
+        // Consume only this verification record. High-entropy tokens are unique,
+        // and changing every record with the same value made legacy short-code
+        // collisions capable of verifying unrelated accounts.
         user.verified = true
         try await user.save(on: req.db)
 
-        for v in matches {
-            v.status = .verified
-            try await v.save(on: req.db)
-        }
+        verification.status = .verified
+        try await verification.save(on: req.db)
 
         return .ok
     }
@@ -294,7 +303,7 @@ extension AppController {
     }
     
     // GET /app/application/registrations/:registrationId
-    func getTeamRegistrationById(req: Request) async throws -> TeamRegistration {
+    func getTeamRegistrationById(req: Request) async throws -> TeamApplicationDetail {
         guard
             let regIdParam = req.parameters.get("registrationId"),
             let regId = UUID(uuidString: regIdParam)
@@ -306,11 +315,13 @@ extension AppController {
             throw Abort(.notFound, reason: "Registration not found.")
         }
 
-        return registration
+        try authorizeApplicationRegistration(registration, req: req)
+
+        return registration.asApplicationDetail()
     }
 
     // PATCH /app/application/registrations/:registrationId
-    func updateTeamRegistration(req: Request) async throws -> TeamRegistration {
+    func updateTeamRegistration(req: Request) async throws -> TeamApplicationDetail {
         guard
             let regIdParam = req.parameters.get("registrationId"),
             let regId = UUID(uuidString: regIdParam)
@@ -321,6 +332,9 @@ extension AppController {
         guard let registration = try await TeamRegistration.find(regId, on: req.db) else {
             throw Abort(.notFound, reason: "Registration not found.")
         }
+
+        try authorizeApplicationRegistration(registration, req: req)
+        let isAdmin = try req.auth.require(User.self).type == .admin
 
         // Branch by Content-Type
         let contentType = req.headers.contentType
@@ -343,32 +357,32 @@ extension AppController {
             if let verein = input.verein { registration.verein = verein }
 
             if let teamName = input.teamName { registration.teamName = teamName }
-            if let status = try parseStatus(input.status) { registration.status = status }
+            if isAdmin, let status = try parseStatus(input.status) { registration.status = status }
             if let bundesland = try parseBundesland(input.bundesland) { registration.bundesland = bundesland }
 
             if let refereerLink = input.refereerLink { registration.refereerLink = refereerLink }
-            if let assignedLeague = try parseUUID(input.assignedLeague, field: "assignedLeague") {
+            if isAdmin, let assignedLeague = try parseUUID(input.assignedLeague, field: "assignedLeague") {
                 registration.assignedLeague = assignedLeague
             }
 
             if let customerSignedContract = input.customerSignedContract {
                 registration.customerSignedContract = customerSignedContract
             }
-            if let adminSignedContract = input.adminSignedContract {
+            if isAdmin, let adminSignedContract = input.adminSignedContract {
                 registration.adminSignedContract = adminSignedContract
             }
             if let teamLogo = input.teamLogo {
                 registration.teamLogo = teamLogo
             }
 
-            if let paidAmount = input.paidAmount { registration.paidAmount = paidAmount }
-            if let user = try parseUUID(input.user, field: "user") { registration.user = user }
-            if let team = try parseUUID(input.team, field: "team") { registration.team = team }
-
-            if let isWelcomeEmailSent = input.isWelcomeEmailSent { registration.isWelcomeEmailSent = isWelcomeEmailSent }
-            if let isLoginDataSent = input.isLoginDataSent { registration.isLoginDataSent = isLoginDataSent }
-
-            if let kaution = input.kaution { registration.kaution = kaution }
+            if isAdmin {
+                if let paidAmount = input.paidAmount { registration.paidAmount = paidAmount }
+                if let user = try parseUUID(input.user, field: "user") { registration.user = user }
+                if let team = try parseUUID(input.team, field: "team") { registration.team = team }
+                if let isWelcomeEmailSent = input.isWelcomeEmailSent { registration.isWelcomeEmailSent = isWelcomeEmailSent }
+                if let isLoginDataSent = input.isLoginDataSent { registration.isLoginDataSent = isLoginDataSent }
+                if let kaution = input.kaution { registration.kaution = kaution }
+            }
 
             // 2) upload files if present, update URLs accordingly
             let hasAnyFile =
@@ -410,7 +424,7 @@ extension AppController {
             }
 
             try await registration.save(on: req.db)
-            return registration
+            return registration.asApplicationDetail()
         }
 
         // ----------------------------
@@ -423,29 +437,43 @@ extension AppController {
         if let verein = input.verein { registration.verein = verein }
 
         if let teamName = input.teamName { registration.teamName = teamName }
-        if let status = input.status { registration.status = status }
+        if isAdmin, let status = input.status { registration.status = status }
         if let bundesland = input.bundesland { registration.bundesland = bundesland }
 
         if let refereerLink = input.refereerLink { registration.refereerLink = refereerLink }
-        if let assignedLeague = input.assignedLeague { registration.assignedLeague = assignedLeague }
+        if isAdmin, let assignedLeague = input.assignedLeague { registration.assignedLeague = assignedLeague }
 
         if let customerSignedContract = input.customerSignedContract { registration.customerSignedContract = customerSignedContract }
-        if let adminSignedContract = input.adminSignedContract { registration.adminSignedContract = adminSignedContract }
+        if isAdmin, let adminSignedContract = input.adminSignedContract { registration.adminSignedContract = adminSignedContract }
         if let teamLogo = input.teamLogo { registration.teamLogo = teamLogo }
 
-        if let paidAmount = input.paidAmount { registration.paidAmount = paidAmount }
-        if let user = input.user { registration.user = user }
-        if let team = input.team { registration.team = team }
-
-        if let isWelcomeEmailSent = input.isWelcomeEmailSent { registration.isWelcomeEmailSent = isWelcomeEmailSent }
-        if let isLoginDataSent = input.isLoginDataSent { registration.isLoginDataSent = isLoginDataSent }
-
-        if let kaution = input.kaution { registration.kaution = kaution }
+        if isAdmin {
+            if let paidAmount = input.paidAmount { registration.paidAmount = paidAmount }
+            if let user = input.user { registration.user = user }
+            if let team = input.team { registration.team = team }
+            if let isWelcomeEmailSent = input.isWelcomeEmailSent { registration.isWelcomeEmailSent = isWelcomeEmailSent }
+            if let isLoginDataSent = input.isLoginDataSent { registration.isLoginDataSent = isLoginDataSent }
+            if let kaution = input.kaution { registration.kaution = kaution }
+        }
 
         try await registration.save(on: req.db)
-        return registration
+        return registration.asApplicationDetail()
     }
 
+}
+
+private func authorizeApplicationUser(_ userID: UUID, req: Request) throws {
+    let user = try req.auth.require(User.self)
+    guard user.type == .admin || user.id == userID else {
+        throw Abort(.forbidden, reason: "You can only access your own registration.")
+    }
+}
+
+private func authorizeApplicationRegistration(_ registration: TeamRegistration, req: Request) throws {
+    guard let ownerID = registration.user else {
+        throw Abort(.forbidden, reason: "This registration has no account owner.")
+    }
+    try authorizeApplicationUser(ownerID, req: req)
 }
 struct TeamAppRegistrationRequest: Content {
     let firstName: String
@@ -483,6 +511,70 @@ struct TeamAppApplicationResponse: Content {
     let registrationId: UUID
     let status: TeamRegistrationStatus
     let created: Date?
+}
+
+/// Owner-facing registration data. Identification documents, signed-contract
+/// URLs, generated passwords and internal delivery flags remain admin-only.
+struct TeamApplicationContact: Content {
+    let first: String
+    let last: String
+    let phone: String
+    let email: String
+    let identificationUploaded: Bool
+}
+
+struct TeamApplicationDetail: Content {
+    let id: UUID?
+    let primary: TeamApplicationContact?
+    let secondary: TeamApplicationContact?
+    let verein: String?
+    let teamName: String
+    let status: TeamRegistrationStatus
+    let bundesland: Bundesland
+    let refereerLink: String?
+    let assignedLeague: UUID?
+    let customerSignedContractUploaded: Bool
+    let teamLogo: String?
+    let paidAmount: Double?
+    let user: UUID?
+    let team: UUID?
+    let dateCreated: Date?
+    let kaution: Double?
+}
+
+private extension ContactPerson {
+    func asApplicationContact() -> TeamApplicationContact {
+        TeamApplicationContact(
+            first: first,
+            last: last,
+            phone: phone,
+            email: email,
+            identificationUploaded: identification?.isEmpty == false
+        )
+    }
+}
+
+private extension TeamRegistration {
+    func asApplicationDetail() -> TeamApplicationDetail {
+        TeamApplicationDetail(
+            id: id,
+            primary: primary?.asApplicationContact(),
+            secondary: secondary?.asApplicationContact(),
+            verein: verein,
+            teamName: teamName,
+            status: status,
+            bundesland: bundesland,
+            refereerLink: refereerLink,
+            assignedLeague: assignedLeague,
+            customerSignedContractUploaded: customerSignedContract?.isEmpty == false,
+            teamLogo: teamLogo,
+            paidAmount: paidAmount,
+            user: user,
+            team: team,
+            dateCreated: dateCreated,
+            kaution: kaution
+        )
+    }
 }
 
 struct UpdateTeamRegistrationRequest: Content {

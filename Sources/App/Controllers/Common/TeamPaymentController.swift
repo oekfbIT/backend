@@ -6,7 +6,11 @@ struct TeamPaymentController: RouteCollection {
         let payments = routes.grouped("payments")
         payments.on(.POST, "stripe", "webhook", body: .collect(maxSize: "256kb"), use: webhook)
         payments.get("checkout", "return", use: checkoutReturn)
-        let authed = payments.grouped(Token.authenticator(), User.guardMiddleware())
+        let authed = payments.grouped(
+            Token.authenticator(),
+            User.guardMiddleware(),
+            ProtectedResponseMiddleware()
+        )
         authed.get("config", use: config)
         authed.post("teams", ":teamID", "top-ups", use: create)
         authed.post("teams", ":teamID", "top-ups", "checkout", use: createCheckout)
@@ -137,7 +141,7 @@ struct TeamPaymentController: RouteCollection {
         if response.status == .accepted { response.headers.replaceOrAdd(name: "Retry-After", value: "3") }
         return response
     }
-    func invoices(req: Request) async throws -> Page<Rechnung> {
+    func invoices(req: Request) async throws -> Page<Rechnung.Public> {
         let team = try await Self.team(req.parameters.require("teamID", as: UUID.self), on: req)
         let query = Rechnung.query(on: req.db).filter(\.$team.$id == team.id)
         if let source = req.query[String.self, at: "source"] {
@@ -147,7 +151,9 @@ struct TeamPaymentController: RouteCollection {
         }
         let page = max(1, min(100_000, req.query[Int.self, at: "page"] ?? 1))
         let per = max(1, min(100, req.query[Int.self, at: "per"] ?? 20))
-        return try await query.sort(\.$created, .descending).paginate(PageRequest(page: page, per: per))
+        let result = try await query.sort(\.$created, .descending)
+            .paginate(PageRequest(page: page, per: per))
+        return Page(items: result.items.map { $0.asPublic() }, metadata: result.metadata)
     }
     func webhook(req: Request) async throws -> HTTPStatus {
         guard let bytes = req.body.data, let signature = req.headers.first(name: "Stripe-Signature") else {

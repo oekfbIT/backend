@@ -346,10 +346,37 @@ private struct RouteOperation: Comparable {
             return "bearerAuth"
         }
 
-        if first == "app", components.dropFirst().prefix(2).elementsEqual(["auth", "login"]) {
-            return "basicAuth"
+        if first == "app" {
+            let rest = Array(components.dropFirst())
+            if rest.prefix(2).elementsEqual(["auth", "login"]) {
+                return "basicAuth"
+            }
+            if rest.prefix(2).elementsEqual(["auth", "reset-password"])
+                || rest.prefix(2).elementsEqual(["application", "request"])
+                || rest.prefix(3).elementsEqual(["application", "user", "verify"])
+            {
+                return nil
+            }
+            return "bearerAuth"
         }
 
-        return nil
+        if ["client", "webClient", "legal", "status", "docs", "openapi.yaml"].contains(first) {
+            return nil
+        }
+
+        if first == "payments" {
+            let rest = Array(components.dropFirst())
+            if rest.prefix(2).elementsEqual(["stripe", "webhook"])
+                || rest.prefix(2).elementsEqual(["checkout", "return"])
+            {
+                return nil
+            }
+            return "bearerAuth"
+        }
+
+        // All remaining registered routes are either authenticated team routes
+        // or administrator-only legacy CRUD routes. Defaulting to bearer auth
+        // keeps the generated contract fail-closed as new protected routes appear.
+        return "bearerAuth"
     }
 }

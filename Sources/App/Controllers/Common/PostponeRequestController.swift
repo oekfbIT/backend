@@ -19,29 +19,34 @@ final class PostponeRequestController: RouteCollection {
 
     func setupRoutes(on app: RoutesBuilder) throws {
         let route = app.grouped(PathComponent(stringLiteral: repository.path))
+        let admin = route.grouped(AdminOnlyMiddleware())
 
-        // route.post(use: repository.create)
-        route.post("batch", use: repository.createBatch)
+        // Bulk and raw repository operations are administrative maintenance.
+        admin.post("batch", use: repository.createBatch)
 
         // list / info routes
-        route.get(use: getAllPostponeRequestsSorted)
-        route.get("test", use: test)
+        admin.get(use: getAllPostponeRequestsSorted)
+        admin.get("test", use: test)
         route.get("open", use: getOpenRequests)
-        route.get("team", ":id", "all", use: getAllPostponeRequestsForTeam)
+        route.grouped("team", ":id")
+            .grouped(TeamParameterAccessMiddleware(parameter: "id"))
+            .get("all", use: getAllPostponeRequestsForTeam)
 
         // item routes
-        route.get(":id", "id", use: repository.getbyID)
-        route.get(":id", use: getTeamPostponeRequests)
-        route.delete(":id", use: repository.deleteID)
+        admin.get(":id", "id", use: repository.getbyID)
+        route.grouped(":id")
+            .grouped(TeamParameterAccessMiddleware(parameter: "id"))
+            .get(use: getTeamPostponeRequests)
+        admin.delete(":id", use: repository.deleteID)
 
-        route.patch(":id", use: repository.updateID)
-        route.patch("batch", use: repository.updateBatch)
+        admin.patch(":id", use: repository.updateID)
+        admin.patch("batch", use: repository.updateBatch)
 
         // actions
         route.post(use: createNewRequest)
-        route.grouped(Token.authenticator(), User.guardMiddleware()).post(":id", "approve", use: approveRequest)
+        route.post(":id", "approve", use: approveRequest)
         route.post(":id", "deny", use: denyRequest)
-        route.post(":id", "toggle", use: toggleStatus)
+        admin.post(":id", "toggle", use: toggleStatus)
     }
 
     func boot(routes: RoutesBuilder) throws {
@@ -81,105 +86,118 @@ final class PostponeRequestController: RouteCollection {
     }
 
     /// GET /postpone/team/:id/all
-    func getAllPostponeRequestsForTeam(req: Request) throws -> EventLoopFuture<[PostponeRequest]> {
+    func getAllPostponeRequestsForTeam(req: Request) async throws -> [PostponeRequest] {
         let teamID = try req.parameters.require("id", as: UUID.self)
+        _ = try await ApplicationAccess.requireTeam(teamID, req: req)
 
-        return PostponeRequest.query(on: req.db)
+        return try await PostponeRequest.query(on: req.db)
             .sort(\.$created, .descending)
             .all()
-            .map { requests in
-                requests.filter {
-                    $0.requester.id == teamID || $0.requestee.id == teamID
-                }
+            .filter {
+                $0.requester.id == teamID || $0.requestee.id == teamID
             }
     }
 
     /// GET /postpone/open?teamID=...
-    func getOpenRequests(req: Request) throws -> EventLoopFuture<[PostponeRequest]> {
+    func getOpenRequests(req: Request) async throws -> [PostponeRequest] {
         guard let teamID = req.query[UUID.self, at: "teamID"] else {
             throw Abort(.badRequest, reason: "Missing or invalid teamID query param")
         }
+        _ = try await ApplicationAccess.requireTeam(teamID, req: req)
 
-        return PostponeRequest.query(on: req.db)
+        return try await PostponeRequest.query(on: req.db)
             .filter(\.$status == true)
             .sort(\.$created, .descending)
             .all()
-            .map { requests in
-                requests.filter {
-                    $0.requester.id == teamID || $0.requestee.id == teamID
-                }
+            .filter {
+                $0.requester.id == teamID || $0.requestee.id == teamID
             }
     }
 
     /// GET /postpone/:id
-    func getTeamPostponeRequests(req: Request) throws -> EventLoopFuture<[PostponeRequest]> {
+    func getTeamPostponeRequests(req: Request) async throws -> [PostponeRequest] {
         let teamID = try req.parameters.require("id", as: UUID.self)
+        _ = try await ApplicationAccess.requireTeam(teamID, req: req)
 
-        return PostponeRequest.query(on: req.db)
+        return try await PostponeRequest.query(on: req.db)
             .filter(\.$status == true)
             .sort(\.$created, .descending)
             .all()
-            .map { requests in
-                requests.filter {
-                    $0.requester.id == teamID || $0.requestee.id == teamID
-                }
+            .filter {
+                $0.requester.id == teamID || $0.requestee.id == teamID
             }
     }
 
-    func createNewRequest(req: Request) throws -> EventLoopFuture<PostponeRequest> {
+    func createNewRequest(req: Request) async throws -> PostponeRequest {
         let newRequest = try req.content.decode(PostponeRequest.self)
-        newRequest.status = true
-
+        guard let requesterID = newRequest.requester.id else {
+            throw Abort(.badRequest, reason: "Missing requester ID")
+        }
         guard let requesteeID = newRequest.requestee.id else {
             throw Abort(.badRequest, reason: "Missing requestee ID")
         }
-
-        return newRequest.save(on: req.db).flatMap {
-            let matchID = newRequest.$match.id
-
-            let teamFuture = Team.find(requesteeID, on: req.db)
-                .unwrap(or: Abort(.notFound, reason: "Requestee team not found"))
-
-            let matchFuture = Match.find(matchID, on: req.db)
-                .unwrap(or: Abort(.notFound, reason: "Match not found"))
-
-            return teamFuture.and(matchFuture).flatMap { opponentTeam, match in
-                match.postponerequest = true
-
-                return match.save(on: req.db).flatMap {
-                    let emailFuture: EventLoopFuture<Void> = {
-                        guard let recipient = opponentTeam.usremail else {
-                            req.logger.warning("Postpone request notification skipped: requestee has no email")
-                            return req.eventLoop.makeSucceededFuture(())
-                        }
-                        do {
-                            return try self.emailController.sendPostPone(
-                                req: req,
-                                postpone: newRequest,
-                                cancellerName: newRequest.requester.teamName,
-                                recipient: recipient,
-                                match: match
-                            ).transform(to: ())
-                        } catch {
-                            req.logger.warning("Unable to prepare postpone email: \(error)")
-                            return req.eventLoop.makeSucceededFuture(())
-                        }
-                    }()
-
-                    let pushFuture = PostponePushNotifier.notifyRequestCreated(
-                        req: req,
-                        postponeRequest: newRequest,
-                        targetTeamId: requesteeID
-                    )
-
-                    return self.ignoreNotificationFailure(
-                        emailFuture.and(pushFuture).transform(to: ()),
-                        req: req,
-                        action: "Postpone request"
-                    ).transform(to: newRequest)
-                }
-            }
+        guard requesterID != requesteeID else {
+            throw Abort(.badRequest, reason: "Requester and requestee must be different teams.")
         }
+
+        let requester = try await ApplicationAccess.requireTeam(requesterID, req: req)
+        guard let requestee = try await Team.find(requesteeID, on: req.db) else {
+            throw Abort(.notFound, reason: "Requestee team not found")
+        }
+        guard let match = try await Match.find(newRequest.$match.id, on: req.db) else {
+            throw Abort(.notFound, reason: "Match not found")
+        }
+        let participants = Set([match.$homeTeam.id, match.$awayTeam.id])
+        guard participants == Set([requesterID, requesteeID]) else {
+            throw Abort(.forbidden, reason: "The selected teams are not the participants in this match.")
+        }
+
+        // Do not trust client-supplied team names, logos, state or identifiers.
+        newRequest.id = nil
+        newRequest.requester = PublicTeamShort(
+            id: requester.id,
+            sid: requester.sid,
+            logo: requester.logo,
+            points: requester.points,
+            teamName: requester.teamName,
+            shortName: requester.shortName
+        )
+        newRequest.requestee = PublicTeamShort(
+            id: requestee.id,
+            sid: requestee.sid,
+            logo: requestee.logo,
+            points: requestee.points,
+            teamName: requestee.teamName,
+            shortName: requestee.shortName
+        )
+        newRequest.status = true
+        newRequest.response = nil
+        newRequest.responseDate = nil
+        try await newRequest.save(on: req.db)
+
+        match.postponerequest = true
+        try await match.save(on: req.db)
+
+        do {
+            if let recipient = requestee.usremail {
+                try await emailController.sendPostPone(
+                    req: req,
+                    postpone: newRequest,
+                    cancellerName: requester.teamName,
+                    recipient: recipient,
+                    match: match
+                ).get()
+            }
+            try await PostponePushNotifier.notifyRequestCreated(
+                req: req,
+                postponeRequest: newRequest,
+                targetTeamId: requesteeID
+            ).get()
+        } catch {
+            req.logger.warning("Postpone request notification failed: \(error)")
+        }
+
+        return newRequest
     }
 
     func approveRequest(req: Request) async throws -> PostponeRequest {
@@ -219,60 +237,51 @@ final class PostponeRequestController: RouteCollection {
     }
 
 
-    func denyRequest(req: Request) throws -> EventLoopFuture<PostponeRequest> {
+    func denyRequest(req: Request) async throws -> PostponeRequest {
         let id = try req.parameters.require("id", as: UUID.self)
-
-        return PostponeRequest.query(on: req.db)
+        guard let request = try await PostponeRequest.query(on: req.db)
             .with(\.$match)
             .filter(\.$id == id)
             .first()
-            .unwrap(or: Abort(.notFound))
-            .flatMap { request in
-                guard let requesterID = request.requester.id else {
-                    return req.eventLoop.makeFailedFuture(
-                        Abort(.badRequest, reason: "Missing requester or match ID")
-                    )
-                }
+        else {
+            throw Abort(.notFound)
+        }
+        guard let requesterID = request.requester.id,
+              let requesteeID = request.requestee.id else {
+            throw Abort(.badRequest, reason: "Missing requester or requestee ID")
+        }
+        _ = try await ApplicationAccess.requireTeam(requesteeID, req: req)
+        guard request.status, request.response == nil else {
+            throw Abort(.conflict, reason: "Die Anfrage ist bereits abgeschlossen.")
+        }
+        guard let requester = try await Team.find(requesterID, on: req.db) else {
+            throw Abort(.notFound, reason: "Requester team not found")
+        }
 
-                let matchID = request.$match.id
+        request.response = false
+        request.responseDate = Date.viennaNow
+        request.status = false
+        try await request.update(on: req.db)
 
-                let teamFuture = Team.find(requesterID, on: req.db)
-                    .unwrap(or: Abort(.notFound, reason: "Requester team not found"))
-
-                let matchFuture = Match.find(matchID, on: req.db)
-                    .unwrap(or: Abort(.notFound, reason: "Match not found"))
-
-                return teamFuture.and(matchFuture).flatMap { team, match in
-                    request.response = false
-                    request.responseDate = Date.viennaNow
-                    request.status = false
-
-                    return request.update(on: req.db)
-                        .flatMap {
-                            let emailFuture: EventLoopFuture<Void> = {
-                                guard let email = team.usremail else {
-                                    req.logger.warning("Postpone denial notification skipped: requester has no email")
-                                    return req.eventLoop.makeSucceededFuture(())
-                                }
-                                do {
-                                    return try self.emailController.deny(req: req, denierName: request.requestee.teamName, recipient: email, match: match).transform(to: ())
-                                } catch {
-                                    req.logger.warning("Unable to prepare postpone denial email: \(error)")
-                                    return req.eventLoop.makeSucceededFuture(())
-                                }
-                            }()
-
-                            let pushFuture = PostponePushNotifier.notifyRequestDenied(
-                                req: req,
-                                postponeRequest: request,
-                                targetTeamId: requesterID
-                            )
-
-                            return self.ignoreNotificationFailure(emailFuture.and(pushFuture).transform(to: ()), req: req, action: "Postpone denial")
-                                .transform(to: request)
-                        }
-                }
+        do {
+            if let email = requester.usremail {
+                try await emailController.deny(
+                    req: req,
+                    denierName: request.requestee.teamName,
+                    recipient: email,
+                    match: request.match
+                ).get()
             }
+            try await PostponePushNotifier.notifyRequestDenied(
+                req: req,
+                postponeRequest: request,
+                targetTeamId: requesterID
+            ).get()
+        } catch {
+            req.logger.warning("Postpone denial notification failed: \(error)")
+        }
+
+        return request
     }
 
     func toggleStatus(req: Request) throws -> EventLoopFuture<PostponeRequest> {

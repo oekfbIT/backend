@@ -136,6 +136,6 @@ extension ClientController {
         var blanket = stored ?? Blankett(name: team.teamName, dress: nil,
                                          logo: team.logo, players: [])
         blanket.shortName = team.shortName
-        return blanket
+        return blanket.asPublic()
     }
 }

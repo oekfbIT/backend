@@ -32,7 +32,6 @@ final class User: Model, Content, Codable {
         let tel: String?
         let verified: Bool?
         let type: UserType
-        let passwordHash: String
         let first: String
         let last: String
     }
@@ -147,7 +146,6 @@ extension User: Authenticatable {
                tel: tel,
                verified: verified,
                type: type,
-               passwordHash: passwordHash,
                first: firstName,
                last: lastName)
     }

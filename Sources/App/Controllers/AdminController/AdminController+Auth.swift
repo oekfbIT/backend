@@ -18,7 +18,7 @@ extension AdminController {
         // POST /admin/auth/login
         // Uses Basic Auth (email + password) via User.authenticator()
         root.grouped("auth")
-            .grouped(User.authenticator())
+            .grouped(User.authenticator(), ProtectedResponseMiddleware())
             .post("login", use: adminLogin)
     }
 
