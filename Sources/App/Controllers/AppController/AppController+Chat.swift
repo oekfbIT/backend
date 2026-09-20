@@ -44,7 +44,7 @@ extension AppController {
 
         // CRUD + index
         conversation.post(use: createConversationApp)
-        admin.get(use: indexConversationsApp)
+        conversation.get(use: indexConversationsApp)
         conversation.grouped(":id")
             .grouped(ConversationParameterAccessMiddleware(parameter: "id"))
             .get(use: getConversationByIDApp)
@@ -57,7 +57,7 @@ extension AppController {
             .get(use: getConversationsForTeamApp)
 
         // all with team info (if needed)
-        admin.get("teams", use: getAllConversationsWithTeamApp)
+        conversation.get("teams", use: getAllConversationsWithTeamApp)
 
         // ✅ ONE universal message route (JSON OR multipart)
         conversation.grouped(":id")
@@ -65,7 +65,9 @@ extension AppController {
             .on(.POST, "message", body: .collect(maxSize: "10mb"), use: sendMessageUniversalApp)
 
         conversation.post("message", ":messageId", "read", use: markMessageAsReadApp)
-        admin.get("status", ":conversationID", use: toggleStatusApp)
+        conversation.grouped("status", ":conversationID")
+            .grouped(ConversationParameterAccessMiddleware(parameter: "conversationID"))
+            .get(use: toggleStatusApp)
     }
 
     /// GET /app/conversation/team/:teamId
@@ -100,29 +102,9 @@ extension AppController {
     }
 
     /// GET /app/conversation/teams
-    /// All conversations including team info (no filter).
-    func getAllConversationsWithTeamApp(req: Request) throws -> EventLoopFuture<[ConversationWrapper]> {
-        return Conversation.query(on: req.db)
-            .with(\.$team)
-            .all()
-            .map { conversations in
-                conversations.map { conversation in
-                    ConversationWrapper(
-                        id: conversation.id,
-                        team: conversation.team.map {
-                            TeamInfo(
-                                id: $0.id!.uuidString,
-                                name: $0.teamName,
-                                icon: $0.logo
-                            )
-                        },
-                        messages: conversation.messages,
-                        subject: conversation.subject,
-                        icon: conversation.icon,
-                        open: conversation.open ?? true
-                    )
-                }
-            }
+    /// Accessible conversations including team info.
+    func getAllConversationsWithTeamApp(req: Request) async throws -> [ConversationWrapper] {
+        try await accessibleConversationWrappers(req: req)
     }
 
     // MARK: - Messages
@@ -338,28 +320,51 @@ extension AppController {
     }
     
     /// GET /app/conversation
-    func indexConversationsApp(req: Request) throws -> EventLoopFuture<[ConversationWrapper]> {
-        return Conversation.query(on: req.db)
-            .with(\.$team)
-            .all()
-            .map { conversations in
-                conversations.map { conversation in
-                    ConversationWrapper(
-                        id: conversation.id,
-                        team: conversation.team.map {
-                            TeamInfo(
-                                id: $0.id!.uuidString,
-                                name: $0.teamName,
-                                icon: $0.logo
-                            )
-                        },
-                        messages: conversation.messages,
-                        subject: conversation.subject,
-                        icon: conversation.icon,
-                        open: conversation.open ?? true
-                    )
-                }
+    func indexConversationsApp(req: Request) async throws -> [ConversationWrapper] {
+        try await accessibleConversationWrappers(req: req)
+    }
+
+    /// Returns all conversations for administrators and only conversations
+    /// belonging to the authenticated user's teams for every other account.
+    private func accessibleConversationWrappers(req: Request) async throws -> [ConversationWrapper] {
+        let user = try req.auth.require(User.self)
+        let query = Conversation.query(on: req.db).with(\.$team)
+
+        let conversations: [Conversation]
+        if user.type == .admin {
+            conversations = try await query.all()
+        } else {
+            guard let userID = user.id else {
+                throw Abort(.unauthorized, reason: "Authenticated user has no identifier.")
             }
+
+            let teamIDs = try await Team.query(on: req.db)
+                .filter(\.$user.$id == userID)
+                .all()
+                .compactMap(\.id)
+
+            guard !teamIDs.isEmpty else { return [] }
+            conversations = try await query
+                .filter(\.$team.$id ~~ teamIDs)
+                .all()
+        }
+
+        return conversations.map { conversation in
+            ConversationWrapper(
+                id: conversation.id,
+                team: conversation.team.map {
+                    TeamInfo(
+                        id: $0.id!.uuidString,
+                        name: $0.teamName,
+                        icon: $0.logo
+                    )
+                },
+                messages: conversation.messages,
+                subject: conversation.subject,
+                icon: conversation.icon,
+                open: conversation.open ?? true
+            )
+        }
     }
 
     /// GET /app/conversation/:id

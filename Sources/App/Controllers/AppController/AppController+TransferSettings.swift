@@ -30,11 +30,14 @@ extension AppController {
 
         // GET /transferSettings/isCancelPossible
         settings.get("isCancelPossible", use: isCancelPossible)
+
+        // GET /transferSettings/paymentsEnabled
+        settings.get("paymentsEnabled", use: paymentsEnabled)
         
-        // GET /transferSettings/isCancelPossible
+        // GET /transferSettings/sponsors
         settings.get("sponsors", use: showSponsors)
         
-        // GET /transferSettings/isCancelPossible
+        // GET /transferSettings/appversion
         settings.get("appversion", use: minAppVersion)
     }
 
@@ -72,8 +75,16 @@ extension AppController {
         }
         return settings.isCancelPossible
     }
+
+    // MARK: - GET /app/transferSettings/paymentsEnabled
+    func paymentsEnabled(req: Request) async throws -> Bool {
+        guard let settings = try await TransferSettings.query(on: req.db).first() else {
+            throw Abort(.notFound, reason: "No TransferSettings found.")
+        }
+        return settings.paymentsEnabled ?? true
+    }
     
-    // MARK: - GET /app/transferSettings/isCancelPossible
+    // MARK: - GET /app/transferSettings/sponsors
     func showSponsors(req: Request) async throws -> Bool {
         guard let settings = try await TransferSettings.query(on: req.db).first() else {
             throw Abort(.notFound, reason: "No TransferSettings found.")

@@ -40,15 +40,32 @@ struct TeamPaymentController: RouteCollection {
         let livemode: Bool
         let stripeMode: String
         let checkoutEnabled: Bool
+        let paymentsEnabled: Bool
         let creditPolicy: TeamTopUpCreditPolicy
         let estimatedFeeBasisPoints: Int
         let estimatedFeeFixedMinor: Int
     }
-    func config(req: Request) throws -> ConfigurationResponse {
+    static func paymentsEnabled(on req: Request) async throws -> Bool {
+        let settings = try await TransferSettings.query(on: req.db).first()
+        return settings?.paymentsEnabled ?? true
+    }
+    static func requirePaymentsEnabled(on req: Request) async throws {
+        guard try await paymentsEnabled(on: req) else {
+            throw Abort(.forbidden, reason: "Stripe payments are currently disabled.")
+        }
+    }
+    func config(req: Request) async throws -> ConfigurationResponse {
+        guard try await Self.paymentsEnabled(on: req) else {
+            return ConfigurationResponse(publishableKey: "", currency: "eur",
+                minimumAmountMinor: 1000, maximumAmountMinor: 0, livemode: false, stripeMode: "disabled",
+                checkoutEnabled: false, paymentsEnabled: false,
+                creditPolicy: .stripeNet, estimatedFeeBasisPoints: 150, estimatedFeeFixedMinor: 25)
+        }
         let config = try TeamStripeConfiguration()
         return ConfigurationResponse(publishableKey: config.publishableKey, currency: "eur",
             minimumAmountMinor: 1000, maximumAmountMinor: config.maximumMinor, livemode: config.livemode, stripeMode: config.mode,
             checkoutEnabled: (try? config.checkoutReturnURLs(topUpID: "configuration")) != nil,
+            paymentsEnabled: true,
             creditPolicy: .stripeNet, estimatedFeeBasisPoints: 150, estimatedFeeFixedMinor: 25)
     }
     // The redirect is informational only. No payment or personal data is exposed here.
@@ -107,6 +124,7 @@ struct TeamPaymentController: RouteCollection {
     }
 
     func create(req: Request) async throws -> TeamTopUpResponse {
+        try await Self.requirePaymentsEnabled(on: req)
         let team = try await Self.team(req.parameters.require("teamID", as: UUID.self), on: req)
         return try await TeamTopUpManager(application: req.application).create(team: team,
             user: req.auth.require(User.self), input: req.content.decode(TeamTopUpInput.self))
@@ -117,6 +135,7 @@ struct TeamPaymentController: RouteCollection {
         return TeamTopUpResponse(topUp, publishableKey: try TeamStripeConfiguration().publishableKey)
     }
     func createCheckout(req: Request) async throws -> TeamTopUpResponse {
+        try await Self.requirePaymentsEnabled(on: req)
         let team = try await Self.team(req.parameters.require("teamID", as: UUID.self), on: req)
         return try await TeamTopUpManager(application: req.application).create(team: team,
             user: req.auth.require(User.self), input: req.content.decode(TeamTopUpInput.self), flow: .checkout)
