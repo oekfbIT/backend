@@ -219,12 +219,22 @@ public func configure(_ app: Application) throws {
         .on(.saturday)
         .at(18, 0)
 
+    app.queues.schedule(PostponeLockJob())
+        .weekly()
+        .on(.saturday)
+        .at(18, 0)
+
     app.queues.schedule(DressUnlockJob())
         .weekly()
         .on(.monday)
         .at(6, 0)
     
     app.queues.schedule(CancelUnlockJob())
+        .weekly()
+        .on(.monday)
+        .at(6, 0)
+
+    app.queues.schedule(PostponeUnlockJob())
         .weekly()
         .on(.monday)
         .at(6, 0)

@@ -34,6 +34,7 @@ final class TransferSettingsController: RouteCollection {
         
         route.get("isDressChangeOpen", use: isDressChangeOpen)
         route.get("isCancelPossible", use: isCancelPossible)
+        route.get("isPostponePossible", use: isPostponePossible)
         route.get("paymentsEnabled", use: paymentsEnabled)
 
     }
@@ -65,6 +66,7 @@ final class TransferSettingsController: RouteCollection {
         let isTransferOpen: Bool?
         let isDressChangeOpen: Bool?
         let isCancelPossible: Bool?
+        let isPostponePossible: Bool?
         let showSponsors: Bool?
         let paymentsEnabled: Bool?
         let fromDate: String?
@@ -84,6 +86,7 @@ final class TransferSettingsController: RouteCollection {
         if let value = update.isTransferOpen { settings.isTransferOpen = value }
         if let value = update.isDressChangeOpen { settings.isDressChangeOpen = value }
         if let value = update.isCancelPossible { settings.isCancelPossible = value }
+        if let value = update.isPostponePossible { settings.isPostponePossible = value }
         if let value = update.showSponsors { settings.showSponsors = value }
         if let value = update.paymentsEnabled { settings.paymentsEnabled = value }
         if let value = update.fromDate { settings.fromDate = value }
@@ -109,6 +112,13 @@ final class TransferSettingsController: RouteCollection {
             throw Abort(.notFound, reason: "No TransferSettings found.")
         }
         return settings.isCancelPossible
+    }
+
+    func isPostponePossible(req: Request) async throws -> Bool {
+        guard let settings = try await TransferSettings.query(on: req.db).first() else {
+            throw Abort(.notFound, reason: "No TransferSettings found.")
+        }
+        return settings.isPostponePossible ?? settings.isCancelPossible
     }
 
     func paymentsEnabled(req: Request) async throws -> Bool {

@@ -20,6 +20,7 @@ let app_migrations: [Migration] = [
     RechnungMigration(),
     TransferMigration(),
     TransferSettingsMigration(),
+    TransferSettingsPostponeMigration(),
     MatchEventMigration(),
     StrafsenatMigration(),
     MatchAchivementMigration(),

@@ -60,6 +60,19 @@ struct CancelLockJob: AsyncScheduledJob {
     }
 }
 
+struct PostponeLockJob: AsyncScheduledJob {
+    func run(context: QueueContext) async throws {
+        context.logger.info("Postpone Lock Job is running.")
+        print("Postpone Lock Job is running.")
+
+        if let transferSetting = try await TransferSettings.query(on: context.application.db).first() {
+            transferSetting.isPostponePossible = false
+            try await transferSetting.save(on: context.application.db)
+            context.logger.info("TransferSettings isPostponePossible set to false.")
+        }
+    }
+}
+
 struct CancelUnlockJob: AsyncScheduledJob {
     func run(context: QueueContext) async throws {
         context.logger.info("Cancel Unclock Job is running.")
@@ -71,6 +84,19 @@ struct CancelUnlockJob: AsyncScheduledJob {
             transferSetting.isCancelPossible = true
             try await transferSetting.save(on: context.application.db)
             context.logger.info("TransferSettings isCancelPossible set to true.")
+        }
+    }
+}
+
+struct PostponeUnlockJob: AsyncScheduledJob {
+    func run(context: QueueContext) async throws {
+        context.logger.info("Postpone Unlock Job is running.")
+        print("Postpone Unlock Job is running.")
+
+        if let transferSetting = try await TransferSettings.query(on: context.application.db).first() {
+            transferSetting.isPostponePossible = true
+            try await transferSetting.save(on: context.application.db)
+            context.logger.info("TransferSettings isPostponePossible set to true.")
         }
     }
 }
