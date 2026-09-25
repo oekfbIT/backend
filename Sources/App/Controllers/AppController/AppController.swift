@@ -31,6 +31,8 @@ final class AppController: RouteCollection {
         try setupAuthRoutes(on: route)
         setupPublicTeamRegistrationRoutes(on: route)
         setupNewsRoutes(on: route)
+        setupPublicSponsorSettingsRoute(on: route)
+        setupPublicStadiumDetailRoute(on: route)
 
         let authenticated = route.grouped(
             Token.authenticator(),

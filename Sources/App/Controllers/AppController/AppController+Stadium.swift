@@ -11,12 +11,15 @@ import Fluent
 
 // MARK: - Stadium Endpoints
 extension AppController {
+
+    func setupPublicStadiumDetailRoute(on root: RoutesBuilder) {
+        root.grouped("stadium").get(":id", use: getStadiumByID)
+    }
     
     func setupStadiumRoutes(on root: RoutesBuilder) {
         let stadium = root.grouped("stadium")
 
         stadium.get("all", use: getAllStadiums)
-        stadium.get(":id", use: getStadiumByID)
         stadium.get("bundesland", ":bundesland", use: getStadiumsByBundesland)
     }
 

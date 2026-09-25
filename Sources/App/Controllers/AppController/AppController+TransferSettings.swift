@@ -15,6 +15,10 @@ extension AppController {
     /// Call this from your AppController route setup (where you call setupTransferRoutes)
     /// e.g. in AppController.setupRoutes(on:) or similar:
     /// setupTransferSettingsRoutes(on: appGroupedUnderAppPrefix)
+    func setupPublicSponsorSettingsRoute(on root: RoutesBuilder) {
+        root.grouped("transferSettings").get("sponsors", use: showSponsors)
+    }
+
     func setupTransferSettingsRoutes(on root: RoutesBuilder) {
         let settings = root.grouped("transferSettings")
 
@@ -36,9 +40,6 @@ extension AppController {
 
         // GET /transferSettings/paymentsEnabled
         settings.get("paymentsEnabled", use: paymentsEnabled)
-        
-        // GET /transferSettings/sponsors
-        settings.get("sponsors", use: showSponsors)
         
         // GET /transferSettings/appversion
         settings.get("appversion", use: minAppVersion)
