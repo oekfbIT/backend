@@ -66,14 +66,15 @@ final class NewsController: RouteCollection {
     func getAllExceptStrafsenat(req: Request) throws -> EventLoopFuture<[NewsItem]> {
         return NewsItem.query(on: req.db)
             .filter(\.$tag != "strafsenat")
+            .sort(\.$created, .descending)
             .all()
     }
 
     func getAllWithStrafsenat(req: Request) throws -> EventLoopFuture<[NewsItem]> {
         return NewsItem.query(on: req.db)
             .filter(\.$tag == "strafsenat")
+            .sort(\.$created, .descending)
             .all()
     }
 
 }
-

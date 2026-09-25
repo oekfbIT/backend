@@ -45,6 +45,7 @@ extension ClientController {
                 group.filter(\NewsItem.$tag == code)
                 group.filter(\NewsItem.$tag == "Alle")
             }
+            .sort(\.$created, .descending)
             .all()
     }
 
@@ -102,6 +103,7 @@ extension ClientController {
                 group.filter(\NewsItem.$tag == term)
                 group.filter(\NewsItem.$tag == "Alle")
             }
+            .sort(\.$created, .descending)
             .all()
     }
 }

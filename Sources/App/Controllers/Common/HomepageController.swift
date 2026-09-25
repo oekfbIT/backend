@@ -112,6 +112,7 @@ final class HomepageController: RouteCollection {
                 group.filter(\NewsItem.$tag == code)
                 group.filter(\NewsItem.$tag == "Alle")
             }
+            .sort(\.$created, .descending)
             .all()
     }
 

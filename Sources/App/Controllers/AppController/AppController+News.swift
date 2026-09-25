@@ -31,7 +31,10 @@ extension AppController {
     // 2️⃣ GET /app/news/strafsenat
     func getStrafsenatNews(req: Request) async throws -> [NewsItem] {
         try await NewsItem.query(on: req.db)
-            .filter(\.$tag == "strafsenat ")
+            .group(.or) { group in
+                group.filter(\NewsItem.$tag == "strafsenat")
+                group.filter(\NewsItem.$tag == "strafsenat ")
+            }
             .sort(\.$created, .descending)
             .all()
     }

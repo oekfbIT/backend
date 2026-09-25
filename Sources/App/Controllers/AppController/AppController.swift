@@ -30,6 +30,7 @@ final class AppController: RouteCollection {
         // routes in the application namespace.
         try setupAuthRoutes(on: route)
         setupPublicTeamRegistrationRoutes(on: route)
+        setupNewsRoutes(on: route)
 
         let authenticated = route.grouped(
             Token.authenticator(),
@@ -52,8 +53,6 @@ final class AppController: RouteCollection {
         setupLeagueRoutes(on: authenticated)
         // MARK: - PLAYER ROUTES
         setupPlayerRoutes(on: authenticated)
-        // MARK: - NEWS ROUTES
-        setupNewsRoutes(on: authenticated)
         // MARK: - STADIUM ROUTES
         setupStadiumRoutes(on: authenticated)
         // MARK: PUSH NOTIFICATIONS
