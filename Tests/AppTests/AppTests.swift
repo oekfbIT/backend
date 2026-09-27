@@ -13,6 +13,46 @@ final class AppTests: XCTestCase {
         XCTAssertEqual(referee.active, true)
     }
 
+    func testCardAssignmentIsDerivedFromTheMatchSheet() throws {
+        let homeTeamID = UUID()
+        let awayTeamID = UUID()
+        let playerID = UUID()
+        let player = PlayerOverview(
+            id: playerID,
+            sid: "P1",
+            name: "Player",
+            number: 7,
+            image: nil,
+            yellowCard: 0,
+            redYellowCard: 0,
+            redCard: 0
+        )
+        let match = Match(
+            details: MatchDetails(gameday: 1),
+            homeTeamId: homeTeamID,
+            awayTeamId: awayTeamID,
+            homeBlanket: Blankett(name: "Home", dress: nil, logo: nil, players: [player]),
+            awayBlanket: Blankett(name: "Away", dress: nil, logo: nil, players: []),
+            score: Score(home: 0, away: 0),
+            status: .first
+        )
+
+        XCTAssertEqual(
+            try resolveCardAssignment(playerID: playerID, suppliedTeamID: nil, match: match),
+            .home
+        )
+        XCTAssertEqual(
+            try resolveCardAssignment(playerID: playerID, suppliedTeamID: homeTeamID, match: match),
+            .home
+        )
+        XCTAssertThrowsError(
+            try resolveCardAssignment(playerID: playerID, suppliedTeamID: awayTeamID, match: match)
+        )
+        XCTAssertThrowsError(
+            try resolveCardAssignment(playerID: UUID(), suppliedTeamID: homeTeamID, match: match)
+        )
+    }
+
     func testCreatedTokensAreCookieAndBearerSafe() throws {
         let id = UUID()
         let user = User(

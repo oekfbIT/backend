@@ -13,11 +13,34 @@ struct LeagueMatchesShort: Codable, Content{
 // Define the CardRequest struct inside the do-catch block
 struct CardRequest: Content {
     let playerId: UUID
-    let teamId: UUID
+    // Optional for compatibility with clients that identify the selected side
+    // through the match sheet. The backend derives and validates the side from
+    // the player in all cases.
+    let teamId: UUID?
     let minute: Int
     let name: String?
     let image: String?
     let number: String?
+}
+
+func resolveCardAssignment(
+    playerID: UUID,
+    suppliedTeamID: UUID?,
+    match: Match
+) throws -> MatchAssignment {
+    let isHomePlayer = match.homeBlanket?.players.contains { $0.id == playerID } ?? false
+    let isAwayPlayer = match.awayBlanket?.players.contains { $0.id == playerID } ?? false
+
+    guard isHomePlayer != isAwayPlayer else {
+        throw Abort(.badRequest, reason: "Player must belong to exactly one match sheet.")
+    }
+
+    let assignment: MatchAssignment = isHomePlayer ? .home : .away
+    let expectedTeamID = isHomePlayer ? match.$homeTeam.id : match.$awayTeam.id
+    if let suppliedTeamID, suppliedTeamID != expectedTeamID {
+        throw Abort(.badRequest, reason: "Team ID does not match the player's match sheet.")
+    }
+    return assignment
 }
 
 func updatePlayerCardStatus(in blanket: inout Blankett?, playerId: UUID, cardType: MatchEventType) {
@@ -531,22 +554,25 @@ final class MatchController: RouteCollection {
                 .first()
                 .unwrap(or: Abort(.notFound))
                 .flatMap { match in
+                    let assignment: MatchAssignment
+                    do {
+                        assignment = try resolveCardAssignment(
+                            playerID: cardRequest.playerId,
+                            suppliedTeamID: cardRequest.teamId,
+                            match: match
+                        )
+                    } catch {
+                        return req.eventLoop.makeFailedFuture(error)
+                    }
 
-                    let side: String
-                    if cardRequest.teamId == match.$homeTeam.id {
-                        side = "home"
+                    if assignment == .home {
                         updatePlayerCardStatus(in: &match.homeBlanket,
                                                playerId: cardRequest.playerId,
                                                cardType: cardType)
-                    } else if cardRequest.teamId == match.$awayTeam.id {
-                        side = "away"
+                    } else {
                         updatePlayerCardStatus(in: &match.awayBlanket,
                                                playerId: cardRequest.playerId,
                                                cardType: cardType)
-                    } else {
-                        return req.eventLoop.makeFailedFuture(
-                            Abort(.badRequest, reason: "Team ID does not match home or away team.")
-                        )
                     }
 
                     return match.save(on: req.db).flatMap {
@@ -558,7 +584,7 @@ final class MatchController: RouteCollection {
                             name: cardRequest.name,
                             image: cardRequest.image,
                             number: cardRequest.number,
-                            assign: side == "home" ? .home : .away
+                            assign: assignment
                         )
 
                         guard let mid = match.id else {
@@ -589,7 +615,7 @@ final class MatchController: RouteCollection {
                                     "playerName": cardRequest.name ?? "",
                                     "playerNumber": cardRequest.number ?? "",
                                     "playerId": cardRequest.playerId.uuidString,
-                                    "teamSide": side // "home" | "away"
+                                    "teamSide": assignment.rawValue // "home" | "away"
                                 ])
                             }
 

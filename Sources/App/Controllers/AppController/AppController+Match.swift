@@ -974,15 +974,15 @@ extension AppController {
             throw Abort(.notFound, reason: "Match not found")
         }
 
-        let assignment: MatchAssignment
-        if cardRequest.teamId == match.$homeTeam.id {
-            assignment = .home
+        let assignment = try resolveCardAssignment(
+            playerID: cardRequest.playerId,
+            suppliedTeamID: cardRequest.teamId,
+            match: match
+        )
+        if assignment == .home {
             updatePlayerCardStatus(in: &match.homeBlanket, playerId: cardRequest.playerId, cardType: cardType)
-        } else if cardRequest.teamId == match.$awayTeam.id {
-            assignment = .away
-            updatePlayerCardStatus(in: &match.awayBlanket, playerId: cardRequest.playerId, cardType: cardType)
         } else {
-            throw Abort(.badRequest, reason: "Team ID does not match home or away team.")
+            updatePlayerCardStatus(in: &match.awayBlanket, playerId: cardRequest.playerId, cardType: cardType)
         }
 
         try await match.save(on: req.db)
