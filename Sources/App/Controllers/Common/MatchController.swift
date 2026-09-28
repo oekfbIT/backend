@@ -1041,8 +1041,8 @@ final class MatchController: RouteCollection {
 
         return FeeService.load(req).flatMap { fees in
             return Match.query(on: req.db)
-                .with(\.$homeTeam)
-                .with(\.$awayTeam)
+                .with(\.$homeTeam) { $0.with(\.$user) }
+                .with(\.$awayTeam) { $0.with(\.$user) }
                 .with(\.$referee) { $0.with(\.$user) }
                 .filter(\.$id == matchId)
                 .first()
@@ -1057,13 +1057,13 @@ final class MatchController: RouteCollection {
                         match.score = Score(home: 6, away: 0)
                         winningTeamId = match.$homeTeam.id
                         losingTeamId = match.$awayTeam.id
-                        opponentEmail = match.homeTeam.usremail
+                        opponentEmail = match.homeTeam.user?.email.trimmingCharacters(in: .whitespacesAndNewlines)
 
                     case "away":
                         match.score = Score(home: 0, away: 6)
                         winningTeamId = match.$awayTeam.id
                         losingTeamId = match.$homeTeam.id
-                        opponentEmail = match.awayTeam.usremail
+                        opponentEmail = match.awayTeam.user?.email.trimmingCharacters(in: .whitespacesAndNewlines)
 
                     default:
                         return req.eventLoop.future(error: Abort(.badRequest, reason: "Invalid winning team specified"))
@@ -1120,28 +1120,44 @@ final class MatchController: RouteCollection {
                                 return rechnung.save(on: req.db).flatMap {
                                     losingTeam.balance = balance - Double(rechnungAmount)
 
-                                    do {
-                                        try emailController.sendCancellationNotification(
-                                            req: req,
-                                            recipient: opponentEmail!,
-                                            match: match
-                                        )
-
-                                        if let ref = match.referee,
-                                        let refUser = ref.user {
-                                            let refEmail = refUser.email
-                                            try emailController.informRefereeCancellation(
+                                    let emailFuture: EventLoopFuture<Void>
+                                    if let opponentEmail, !opponentEmail.isEmpty {
+                                        do {
+                                            var futures = [EventLoopFuture<HTTPStatus>]()
+                                            futures.append(try emailController.sendCancellationNotification(
                                                 req: req,
-                                                email: refEmail,
-                                                name: ref.name ?? "Referee",
+                                                recipient: opponentEmail,
                                                 match: match
-                                            )
+                                            ))
+
+                                            if let ref = match.referee,
+                                               let refUser = ref.user {
+                                                futures.append(try emailController.informRefereeCancellation(
+                                                    req: req,
+                                                    email: refUser.email,
+                                                    name: ref.name ?? "Referee",
+                                                    match: match
+                                                ))
+                                            }
+
+                                            emailFuture = EventLoopFuture.andAllSucceed(futures, on: req.eventLoop)
+                                                .map { _ in () }
+                                                .flatMapError { error in
+                                                    req.logger.warning("Unable to send cancellation emails: \(error)")
+                                                    return req.eventLoop.makeSucceededFuture(())
+                                                }
+                                        } catch {
+                                            req.logger.warning("Unable to prepare cancellation emails: \(error)")
+                                            emailFuture = req.eventLoop.makeSucceededFuture(())
                                         }
-                                    } catch {
-                                        print("Unable to send email. \(error)")
+                                    } else {
+                                        req.logger.warning("Unable to send cancellation email: winning team owner has no email address")
+                                        emailFuture = req.eventLoop.makeSucceededFuture(())
                                     }
 
-                                    return losingTeam.save(on: req.db).flatMap {
+                                    return emailFuture.flatMap {
+                                        losingTeam.save(on: req.db)
+                                    }.flatMap {
                                         winningTeam.save(on: req.db).transform(to: .ok)
                                     }
                                 }

@@ -732,8 +732,8 @@ extension AppController {
         let noShowRequest = try req.content.decode(NoShowRequest.self)
 
         let matchDB = try await Match.query(on: req.db)
-            .with(\.$homeTeam)
-            .with(\.$awayTeam)
+            .with(\.$homeTeam) { $0.with(\.$user) }
+            .with(\.$awayTeam) { $0.with(\.$user) }
             .with(\.$referee) { $0.with(\.$user) }
             .filter(\.$id == matchId)
             .first()
@@ -749,12 +749,12 @@ extension AppController {
             match.score = Score(home: 6, away: 0)
             winningTeamId = match.$homeTeam.id
             losingTeamId = match.$awayTeam.id
-            opponentEmail = match.homeTeam.usremail
+            opponentEmail = match.homeTeam.user?.email.trimmingCharacters(in: .whitespacesAndNewlines)
         case "away":
             match.score = Score(home: 0, away: 6)
             winningTeamId = match.$awayTeam.id
             losingTeamId = match.$homeTeam.id
-            opponentEmail = match.awayTeam.usremail
+            opponentEmail = match.awayTeam.user?.email.trimmingCharacters(in: .whitespacesAndNewlines)
         default:
             throw Abort(.badRequest, reason: "Invalid winning team specified")
         }
@@ -807,18 +807,20 @@ extension AppController {
         losingTeam.balance = balance - Double(rechnungAmount)
 
         do {
-            if let mail = opponentEmail {
+            if let mail = opponentEmail, !mail.isEmpty {
                 let emailController = EmailController()
-                try emailController.sendCancellationNotification(req: req, recipient: mail, match: match)
+                _ = try await emailController.sendCancellationNotification(req: req, recipient: mail, match: match).get()
 
                 if let ref = match.referee, let refUser = ref.user {
-                    try emailController.informRefereeCancellation(
+                    _ = try await emailController.informRefereeCancellation(
                         req: req,
                         email: refUser.email,
                         name: ref.name ?? "Referee",
                         match: match
-                    )
+                    ).get()
                 }
+            } else {
+                req.logger.warning("Unable to send cancellation email: winning team owner has no email address")
             }
         } catch {
             req.logger.warning("Unable to send cancellation emails: \(error)")

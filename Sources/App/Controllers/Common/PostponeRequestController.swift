@@ -67,6 +67,24 @@ final class PostponeRequestController: RouteCollection {
         }
     }
 
+    private func ownerEmail(for team: Team, req: Request, action: String) async throws -> String? {
+        guard team.$user.id != nil else {
+            req.logger.warning("\(action) email skipped: team \(team.id?.uuidString ?? "unknown") has no owner user")
+            return nil
+        }
+
+        guard let user = try await team.$user.get(on: req.db) else {
+            req.logger.warning("\(action) email skipped: team \(team.id?.uuidString ?? "unknown") owner user was not found")
+            return nil
+        }
+        let email = user.email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !email.isEmpty else {
+            req.logger.warning("\(action) email skipped: owner user \(user.id?.uuidString ?? "unknown") has an empty email")
+            return nil
+        }
+        return email
+    }
+
     func test(req: Request) throws -> EventLoopFuture<[String]> {
         req.eventLoop.makeSucceededFuture(["Is Online"])
     }
@@ -179,8 +197,8 @@ final class PostponeRequestController: RouteCollection {
         try await match.save(on: req.db)
 
         do {
-            if let recipient = requestee.usremail {
-                try await emailController.sendPostPone(
+            if let recipient = try await ownerEmail(for: requestee, req: req, action: "Postpone request") {
+                _ = try await emailController.sendPostPone(
                     req: req,
                     postpone: newRequest,
                     cancellerName: requester.teamName,
@@ -226,8 +244,8 @@ final class PostponeRequestController: RouteCollection {
         request.status = false
         try await request.update(on: req.db)
         do {
-            if let email = team.usremail {
-                try await self.emailController.approve(req: req, approverName: request.requestee.teamName,
+            if let email = try await ownerEmail(for: team, req: req, action: "Postpone approval") {
+                _ = try await self.emailController.approve(req: req, approverName: request.requestee.teamName,
                     recipient: email, match: match).get()
             }
             try await PostponePushNotifier.notifyRequestApproved(req: req,
@@ -264,8 +282,8 @@ final class PostponeRequestController: RouteCollection {
         try await request.update(on: req.db)
 
         do {
-            if let email = requester.usremail {
-                try await emailController.deny(
+            if let email = try await ownerEmail(for: requester, req: req, action: "Postpone denial") {
+                _ = try await emailController.deny(
                     req: req,
                     denierName: request.requestee.teamName,
                     recipient: email,
