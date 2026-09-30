@@ -6,6 +6,7 @@ import Fluent
 
 let app_migrations: [Migration] = [
     UserMigration(),
+    UserPermissionsMigration(),
     TeamMigration(),
     PlayerMigration(),
     LeagueMigration(),

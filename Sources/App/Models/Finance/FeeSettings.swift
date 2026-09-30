@@ -154,14 +154,16 @@ struct FeeSettingsMigration: AsyncMigration {
 
 extension AdminController {
     func setupFeeRoutes(on admin: RoutesBuilder) {
-        admin.get("fees") { req async throws -> FeeSettings in
+        let readable = admin.grouped(PermissionMiddleware(.financesRead))
+        let manageable = admin.grouped(PermissionMiddleware(.financesManage))
+        readable.get("fees") { req async throws -> FeeSettings in
             try await FeeService(database: req.db).read()
         }
-        admin.patch("fees") { req async throws -> FeeSettings in
+        manageable.patch("fees") { req async throws -> FeeSettings in
             let user = try req.auth.require(User.self)
             return try await FeeService(database: req.db).update(req.content.decode(FeeSettingsUpdate.self), by: user.requireID())
         }
-        admin.get("fees", "history") { req async throws -> [FeeChange] in
+        readable.get("fees", "history") { req async throws -> [FeeChange] in
             try await FeeService(database: req.db).read().history.reversed()
         }
     }

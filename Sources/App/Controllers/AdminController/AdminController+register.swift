@@ -35,21 +35,23 @@ extension AdminController {
 
     func setupRegistrationRoutes(on root: RoutesBuilder) {
         let regs = root.grouped("registrations")
+        let readable = regs.grouped(PermissionMiddleware(.ordersRead))
+        let manageable = regs.grouped(PermissionMiddleware(.ordersManage))
 
         // CRUD-ish
-        regs.get(use: getAllRegistrations)
-        regs.get(":id", use: getRegistrationByID)
+        readable.get(use: getAllRegistrations)
+        readable.get(":id", use: getRegistrationByID)
 
         // multipart patch (optional files)
-        regs.patch(":id", use: patchRegistration)
+        manageable.patch(":id", use: patchRegistration)
 
         // Actions
-        regs.post("register", use: register)
-        regs.post("confirm", ":id", use: confirm)
-        regs.post("assign", ":id", "league", ":leagueid", use: assignLeague)
-        regs.post("reject", ":id", use: reject)
-        regs.post("updatePayment", ":id", use: updatePaymentConfirmation)
-        regs.post("completeRegistration", ":id", use: startTeamCustomization)
+        manageable.post("register", use: register)
+        manageable.post("confirm", ":id", use: confirm)
+        manageable.post("assign", ":id", "league", ":leagueid", use: assignLeague)
+        manageable.post("reject", ":id", use: reject)
+        manageable.post("updatePayment", ":id", use: updatePaymentConfirmation)
+        manageable.post("completeRegistration", ":id", use: startTeamCustomization)
     }
 }
 
@@ -581,4 +583,3 @@ private extension AdminController {
         }
     }
 }
-

@@ -10,19 +10,21 @@ final class RechnungsController: RouteCollection {
     func setupRoutes(on app: RoutesBuilder) throws {
         let route = app.grouped(PathComponent(stringLiteral: repository.path))
             .grouped(Token.authenticator(), User.guardMiddleware(), AdminOnlyMiddleware())
+        let readable = route.grouped(PermissionMiddleware(.financesRead))
+        let manageable = route.grouped(PermissionMiddleware(.financesManage))
         
-        route.post(use: create)
-        route.post("batch", use: repository.createBatch)
+        manageable.post(use: create)
+        manageable.post("batch", use: repository.createBatch)
 
-        route.get(use: repository.index)
-        route.get(":id", use: repository.getbyID)
+        readable.get(use: repository.index)
+        readable.get(":id", use: repository.getbyID)
         
-        route.get("complete", ":id", use: complete)
-        route.delete(":id", use: repository.deleteID)
+        manageable.get("complete", ":id", use: complete)
+        manageable.delete(":id", use: repository.deleteID)
 
-        route.patch(":id", use: repository.updateID)
-        route.patch("batch", use: repository.updateBatch)
-        route.get("refund", ":id", use: refund)
+        manageable.patch(":id", use: repository.updateID)
+        manageable.patch("batch", use: repository.updateBatch)
+        manageable.get("refund", ":id", use: refund)
 
     }
 

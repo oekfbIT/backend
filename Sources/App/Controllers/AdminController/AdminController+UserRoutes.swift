@@ -23,18 +23,25 @@ extension AdminController {
     func setupUserRoutes(on root: RoutesBuilder) {
         let users = root.grouped("users")
 
-        users.get("admins", use: getAllAdminUsers)
-        users.get("team", use: getAllTeamUsers)
-        users.get(":id", use: getUserByID)
+        let readable = users.grouped(PermissionMiddleware(.usersRead))
+        readable.get("admins", use: getAllAdminUsers)
+        readable.get("team", use: getAllTeamUsers)
+        readable.get(":id", use: getUserByID)
 
-        users.post(use: adminCreateUser)
-        users.patch(":id", use: patchUser)
+        users.grouped(PermissionMiddleware(.usersCreate)).post(use: adminCreateUser)
+        users.grouped(PermissionMiddleware(.usersUpdate)).patch(":id", use: patchUser)
 
-        users.delete(":id", use: deleteAdminUser)
+        users.grouped(PermissionMiddleware(.usersDelete)).delete(":id", use: deleteAdminUser)
 
-        users.post(":id", "reset-password", use: resetForgottenPassword)
+        users.grouped(PermissionMiddleware(.usersUpdate)).post(":id", "reset-password", use: resetForgottenPassword)
 
-        users.get(":id", "bundle", use: getUserBundleWithTeams)
+        readable.get(":id", "bundle", use: getUserBundleWithTeams)
+
+        // Permission discovery and assignment.
+        users.get("permissions", "catalog", use: getPermissionCatalog)
+        readable.get(":id", "permissions", use: getUserPermissions)
+        users.grouped(PermissionMiddleware(.usersUpdate))
+            .put(":id", "permissions", use: replaceUserPermissions)
     }
 }
 
@@ -50,6 +57,7 @@ extension AdminController {
         let password: String
         let verified: Bool?
         let userID: String? // optional override; otherwise generated
+        let permissions: [UserPermission]?
     }
 
     struct PatchUserRequest: Content {
@@ -72,6 +80,15 @@ extension AdminController {
         let newPassword: String
     }
 
+    struct ReplacePermissionsRequest: Content {
+        let permissions: [UserPermission]
+    }
+
+    struct UserPermissionsResponse: Content {
+        let userId: UUID
+        let permissions: [UserPermission]
+    }
+
     struct AdminUserBundle: Content {
         let user: User.Public
         let teams: [AdminTeamOverview]
@@ -80,6 +97,36 @@ extension AdminController {
 
 // MARK: - Handlers
 extension AdminController {
+
+    func getPermissionCatalog(req: Request) async throws -> [UserPermission] {
+        UserPermission.allCases
+    }
+
+    func getUserPermissions(req: Request) async throws -> UserPermissionsResponse {
+        let user = try await requireUser(req: req, param: "id")
+        guard user.type == .admin else {
+            throw Abort(.badRequest, reason: "Permissions can only be assigned to admin users.")
+        }
+        return try permissionResponse(for: user)
+    }
+
+    func replaceUserPermissions(req: Request) async throws -> UserPermissionsResponse {
+        let user = try await requireUser(req: req, param: "id")
+        guard user.type == .admin else {
+            throw Abort(.badRequest, reason: "Permissions can only be assigned to admin users.")
+        }
+        let body = try req.content.decode(ReplacePermissionsRequest.self)
+        user.permissions = Array(Set(body.permissions)).sorted { $0.rawValue < $1.rawValue }
+        try await user.save(on: req.db)
+        return try permissionResponse(for: user)
+    }
+
+    private func permissionResponse(for user: User) throws -> UserPermissionsResponse {
+        UserPermissionsResponse(
+            userId: try user.requireID(),
+            permissions: Array(user.effectivePermissions).sorted { $0.rawValue < $1.rawValue }
+        )
+    }
     
     // GET /admin/users/admins
     // GET /admin/users/team
@@ -176,6 +223,7 @@ extension AdminController {
             tel: body.tel,
             passwordHash: hashed
         )
+        user.permissions = body.type == .admin ? Array(Set(body.permissions ?? [])) : []
 
         try await user.save(on: req.db)
         return try user.asPublic()

@@ -21,6 +21,7 @@ final class User: Model, Content, Codable {
     @OptionalField(key: FieldKeys.tel) var tel: String?
     @Field(key: FieldKeys.email) var email: String
     @Field(key: FieldKeys.passwordHash) var passwordHash: String
+    @OptionalField(key: FieldKeys.permissions) var permissions: [UserPermission]?
     @Children(for: \.$user) var teams: [Team]
     @Children(for: \.$user) var referees: [Referee]
 
@@ -34,6 +35,7 @@ final class User: Model, Content, Codable {
         let type: UserType
         let first: String
         let last: String
+        let permissions: [UserPermission]
     }
 
     struct FieldKeys {
@@ -46,6 +48,7 @@ final class User: Model, Content, Codable {
         static var tel: FieldKey { "tel" }
         static var verified: FieldKey { "verified" }
         static var passwordHash: FieldKey { "passwordHash" }
+        static var permissions: FieldKey { "permissions" }
     }
 
     init() {}
@@ -60,6 +63,7 @@ final class User: Model, Content, Codable {
         self.tel = tel
         self.verified = verified
         self.passwordHash = passwordHash
+        self.permissions = type == .admin ? [] : []
     }
 }
 
@@ -147,7 +151,8 @@ extension User: Authenticatable {
                verified: verified,
                type: type,
                first: firstName,
-               last: lastName)
+               last: lastName,
+               permissions: Array(effectivePermissions).sorted { $0.rawValue < $1.rawValue })
     }
 }
 

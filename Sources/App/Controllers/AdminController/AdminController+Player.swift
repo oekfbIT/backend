@@ -26,26 +26,31 @@ extension AdminController {
     func setupPlayerRoutes(on root: RoutesBuilder) {
         let players = root.grouped("players")
 
-        players.get(":id", use: getPlayerByID)
-        players.get("sid", ":sid", use: getPlayerBySID)
+        let readable = players.grouped(PermissionMiddleware(.playersRead))
+        let creatable = players.grouped(PermissionMiddleware(.playersCreate))
+        let updatable = players.grouped(PermissionMiddleware(.playersUpdate))
+        let deletable = players.grouped(PermissionMiddleware(.playersDelete))
 
-        players.get(":id", "events", use: getPlayerByIDWithEvents)
-        players.get(":id", "bundle", use: getPlayerByIDBundle)
+        readable.get(":id", use: getPlayerByID)
+        readable.get("sid", ":sid", use: getPlayerBySID)
+
+        readable.get(":id", "events", use: getPlayerByIDWithEvents)
+        readable.get(":id", "bundle", use: getPlayerByIDBundle)
 
         // multipart/form-data
-        players.post("register", use: registerPlayer)
+        creatable.post("register", use: registerPlayer)
 
-        players.patch(":id", use: patchPlayer)
+        updatable.patch(":id", use: patchPlayer)
 
-        players.post(":id", "reset", use: resetPlayer)
-        players.delete(":id", use: deletePlayer)
+        updatable.post(":id", "reset", use: resetPlayer)
+        deletable.delete(":id", use: deletePlayer)
 
-        players.post(":id", "copy", use: copyPlayer)
-        players.post(":id", "transfer", use: transferPlayer)
-        players.post("search", use: searchPlayersCompact) // POST /admin/players/search
-        players.get(use: getAllPlayersCompact)            // GET  /admin/players
-        players.post(":id", "identification", use: uploadPlayerIdentification)
-        players.post(":id", "image", use: uploadPlayerImage)
+        creatable.post(":id", "copy", use: copyPlayer)
+        updatable.post(":id", "transfer", use: transferPlayer)
+        readable.post("search", use: searchPlayersCompact) // POST /admin/players/search
+        readable.get(use: getAllPlayersCompact)            // GET  /admin/players
+        updatable.post(":id", "identification", use: uploadPlayerIdentification)
+        updatable.post(":id", "image", use: uploadPlayerImage)
 
     }
     
