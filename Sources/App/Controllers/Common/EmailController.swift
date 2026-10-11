@@ -564,6 +564,8 @@ final class EmailController {
 
     
     func sendTransferRequest(req: Request, recipient: String, transfer: Transfer) throws -> EventLoopFuture<HTTPStatus> {
+        let transferID = try transfer.requireID()
+        let actionToken = try EmailActionLink.token(kind: "transfer", id: transferID)
         // Apply the SMTP configuration
         try applySMTPConfig(req)
 
@@ -580,7 +582,7 @@ final class EmailController {
 
             <p>Um diese Anfrage anzunehmen oder abzulehnen, klicken Sie bitte auf den folgenden Button:</p>
 
-            <a href="https://oekfb.eu/#/transfer/\(transfer.id ?? UUID())" style="display: inline-block; padding: 10px 20px; font-size: 16px; color: white; background-color: #007bff; text-align: center; text-decoration: none; border-radius: 5px;">Transfer Anfrage beantworten</a>
+            <a href="https://oekfb.eu/#/transfer/\(transferID)?token=\(actionToken)" style="display: inline-block; padding: 10px 20px; font-size: 16px; color: white; background-color: #007bff; text-align: center; text-decoration: none; border-radius: 5px;">Transfer Anfrage beantworten</a>
             
             <p>Wir freuen uns über Ihre baldige Rückmeldung und verbleiben.</p>
 
@@ -664,6 +666,8 @@ extension EmailController {
     }
 
     func sendPostPone(req: Request, postpone: PostponeRequest, cancellerName: String, recipient: String, match: Match) throws -> EventLoopFuture<HTTPStatus> {
+        let postponeID = try postpone.requireID()
+        let actionToken = try EmailActionLink.token(kind: "postpone", id: postponeID)
         try applySMTPConfig(req)
         
         let matchDateString = formatDate(match.details.date)
@@ -680,7 +684,7 @@ extension EmailController {
               Bitte bestätigen oder lehnen Sie die Anfrage ab, indem Sie den folgenden Link aufrufen:
             </p>
             <p>
-              <a href="https://www.oekfb.eu/#/postpone/\(postpone.id)">
+              <a href="https://www.oekfb.eu/#/postpone/\(postponeID)?token=\(actionToken)">
                 Spielverschiebung ansehen
               </a>
             </p>

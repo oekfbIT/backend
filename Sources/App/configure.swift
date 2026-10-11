@@ -178,7 +178,8 @@ public func configure(_ app: Application) throws {
             "sec-ch-ua",
             "sec-ch-ua-mobile",
             "sec-ch-ua-platform",
-            "X-Fee-Version"
+            "X-Fee-Version",
+            "X-Email-Action-Token"
         ],
         allowCredentials: true
     )

@@ -219,15 +219,23 @@ final class PostponeRequestController: RouteCollection {
     }
 
     func approveRequest(req: Request) async throws -> PostponeRequest {
+        try await approveRequest(req: req, fromEmail: false)
+    }
+
+    func approveRequest(req: Request, fromEmail: Bool) async throws -> PostponeRequest {
         let id = try req.parameters.require("id", as: UUID.self)
-        let user = try req.auth.require(User.self)
         guard let request = try await PostponeRequest.find(id, on: req.db),
               let requesterID = request.requester.id,
               let requesteeID = request.requestee.id else { throw Abort(.notFound) }
-        if user.type != .admin {
-            guard user.type == .team,
-                  let recipient = try await Team.find(requesteeID, on: req.db),
-                  recipient.$user.id == user.id else { throw Abort(.forbidden) }
+        if fromEmail {
+            try EmailActionLink.require(req, kind: "postpone", id: id)
+        } else {
+            let user = try req.auth.require(User.self)
+            if user.type != .admin {
+                guard user.type == .team,
+                      let recipient = try await Team.find(requesteeID, on: req.db),
+                      recipient.$user.id == user.id else { throw Abort(.forbidden) }
+            }
         }
         // Previously approved requests never acquire a retroactive charge.
         if request.response == true { return request }
@@ -256,6 +264,10 @@ final class PostponeRequestController: RouteCollection {
 
 
     func denyRequest(req: Request) async throws -> PostponeRequest {
+        try await denyRequest(req: req, fromEmail: false)
+    }
+
+    func denyRequest(req: Request, fromEmail: Bool) async throws -> PostponeRequest {
         let id = try req.parameters.require("id", as: UUID.self)
         guard let request = try await PostponeRequest.query(on: req.db)
             .with(\.$match)
@@ -268,7 +280,11 @@ final class PostponeRequestController: RouteCollection {
               let requesteeID = request.requestee.id else {
             throw Abort(.badRequest, reason: "Missing requester or requestee ID")
         }
-        _ = try await ApplicationAccess.requireTeam(requesteeID, req: req)
+        if fromEmail {
+            try EmailActionLink.require(req, kind: "postpone", id: id)
+        } else {
+            _ = try await ApplicationAccess.requireTeam(requesteeID, req: req)
+        }
         guard request.status, request.response == nil else {
             throw Abort(.conflict, reason: "Die Anfrage ist bereits abgeschlossen.")
         }

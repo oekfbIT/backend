@@ -118,6 +118,25 @@ final class AppTests: XCTestCase {
         })
     }
 
+    func testEmailDecisionRoutesRequireSignedLink() throws {
+        let app = Application(.testing)
+        defer { app.shutdown() }
+        try routes(app)
+
+        let id = UUID().uuidString
+        for kind in ["postpone", "transfer"] {
+            let path = "email-actions/\(kind)/\(id)"
+            try app.test(.GET, path, afterResponse: { response in
+                XCTAssertEqual(response.status, .unauthorized)
+            })
+            for action in kind == "postpone" ? ["approve", "deny"] : ["confirm", "reject"] {
+                try app.test(.POST, "\(path)/\(action)", afterResponse: { response in
+                    XCTAssertEqual(response.status, .unauthorized)
+                })
+            }
+        }
+    }
+
     func testRefereeSelfResponseOmitsSensitiveFields() throws {
         let response = AppController.RefereeSelfResponse(
             id: UUID(),

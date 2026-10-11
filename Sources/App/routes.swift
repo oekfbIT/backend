@@ -19,7 +19,8 @@ func routes(_ app: Application) throws {
         TeamPaymentController(),
         AppController(path: "app"),
         AdminController(path: "admin"),
-        LegalDocumentController(path: "legal")
+        LegalDocumentController(path: "legal"),
+        EmailActionController()
     ]
 
     // Legacy/root CRUD endpoints are retained for administrator compatibility,
