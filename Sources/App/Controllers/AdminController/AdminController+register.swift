@@ -374,8 +374,7 @@ extension AdminController {
         if userID == reg.id, let password = reg.initialPassword {
             _ = try await EmailController().sendTeamLogin(req: req, recipient: user.email, email: user.email, password: password).get()
         } else {
-            try await RegistrationFlow.notify(reg, event: "approved", req: req, recipient: user.email,
-                subject: "ÖKFB – Mannschaft freigegeben", body: "<p>Ihre Mannschaft wurde freigegeben. Melden Sie sich mit Ihren bestehenden Zugangsdaten in der ÖKFB App an.</p>")
+            try await RegistrationFlow.notify(reg, event: "approved", req: req, recipient: user.email)
         }
         reg.isLoginDataSent = true
         try await reg.save(on: req.db)
@@ -387,8 +386,7 @@ extension AdminController {
         guard reg.team == nil else { throw Abort(.conflict, reason: "Die Mannschaft wurde bereits angelegt.") }
         reg.status = .rejected
         try await reg.save(on: req.db)
-        try await RegistrationFlow.notify(reg, event: "rejected", req: req,
-            subject: "ÖKFB – Entscheidung zu Ihrer Anmeldung", body: "<p>Ihre Mannschaftsanmeldung wurde abgelehnt. Bei Fragen wenden Sie sich bitte an office@oekfb.eu.</p>")
+        try await RegistrationFlow.notify(reg, event: "rejected", req: req)
         return .ok
     }
 
@@ -402,6 +400,11 @@ extension AdminController {
         }
 
         try RegistrationFlow.requireEditable(reg)
+        guard RegistrationFlow.documentsComplete(reg) else {
+            throw Abort(.conflict, reason: "Bitte zuerst den unterschriebenen Vertrag und beide Ausweise vollständig einreichen lassen.")
+        }
+        try RegistrationFlow.validateContact(reg.primary)
+        try RegistrationFlow.validateContact(reg.secondary)
         guard reg.assignedLeague == nil else {
             throw Abort(.conflict, reason: "Die Liga wurde bereits zugewiesen. Verwenden Sie Zahlungsinformation erneut senden.")
         }
@@ -450,8 +453,7 @@ extension AdminController {
 
         let updated = try await RegistrationFlow.recordPayment(reg, amount: paymentRequest.paidAmount,
             paymentID: paymentRequest.paymentId ?? UUID(), req: req)
-        try? await RegistrationFlow.notify(updated, event: "paymentReceived", req: req,
-            subject: "ÖKFB – Zahlung verbucht", body: "<p>Ihre Zahlung wurde verbucht. Aktueller Saldo: \(updated.paidAmount ?? 0) EUR. Die Administration prüft die Freigabe Ihrer Mannschaft.</p>")
+        try? await RegistrationFlow.notify(updated, event: "paymentReceived", req: req)
         return .ok
     }
 
@@ -541,21 +543,8 @@ extension AdminController {
 
     func requestRegistrationDocuments(req: Request) async throws -> HTTPStatus {
         let registration = try await requireRegistration(req: req, param: "id")
-        try RegistrationFlow.requireEditable(registration)
-        let contract = try RegistrationFlow.contractURL()
-        let id = try registration.requireID()
-        let token = try EmailActionLink.token(kind: "registration", id: id)
-        let link = "\(try RegistrationFlow.homepageURL())/#/registration/\(id)?token=\(token)"
-        registration.documentsRequestedAt = Date.viennaNow
-        try await registration.save(on: req.db)
-        try await RegistrationFlow.notify(registration, event: "documentsRequested", req: req,
-            subject: "ÖKFB – Bitte Anmeldeunterlagen hochladen",
-            body: """
-            <p>Bitte laden Sie den unterschriebenen Vertrag und die Ausweise beider Kontaktpersonen hoch und prüfen Sie deren Namen und Kontaktdaten.</p>
-            <p><a href="\(contract.absoluteString)">Vertrag herunterladen</a></p>
-            <p><a href="\(link)">Unterlagen sicher hochladen</a> (30 Tage gültig)</p>
-            <p>Dieser persönliche Link darf nicht weitergegeben werden. Die Mannschaft wird erst nach Prüfung und Freigabe durch die Administration angelegt.</p>
-            """)
+        let values = try await RegistrationFlow.prepareDocumentInvitation(registration, req: req)
+        try await RegistrationFlow.notify(registration, event: "documentsRequested", req: req, values: values)
         return .ok
     }
 }
@@ -589,17 +578,13 @@ extension AdminController {
             try await sendRegistrationApproval(registration, req: req)
         case "documentsReceived":
             guard RegistrationFlow.documentsComplete(registration) else { throw Abort(.conflict) }
-            try await RegistrationFlow.notify(registration, event: event, req: req, subject: "ÖKFB – Unterlagen eingegangen",
-                body: "<p>Ihre Unterlagen wurden gespeichert und werden von der Administration geprüft.</p>")
+            try await RegistrationFlow.notify(registration, event: event, req: req)
         case "paymentReceived":
             guard registration.emailDeliveries?[event] != nil else { throw Abort(.conflict) }
-            try await RegistrationFlow.notify(registration, event: event, req: req, subject: "ÖKFB – Zahlung verbucht",
-                body: "<p>Ihre Zahlung wurde verbucht. Aktueller Saldo: \(registration.paidAmount ?? 0) EUR.</p>")
+            try await RegistrationFlow.notify(registration, event: event, req: req)
         case "adminRequestReceived", "adminDocumentsReceived":
             try await RegistrationFlow.notify(registration, event: event, req: req,
-                recipient: Environment.get("REGISTRATION_ADMIN_EMAIL") ?? "office@oekfb.eu",
-                subject: "ÖKFB – Anmeldung zur Prüfung",
-                body: "<p>Bitte Anmeldung \(try registration.requireID()) in der Registrierungsübersicht prüfen.</p>")
+                recipient: Environment.get("REGISTRATION_ADMIN_EMAIL") ?? "office@oekfb.eu")
         default: throw Abort(.badRequest, reason: "Unbekannte Benachrichtigung.")
         }
         return .ok

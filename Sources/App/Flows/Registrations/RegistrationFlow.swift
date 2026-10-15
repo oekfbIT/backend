@@ -55,9 +55,7 @@ enum RegistrationFlow {
             }
             if registration.emailDeliveries?["adminRequestReceived"] != "sent" {
                 try? await notify(registration, event: "adminRequestReceived", req: req,
-                    recipient: Environment.get("REGISTRATION_ADMIN_EMAIL") ?? "office@oekfb.eu",
-                    subject: "ÖKFB – Neue Mannschaftsanmeldung",
-                    body: "<p>Eine neue Mannschaftsanmeldung liegt vor: \(try registration.requireID()). Bitte in der Registrierungsübersicht prüfen.</p>")
+                    recipient: Environment.get("REGISTRATION_ADMIN_EMAIL") ?? "office@oekfb.eu")
             }
             if let deliveryError { throw deliveryError }
             return .ok
@@ -66,22 +64,21 @@ enum RegistrationFlow {
 
     static func documentsReceived(_ registration: TeamRegistration, req: Request) async {
         guard documentsComplete(registration) else { return }
-        try? await notify(registration, event: "documentsReceived", req: req,
-            subject: "ÖKFB – Unterlagen eingegangen", body: "<p>Ihre Unterlagen wurden gespeichert und werden von der Administration geprüft. Eine Mannschaft wird erst nach Freigabe angelegt.</p>")
+        try? await notify(registration, event: "documentsReceived", req: req)
         try? await notify(registration, event: "adminDocumentsReceived", req: req,
-            recipient: Environment.get("REGISTRATION_ADMIN_EMAIL") ?? "office@oekfb.eu",
-            subject: "ÖKFB – Anmeldung zur Prüfung", body: "<p>Neue Unterlagen zur Anmeldung \(registration.id?.uuidString ?? ""). Bitte in der Registrierungsübersicht prüfen.</p>")
+            recipient: Environment.get("REGISTRATION_ADMIN_EMAIL") ?? "office@oekfb.eu")
     }
 
     static func notify(_ registration: TeamRegistration, event: String, req: Request,
-                       recipient: String? = nil, subject: String, body: String) async throws {
+                       recipient: String? = nil, values: [String: String] = [:]) async throws {
         var deliveries = registration.emailDeliveries ?? [:]
         deliveries[event] = "pending"
         registration.emailDeliveries = deliveries
         try await registration.save(on: req.db)
         do {
             _ = try await EmailController().sendRegistrationNotice(req: req,
-                recipient: recipient ?? registration.primary?.email ?? "", subject: subject, body: body).get()
+                recipient: recipient ?? registration.primary?.email ?? "", event: event,
+                values: values.merging(["registrationId": registration.id?.uuidString ?? "", "balance": String(registration.paidAmount ?? 0)]) { provided, _ in provided }).get()
             deliveries[event] = "sent"
             registration.emailDeliveries = deliveries
             try await registration.save(on: req.db)
@@ -136,6 +133,17 @@ extension RegistrationFlow {
             throw Abort(.serviceUnavailable, reason: "REGISTRATION_CONTRACT_URL ist nicht konfiguriert.")
         }
         return url
+    }
+
+    static func prepareDocumentInvitation(_ registration: TeamRegistration, req: Request) async throws -> [String: String] {
+        try requireEditable(registration)
+        let contract = try contractURL()
+        let id = try registration.requireID()
+        let token = try EmailActionLink.token(kind: "registration", id: id)
+        let link = "\(try homepageURL())/#/registration/\(id)?token=\(token)"
+        registration.documentsRequestedAt = Date.viennaNow
+        try await registration.save(on: req.db)
+        return ["contractUrl": contract.absoluteString, "uploadUrl": link]
     }
 
     static func homepageURL() throws -> String {

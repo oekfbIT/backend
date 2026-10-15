@@ -2,15 +2,27 @@
 
 The homepage (`oekfb_hompage`), Livescore (`Development/livescore`) and ÖKFB Client admin (`PUBLIC_REPO/FRONTEND/oekfbFrontEndClient`) share the backend `TeamRegistration` record. Submission does not create a team. AdminGateway is not part of this change.
 
+## Corrected flow / Korrigierter Ablauf
+
+1. **Registrierung:** Website-Anfrage absenden; in der App zuerst das Konto per E-Mail bestätigen und dann den Teamantrag absenden.
+2. **Sofortige Willkommens-E-Mail:** Vertragsdownload und persönliche Uploadseite (30 Tage gültig). Kein Warten auf eine Einladung durch den Admin.
+3. **Unterlagen einreichen:** Namen und Kontaktdaten beider Vertragspartner, beide Ausweise und unterschriebenen Vertrag über Website oder App ergänzen. Teilspeichern möglich; Logo optional.
+4. **Prüfung:** Erst bei vollständigen Unterlagen erhalten Antragsteller und Büro die Eingangsbestätigung; die Administration prüft den Antrag.
+5. **Entscheidung:** Ablehnen mit E-Mail oder annehmen und einer Liga zuweisen. Die Ligazuweisung ist vor vollständigen Unterlagen serverseitig gesperrt.
+6. **Zahlungsaufforderung:** Automatische E-Mail mit offenem Gesamtbetrag inklusive Kaution, vorhandener Bankverbindung und Mannschaftsname als Zahlungsreferenz.
+7. **Zahlung und Teamfreigabe:** Admin verbucht die Zahlung (Bestätigung per E-Mail). Nach ausgeglichenem Saldo bestätigt der Admin die endgültige Team-Erstellung. Neue Konten erhalten Zugangsdaten, bestehende behalten ihr Passwort.
+
+Die frühere PNG-Ablaufgrafik zeigt noch die separate Admin-Einladung und ist durch diesen Ablauf überholt.
+
 ## Lifecycle
 
 | Stage | Behavior | Communication |
 | --- | --- | --- |
-| Initial request | Homepage creates a draft; Livescore requires a verified team account and accepts an application without files. | Welcome email to the primary contact; notification to the office. |
+| Initial request | Homepage creates a draft; Livescore requires a verified team account and accepts an application without files. | Welcome email with contract download and protected upload link to the primary contact; informational notification to the office. |
 | Verification | App account links expire after 24 hours; repeated clicks are safe within that window. Credential-authenticated resend is available with a 60-second cooldown. | Verification link opens the homepage verification screen. |
-| Documents requested | Admin sends an invitation. The link is scoped to one registration, expires after 30 days and returns upload flags, not private document URLs. | Contract download and signed upload link. |
+| Upload invitation | The welcome email immediately includes the contract download and protected upload link. Admin can resend the link as a reminder. The link is scoped to one registration, expires after 30 days and returns upload flags, not private document URLs. | Contract download and signed upload link. |
 | Documents submitted | Both contacts, both IDs and signed contract are retained. Partial saves are supported; completed documents move draft to verified. | Receipt to applicant and notice to office when documents are complete. |
-| League assigned | Price is calculated once, including deposit. A resend does not debit the registration again. | Payment information to primary contact. |
+| League assigned | Only after complete contacts, signed contract and both IDs: admin accepts the application and assigns a league. Price is calculated once, including deposit. A resend does not debit the registration again. | Payment information to primary contact. |
 | Payment recorded | Atomic credit with a request receipt; retrying the same payment ID cannot credit twice. Non-negative balance moves to paid. | Payment confirmation. Delivery failure does not make the payment fail. |
 | Admin approval | Requires both contacts, IDs, contract, league and finite non-negative balance. Creates and links one team with a stable ID. | New accounts receive generated credentials; existing accounts keep their password and receive approval instructions. |
 | Rejection | No team is created; applicant editing is closed. | Rejection email. |

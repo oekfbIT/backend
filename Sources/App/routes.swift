@@ -27,6 +27,7 @@ func routes(_ app: Application) throws {
     // Legacy/root CRUD endpoints are retained for administrator compatibility,
     // but are now protected as one fail-closed group.
     let adminOnlyRoutes: [RouteCollection] = [
+        EmailTemplateController(),
         UserController(path: "users"),
         TeamController(path: "teams"),
         PlayerController(path: "players"),
