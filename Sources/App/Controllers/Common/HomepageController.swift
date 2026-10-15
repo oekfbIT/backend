@@ -406,45 +406,8 @@ final class HomepageController: RouteCollection {
             }
     }
 
-    func register(req: Request) throws -> EventLoopFuture<HTTPStatus> {
-        let registrationRequest = try req.content.decode(TeamRegistrationRequest.self)
-
-        let newRegistration = TeamRegistration()
-        newRegistration.primary = registrationRequest.primaryContact
-        newRegistration.secondary = registrationRequest.secondaryContact
-        newRegistration.teamName = registrationRequest.teamName
-        newRegistration.verein = registrationRequest.verein
-        newRegistration.refereerLink = registrationRequest.referCode
-        newRegistration.status = .draft
-        newRegistration.paidAmount = 0.0
-        newRegistration.bundesland = registrationRequest.bundesland
-        newRegistration.initialPassword = registrationRequest.initialPassword ?? String.randomString(length: 8)
-        newRegistration.isWelcomeEmailSent = true
-        newRegistration.isLoginDataSent = false
-
-        return newRegistration.save(on: req.db).map {
-            self.sendWelcomeEmailInBackground(req: req, recipient: registrationRequest.primaryContact.email, registration: newRegistration)
-            return HTTPStatus.ok
-        }.flatMapError { _ in
-            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Invalid request"))
-        }
-    }
-
-    private func sendWelcomeEmailInBackground(req: Request, recipient: String, registration: TeamRegistration?) {
-        req.eventLoop.execute {
-            do {
-                try emailController.sendWelcomeMail(req: req, recipient: recipient, registration: registration).whenComplete { result in
-                    switch result {
-                    case .success:
-                        req.logger.info("Registration welcome email sent")
-                    case .failure(let error):
-                        req.logger.warning("Registration welcome email failed: \(error.localizedDescription)")
-                    }
-                }
-            } catch {
-                req.logger.warning("Failed to initiate registration welcome email: \(error.localizedDescription)")
-            }
-        }
+    func register(req: Request) async throws -> HTTPStatus {
+        try await TeamRegistrationController(path: "registrations").register(req: req)
     }
 
     // MARK: - Leaderboard Handlers

@@ -52,7 +52,10 @@ final class StrafsenatController: RouteCollection {
     }
 
     func index(req: Request) throws -> EventLoopFuture<[StrafsenatResponse]> {
-        let strafsenatsFuture = Strafsenat.query(on: req.db).all()
+        // Keep the newest cases at the top for every consumer of this endpoint.
+        let strafsenatsFuture = Strafsenat.query(on: req.db)
+            .sort(\.$created, .descending)
+            .all()
         let matchesFuture = Match.query(on: req.db).all()
         let teamsFuture = Team.query(on: req.db).all()
 

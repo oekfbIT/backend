@@ -46,6 +46,10 @@ extension AdminController {
         manageable.patch(":id", use: patchRegistration)
 
         // Actions
+        manageable.post("resendNotification", ":id", ":event", use: resendRegistrationNotification)
+        manageable.post("requestDocuments", ":id", use: requestRegistrationDocuments)
+        manageable.post("resendPayment", ":id", use: resendRegistrationPayment)
+        manageable.post("resendWelcome", ":id", use: resendRegistrationWelcome)
         manageable.post("register", use: register)
         manageable.post("confirm", ":id", use: confirm)
         manageable.post("assign", ":id", "league", ":leagueid", use: assignLeague)
@@ -79,6 +83,7 @@ extension AdminController {
 
     struct UpdatePaymentRequest: Content {
         let paidAmount: Double
+        let paymentId: UUID?
     }
 
     /// Multipart patch payload
@@ -141,7 +146,9 @@ extension AdminController {
     // PATCH /admin/registrations/:id  (multipart/form-data)
     func patchRegistration(req: Request) async throws -> TeamRegistration {
         let reg = try await requireRegistration(req: req, param: "id")
+        try RegistrationFlow.requireEditable(reg)
         let body = try req.content.decode(PatchTeamRegistrationRequest.self)
+        try [body.customerSignedContractFile, body.adminSignedContractFile, body.teamLogoFile, body.primaryIdentificationFile, body.secondaryIdentificationFile].compactMap { $0 }.forEach(RegistrationFlow.validateFile)
 
         // non-file fields
         if let v = body.primary { reg.primary = v }
@@ -154,7 +161,9 @@ extension AdminController {
             reg.teamName = t
         }
 
-        if let v = body.status { reg.status = v }
+        if let v = body.status, v != reg.status {
+            throw Abort(.badRequest, reason: "Bitte die Registrierungsaktionen für Statusänderungen verwenden.")
+        }
         if let v = body.bundesland { reg.bundesland = v }
 
         if let v = body.initialPassword { reg.initialPassword = v }
@@ -167,8 +176,6 @@ extension AdminController {
         if body.paidAmount != nil { reg.paidAmount = body.paidAmount }
         if body.kaution != nil { reg.kaution = body.kaution }
 
-        if let v = body.isWelcomeEmailSent { reg.isWelcomeEmailSent = v }
-        if let v = body.isLoginDataSent { reg.isLoginDataSent = v }
         if let v = body.dateCreated { reg.dateCreated = v }
 
         // direct URL set (still supported)
@@ -234,6 +241,9 @@ extension AdminController {
     // draft creation + welcome email + optional file uploads
     func register(req: Request) async throws -> HTTPStatus {
         let registrationRequest = try req.content.decode(TeamRegistrationRequest.self)
+        try RegistrationFlow.validateContact(registrationRequest.primaryContact)
+        guard !registrationRequest.teamName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw Abort(.badRequest) }
+        try [registrationRequest.customerSignedContractFile, registrationRequest.adminSignedContractFile, registrationRequest.teamLogoFile, registrationRequest.primaryIdentificationFile, registrationRequest.secondaryIdentificationFile].compactMap { $0 }.forEach(RegistrationFlow.validateFile)
 
         let newRegistration = TeamRegistration()
         newRegistration.primary = registrationRequest.primaryContact
@@ -244,11 +254,11 @@ extension AdminController {
         newRegistration.status = .draft
         newRegistration.paidAmount = 0.0
         newRegistration.bundesland = registrationRequest.bundesland
-        newRegistration.initialPassword = registrationRequest.initialPassword ?? String.randomString(length: 8)
+        newRegistration.initialPassword = String.randomString(length: 20)
         newRegistration.customerSignedContract = nil
         newRegistration.adminSignedContract = nil
         newRegistration.teamLogo = nil
-        newRegistration.isWelcomeEmailSent = true
+        newRegistration.isWelcomeEmailSent = false
         newRegistration.isLoginDataSent = false
         newRegistration.dateCreated = Date.viennaNow
 
@@ -298,11 +308,7 @@ extension AdminController {
             try await newRegistration.save(on: req.db)
         }
 
-        sendWelcomeEmailInBackground(
-            req: req,
-            recipient: registrationRequest.primaryContact.email,
-            registration: newRegistration
-        )
+        _ = try? await RegistrationFlow.sendWelcome(req: req, registration: newRegistration).get()
 
         return .ok
     }
@@ -310,60 +316,79 @@ extension AdminController {
     // POST /admin/registrations/confirm/:id
     func confirm(req: Request) async throws -> HTTPStatus {
         let reg = try await requireRegistration(req: req, param: "id")
-        reg.status = .approved
-
-        let passwordForEmail = reg.initialPassword ?? String.randomString(length: 8)
-        if reg.initialPassword == nil { reg.initialPassword = passwordForEmail }
-
-        guard let leagueId = reg.assignedLeague else {
-            throw Abort(.badRequest, reason: "assignedLeague is missing.")
+        if reg.team != nil {
+            try await sendRegistrationApproval(reg, req: req)
+            return .ok
         }
-
-        let user = try await resolveUser(for: reg, on: req)
-        if reg.user == nil, let uid = user.id { reg.user = uid }
-
+        // Repair registrations approved by the legacy flow, which omitted the team link.
+        if [.approved, .teamCustomization].contains(reg.status), let owner = reg.user {
+            let existing = try await Team.query(on: req.db).filter(\.$user.$id == owner).filter(\.$teamName == reg.teamName).all()
+            guard existing.count <= 1 else {
+                throw Abort(.conflict, reason: "Mehrere Mannschaften passen zu dieser Anmeldung. Bitte die Verknüpfung manuell prüfen.")
+            }
+            if let team = existing.first {
+                reg.team = try team.requireID()
+                reg.status = .approved
+                try await reg.save(on: req.db)
+                try await sendRegistrationApproval(reg, req: req)
+                return .ok
+            }
+            // A previous attempt may have saved approval before failing to create the team.
+            reg.status = .paid
+        }
+        try RegistrationFlow.requireEditable(reg)
+        try RegistrationFlow.validateContact(reg.primary)
+        try RegistrationFlow.validateContact(reg.secondary)
+        guard RegistrationFlow.documentsComplete(reg), let balance = reg.paidAmount, balance.isFinite, balance >= 0,
+              let leagueId = reg.assignedLeague else {
+            throw Abort(.badRequest, reason: "Vertrag, beide Ausweise, Liga und vollständige Zahlung sind erforderlich.")
+        }
         let league = try await requireLeagueByID(leagueId, db: req.db)
-
+        let user = try await resolveUser(for: reg, on: req)
+        reg.user = try user.requireID()
+        // Stable identity makes retries safe even after a crash between the two saves.
+        let teamID = try reg.requireID()
+        if try await Team.find(teamID, on: req.db) == nil {
+            let team = Team(id: teamID,
+                sid: String.randomNum(length: 5), userId: user.id,
+                leagueId: leagueId, leagueCode: league.code, points: 0, coverimg: "",
+                logo: reg.teamLogo ?? "", teamName: reg.teamName,
+                foundationYear: Date.viennaNow.yearString, membershipSince: Date.viennaNow.yearString,
+                averageAge: "0", coach: Trainer(name: "", email: "", image: ""),
+                trikot: Trikot(home: "", away: ""), balance: balance,
+                usremail: user.email, usrpass: nil, usrtel: reg.primary?.phone, kaution: reg.kaution)
+            do { try await team.create(on: req.db) }
+            catch { guard try await Team.find(teamID, on: req.db) != nil else { throw error } }
+        }
+        reg.team = teamID
+        reg.status = .approved
         try await reg.save(on: req.db)
-
-        let team = Team(
-            sid: String.randomNum(length: 5),
-            userId: user.id,
-            leagueId: leagueId,
-            leagueCode: league.code,
-            points: 0,
-            coverimg: "",
-            logo: reg.teamLogo ?? "",
-            teamName: reg.teamName,
-            foundationYear: Date.viennaNow.yearString,
-            membershipSince: Date.viennaNow.yearString,
-            averageAge: "0",
-            coach: Trainer(name: "", email: "", image: ""),
-            trikot: Trikot(home: "", away: ""),
-            balance: reg.paidAmount ?? 0.0,
-            usremail: reg.primary?.email,
-            usrpass: reg.initialPassword,
-            usrtel: reg.primary?.phone,
-            kaution: reg.kaution
-        )
-
-        try await team.save(on: req.db)
-
-        sendTeamLoginInBackground(
-            req: req,
-            recipient: user.email,
-            email: user.email,
-            password: passwordForEmail
-        )
-
+        try await sendRegistrationApproval(reg, req: req)
         return .ok
+    }
+
+    private func sendRegistrationApproval(_ reg: TeamRegistration, req: Request) async throws {
+        guard reg.isLoginDataSent != true else { return }
+        guard let userID = reg.user, let user = try await User.find(userID, on: req.db) else { throw Abort(.notFound) }
+        // Only registrations that created an account may send their generated password.
+        if userID == reg.id, let password = reg.initialPassword {
+            _ = try await EmailController().sendTeamLogin(req: req, recipient: user.email, email: user.email, password: password).get()
+        } else {
+            try await RegistrationFlow.notify(reg, event: "approved", req: req, recipient: user.email,
+                subject: "ÖKFB – Mannschaft freigegeben", body: "<p>Ihre Mannschaft wurde freigegeben. Melden Sie sich mit Ihren bestehenden Zugangsdaten in der ÖKFB App an.</p>")
+        }
+        reg.isLoginDataSent = true
+        try await reg.save(on: req.db)
     }
 
     // POST /admin/registrations/reject/:id
     func reject(req: Request) async throws -> HTTPStatus {
         let reg = try await requireRegistration(req: req, param: "id")
+        guard reg.team == nil else { throw Abort(.conflict, reason: "Die Mannschaft wurde bereits angelegt.") }
         reg.status = .rejected
         try await reg.save(on: req.db)
+        try await RegistrationFlow.notify(reg, event: "rejected", req: req,
+            subject: "ÖKFB – Entscheidung zu Ihrer Anmeldung", body: "<p>Ihre Mannschaftsanmeldung wurde abgelehnt. Bei Fragen wenden Sie sich bitte an office@oekfb.eu.</p>")
         return .ok
     }
 
@@ -376,9 +401,13 @@ extension AdminController {
             throw Abort(.badRequest, reason: "Missing or invalid leagueid.")
         }
 
+        try RegistrationFlow.requireEditable(reg)
+        guard reg.assignedLeague == nil else {
+            throw Abort(.conflict, reason: "Die Liga wurde bereits zugewiesen. Verwenden Sie Zahlungsinformation erneut senden.")
+        }
         let league = try await requireLeagueByID(leagueID, db: req.db)
 
-        let teamCount = league.teamcount ?? 0
+        let teamCount = max(league.teamcount ?? 0, 1)
         let topayAmount: Double
         switch teamCount {
         case 0...6:
@@ -395,19 +424,17 @@ extension AdminController {
         reg.kaution = fees.fee(.registrationDeposit).euros
         reg.appliedFees = [fees.fee(.registrationDeposit), fees.fee(.registrationPerGame)]
 
-        if let currentPaidAmount = reg.paidAmount {
-            reg.paidAmount = currentPaidAmount - topayAmount
-        } else {
-            reg.paidAmount = -(topayAmount + (reg.kaution ?? 0))
-        }
-
+        reg.paidAmount = -(topayAmount + (reg.kaution ?? 0))
         try await reg.save(on: req.db)
-
-        sendPaymentInstructionsInBackground(
-            req: req,
-            recipient: reg.primary?.email ?? "",
-            registration: reg
-        )
+        do {
+            _ = try await EmailController().sendPaymentMail(req: req, recipient: reg.primary?.email ?? "", registration: reg).get()
+            var deliveries = reg.emailDeliveries ?? [:]; deliveries["paymentRequested"] = "sent"; reg.emailDeliveries = deliveries
+            try await reg.save(on: req.db)
+        } catch {
+            var deliveries = reg.emailDeliveries ?? [:]; deliveries["paymentRequested"] = "failed"; reg.emailDeliveries = deliveries
+            try await reg.save(on: req.db)
+            throw error
+        }
 
         return .ok
     }
@@ -415,52 +442,23 @@ extension AdminController {
     // POST /admin/registrations/updatePayment/:id
     func updatePaymentConfirmation(req: Request) async throws -> HTTPStatus {
         let reg = try await requireRegistration(req: req, param: "id")
+        try RegistrationFlow.requireEditable(reg)
         let paymentRequest = try req.content.decode(UpdatePaymentRequest.self)
-
-        if let current = reg.paidAmount {
-            reg.paidAmount = current + paymentRequest.paidAmount
-        } else {
-            reg.paidAmount = paymentRequest.paidAmount
+        guard reg.assignedLeague != nil, paymentRequest.paidAmount.isFinite, paymentRequest.paidAmount != 0 else {
+            throw Abort(.badRequest, reason: "Liga und gültiger Zahlungsbetrag erforderlich.")
         }
 
-        try await reg.save(on: req.db)
+        let updated = try await RegistrationFlow.recordPayment(reg, amount: paymentRequest.paidAmount,
+            paymentID: paymentRequest.paymentId ?? UUID(), req: req)
+        try? await RegistrationFlow.notify(updated, event: "paymentReceived", req: req,
+            subject: "ÖKFB – Zahlung verbucht", body: "<p>Ihre Zahlung wurde verbucht. Aktueller Saldo: \(updated.paidAmount ?? 0) EUR. Die Administration prüft die Freigabe Ihrer Mannschaft.</p>")
         return .ok
     }
 
     // POST /admin/registrations/completeRegistration/:id
     func startTeamCustomization(req: Request) async throws -> HTTPStatus {
-        let reg = try await requireRegistration(req: req, param: "id")
-
-        let passwordForEmail = reg.initialPassword ?? String.randomString(length: 8)
-        if reg.initialPassword == nil { reg.initialPassword = passwordForEmail }
-
-        let user = try await resolveUser(for: reg, on: req)
-        if reg.user == nil, let uid = user.id { reg.user = uid }
-
-        let team = Team(
-            sid: "",
-            userId: try user.requireID(),
-            leagueId: reg.assignedLeague,
-            leagueCode: reg.assignedLeague?.uuidString,
-            points: 0,
-            coverimg: "",
-            logo: "",
-            teamName: reg.teamName,
-            foundationYear: "",
-            membershipSince: "",
-            averageAge: "",
-            coach: Trainer(name: "", email: "", image: ""),
-            trikot: Trikot(home: "", away: ""),
-            referCode: reg.refereerLink,
-            usremail: reg.primary?.email,
-            usrpass: reg.initialPassword,
-            usrtel: reg.primary?.phone
-        )
-
-        try await reg.save(on: req.db)
-        try await team.save(on: req.db)
-
-        return .ok
+        // Compatibility endpoint: use the same validated, idempotent approval.
+        try await confirm(req: req)
     }
 }
 
@@ -502,6 +500,15 @@ private extension AdminController {
             throw Abort(.badRequest, reason: "Primary contact email is missing")
         }
 
+        let accountID = try registration.requireID()
+        if let existing = try await User.find(accountID, on: req.db) { return existing }
+        if let existing = try await User.query(on: req.db).filter(\.$email == primaryEmail.lowercased()).first() {
+            guard existing.type == .team else {
+                throw Abort(.conflict, reason: "Diese E-Mail gehört zu einem anderen Kontotyp. Bitte die Zuordnung prüfen.")
+            }
+            // Admin approval links the existing account, without changing its credentials.
+            return existing
+        }
         let password = registration.initialPassword ?? String.randomString(length: 8)
         if registration.initialPassword == nil {
             registration.initialPassword = password
@@ -518,68 +525,83 @@ private extension AdminController {
         )
 
         let user = try User.create(from: userSignup)
-        try await user.save(on: req.db)
+        user.id = accountID
+        do { try await user.create(on: req.db) }
+        catch { guard let existing = try await User.find(accountID, on: req.db) else { throw error }; return existing }
         return user
     }
 
-    // Email helpers
-    func sendWelcomeEmailInBackground(req: Request, recipient: String, registration: TeamRegistration?) {
-        let emailController = EmailController()
-        req.eventLoop.execute {
-            do {
-                try emailController
-                    .sendWelcomeMail(req: req, recipient: recipient, registration: registration)
-                    .whenComplete { result in
-                        switch result {
-                        case .success:
-                            req.logger.info("Welcome email sent to \(recipient)")
-                        case .failure(let err):
-                            req.logger.warning("Welcome email failed to \(recipient): \(err)")
-                        }
-                    }
-            } catch {
-                req.logger.warning("Failed to start welcome email to \(recipient): \(error)")
-            }
-        }
+}
+
+extension AdminController {
+    func resendRegistrationWelcome(req: Request) async throws -> HTTPStatus {
+        let registration = try await requireRegistration(req: req, param: "id")
+        return try await RegistrationFlow.sendWelcome(req: req, registration: registration).get()
     }
 
-    func sendTeamLoginInBackground(req: Request, recipient: String, email: String, password: String) {
-        let emailController = EmailController()
-        req.eventLoop.execute {
-            do {
-                try emailController
-                    .sendTeamLogin(req: req, recipient: recipient, email: email, password: password)
-                    .whenComplete { result in
-                        switch result {
-                        case .success:
-                            req.logger.info("Team login email sent to \(recipient)")
-                        case .failure(let err):
-                            req.logger.warning("Team login email failed to \(recipient): \(err)")
-                        }
-                    }
-            } catch {
-                req.logger.warning("Failed to start team login email to \(recipient): \(error)")
-            }
-        }
+    func requestRegistrationDocuments(req: Request) async throws -> HTTPStatus {
+        let registration = try await requireRegistration(req: req, param: "id")
+        try RegistrationFlow.requireEditable(registration)
+        let contract = try RegistrationFlow.contractURL()
+        let id = try registration.requireID()
+        let token = try EmailActionLink.token(kind: "registration", id: id)
+        let link = "\(try RegistrationFlow.homepageURL())/#/registration/\(id)?token=\(token)"
+        registration.documentsRequestedAt = Date.viennaNow
+        try await registration.save(on: req.db)
+        try await RegistrationFlow.notify(registration, event: "documentsRequested", req: req,
+            subject: "ÖKFB – Bitte Anmeldeunterlagen hochladen",
+            body: """
+            <p>Bitte laden Sie den unterschriebenen Vertrag und die Ausweise beider Kontaktpersonen hoch und prüfen Sie deren Namen und Kontaktdaten.</p>
+            <p><a href="\(contract.absoluteString)">Vertrag herunterladen</a></p>
+            <p><a href="\(link)">Unterlagen sicher hochladen</a> (30 Tage gültig)</p>
+            <p>Dieser persönliche Link darf nicht weitergegeben werden. Die Mannschaft wird erst nach Prüfung und Freigabe durch die Administration angelegt.</p>
+            """)
+        return .ok
     }
+}
 
-    func sendPaymentInstructionsInBackground(req: Request, recipient: String, registration: TeamRegistration) {
-        let emailController = EmailController()
-        req.eventLoop.execute {
-            do {
-                try emailController
-                    .sendPaymentMail(req: req, recipient: recipient, registration: registration)
-                    .whenComplete { result in
-                        switch result {
-                        case .success:
-                            req.logger.info("Payment email sent to \(recipient)")
-                        case .failure(let err):
-                            req.logger.warning("Payment email failed to \(recipient): \(err)")
-                        }
-                    }
-            } catch {
-                req.logger.warning("Failed to start payment email to \(recipient): \(error)")
-            }
+extension AdminController {
+    func resendRegistrationPayment(req: Request) async throws -> HTTPStatus {
+        let registration = try await requireRegistration(req: req, param: "id")
+        try RegistrationFlow.requireEditable(registration)
+        guard registration.assignedLeague != nil else { throw Abort(.badRequest) }
+        let result = try await EmailController().sendPaymentMail(req: req, recipient: registration.primary?.email ?? "", registration: registration).get()
+        var deliveries = registration.emailDeliveries ?? [:]
+        deliveries["paymentRequested"] = "sent"
+        registration.emailDeliveries = deliveries
+        try await registration.save(on: req.db)
+        return result
+    }
+}
+
+extension AdminController {
+    func resendRegistrationNotification(req: Request) async throws -> HTTPStatus {
+        let registration = try await requireRegistration(req: req, param: "id")
+        let event = try req.parameters.require("event")
+        switch event {
+        case "documentsRequested": return try await requestRegistrationDocuments(req: req)
+        case "paymentRequested": return try await resendRegistrationPayment(req: req)
+        case "rejected":
+            guard registration.status == .rejected else { throw Abort(.conflict) }
+            return try await reject(req: req)
+        case "approved":
+            guard registration.team != nil else { throw Abort(.conflict) }
+            try await sendRegistrationApproval(registration, req: req)
+        case "documentsReceived":
+            guard RegistrationFlow.documentsComplete(registration) else { throw Abort(.conflict) }
+            try await RegistrationFlow.notify(registration, event: event, req: req, subject: "ÖKFB – Unterlagen eingegangen",
+                body: "<p>Ihre Unterlagen wurden gespeichert und werden von der Administration geprüft.</p>")
+        case "paymentReceived":
+            guard registration.emailDeliveries?[event] != nil else { throw Abort(.conflict) }
+            try await RegistrationFlow.notify(registration, event: event, req: req, subject: "ÖKFB – Zahlung verbucht",
+                body: "<p>Ihre Zahlung wurde verbucht. Aktueller Saldo: \(registration.paidAmount ?? 0) EUR.</p>")
+        case "adminRequestReceived", "adminDocumentsReceived":
+            try await RegistrationFlow.notify(registration, event: event, req: req,
+                recipient: Environment.get("REGISTRATION_ADMIN_EMAIL") ?? "office@oekfb.eu",
+                subject: "ÖKFB – Anmeldung zur Prüfung",
+                body: "<p>Bitte Anmeldung \(try registration.requireID()) in der Registrierungsübersicht prüfen.</p>")
+        default: throw Abort(.badRequest, reason: "Unbekannte Benachrichtigung.")
         }
+        return .ok
     }
 }

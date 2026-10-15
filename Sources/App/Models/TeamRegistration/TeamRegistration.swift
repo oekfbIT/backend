@@ -28,6 +28,8 @@ final class TeamRegistration: Model, Content, Mergeable {
     @OptionalField(key: FieldKeys.customerSignedContract) var customerSignedContract: String?
     @OptionalField(key: FieldKeys.adminSignedContract) var adminSignedContract: String?
     @OptionalField(key: FieldKeys.teamLogo) var teamLogo: String?
+    @OptionalField(key: "documentsRequestedAt") var documentsRequestedAt: Date?
+    @OptionalField(key: "emailDeliveries") var emailDeliveries: [String: String]?
     @OptionalField(key: "appliedFees") var appliedFees: [AppliedFee]?
     @OptionalField(key: FieldKeys.paidAmount) var paidAmount: Double?
     @OptionalField(key: FieldKeys.user) var user: UUID?

@@ -14,7 +14,11 @@ extension AppController {
 
     func setupPublicTeamRegistrationRoutes(on root: RoutesBuilder) {
         let application = root.grouped("application").grouped(ProtectedResponseMiddleware())
+        application.get("contract") { _ -> RegistrationContractResponse in
+            RegistrationContractResponse(url: try RegistrationFlow.contractURL().absoluteString)
+        }
         application.post("request", use: requestTeamRegistration)
+        application.post("resendVerification", use: resendTeamVerification)
         application.grouped("user", "verify").get(":code", use: verifyEmailByCode)
     }
 
@@ -59,41 +63,37 @@ extension AppController {
         }
 
 
-        // Optional: require verified email before applying
-        // guard user.verified == true else {
-        //     throw Abort(.unauthorized, reason: "Bitte bestätigen Sie zuerst Ihre E-Mail-Adresse.")
-        // }
+        guard user.verified == true else {
+            throw Abort(.forbidden, reason: "Bitte bestätigen Sie zuerst Ihre E-Mail-Adresse.")
+        }
+        try RegistrationFlow.validateContact(input.primary)
+        try RegistrationFlow.validateContact(input.secondary)
+        guard !input.teamName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw Abort(.badRequest) }
 
-        // Optional: prevent multiple active registrations
+        try await RegistrationFlow.claimWebsiteRegistrations(for: user, req: req)
+
+        // Prevent multiple active registrations
         if let _ = try await TeamRegistration.query(on: req.db)
             .filter(\.$user == userId)
             .filter(\.$status != .completed)
+            .filter(\.$status != .rejected)
             .first()
         {
             throw Abort(.conflict, reason: "Es existiert bereits eine aktive Anmeldung für diesen Benutzer.")
         }
 
-        // ✅ Firebase auth (if you already do this at app boot, you can remove)
-        try await req.application.firebaseManager.authenticate().get()
-
+        let files = [input.primaryIdentification, input.secondaryIdentification, input.signedContract, input.teamLogo].compactMap { $0 }
+        try files.forEach(RegistrationFlow.validateFile)
+        if !files.isEmpty { try await RegistrationFlow.prepareUploads(req: req) }
         let basePath = "teamapplications/\(userId.uuidString)/\(UUID().uuidString)"
-
-        // ✅ upload files to Firebase
-        let primaryIdUrl = try await req.application.firebaseManager
-            .uploadFile(file: input.primaryIdentification, to: "\(basePath)/primary_id")
-            .get()
-
-        let secondaryIdUrl = try await req.application.firebaseManager
-            .uploadFile(file: input.secondaryIdentification, to: "\(basePath)/secondary_id")
-            .get()
-
-        let contractUrl = try await req.application.firebaseManager
-            .uploadFile(file: input.signedContract, to: "\(basePath)/signed_contract")
-            .get()
-
-        let logoUrl = try await req.application.firebaseManager
-            .uploadFile(file: input.teamLogo, to: "\(basePath)/team_logo")
-            .get()
+        func upload(_ file: File?, name: String) async throws -> String? {
+            guard let file else { return nil }
+            return try await RegistrationFlow.upload(file, to: "\(basePath)/\(name)", req: req)
+        }
+        let primaryIdUrl = try await upload(input.primaryIdentification, name: "primary_id")
+        let secondaryIdUrl = try await upload(input.secondaryIdentification, name: "secondary_id")
+        let contractUrl = try await upload(input.signedContract, name: "signed_contract")
+        let logoUrl = try await upload(input.teamLogo, name: "team_logo")
 
         // ✅ attach identification URLs into ContactPerson objects
         let primary = ContactPerson(
@@ -130,35 +130,18 @@ extension AppController {
             paidAmount: 0.0,
             user: userId,
             team: nil,
-            isWelcomeEmailSent: true,
+            isWelcomeEmailSent: false,
             isLoginDataSent: false,
             dateCreated: Date.viennaNow,
             kaution: nil
         )
 
+        if RegistrationFlow.documentsComplete(registration) { registration.status = .verified }
         try await registration.save(on: req.db)
         let regId = try registration.requireID()
 
-        // ✅ send welcome mail right away (same pattern as your old controller)
-        let emailController = EmailController()
-        let recipient = primary.email
-
-        req.eventLoop.execute {
-            do {
-                try emailController
-                    .sendWelcomeMail(req: req, recipient: recipient, registration: registration)
-                    .whenComplete { result in
-                        switch result {
-                        case .success:
-                            req.logger.info("Welcome email sent")
-                        case .failure(let error):
-                            req.logger.error("Welcome email FAILED: \(error)")
-                        }
-                    }
-            } catch {
-                req.logger.error("Welcome email start FAILED: \(error)")
-            }
-        }
+        _ = try? await RegistrationFlow.sendWelcome(req: req, registration: registration).get()
+        await RegistrationFlow.documentsReceived(registration, req: req)
 
         return TeamAppApplicationResponse(
             registrationId: regId,
@@ -177,6 +160,9 @@ extension AppController {
         }
 
         try authorizeApplicationUser(userId, req: req)
+        if let user = try await User.find(userId, on: req.db) {
+            try await RegistrationFlow.claimWebsiteRegistrations(for: user, req: req)
+        }
 
         return try await TeamRegistration.query(on: req.db)
             .filter(\.$user == userId)
@@ -190,32 +176,52 @@ extension AppController {
     func requestTeamRegistration(req: Request) async throws -> TeamAppRegistrationResponse {
         let input = try req.content.decode(TeamAppRegistrationRequest.self)
 
-        // Prevent duplicate accounts by email (ANY user type)
-        if let existing = try await User.query(on: req.db)
-            .filter(\.$email == input.email)
-            .first()
-        {
-            let typeLabel = existing.type.position
-            throw Abort(
-                .conflict,
-                reason: "Ein Benutzer mit dieser E-Mail existiert bereits (\(typeLabel)). Bitte verwenden Sie eine andere E-Mail-Adresse."
-            )
+        let email = input.email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard email.contains("@"), input.password.count >= 8,
+              !input.firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !input.lastName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw Abort(.badRequest, reason: "Name, gültige E-Mail und Passwort mit mindestens 8 Zeichen erforderlich.")
         }
+        let user: User
+        if let existing = try await User.query(on: req.db).filter(\.$email == email).first() {
+            guard existing.type == .team, existing.verified != true,
+                  try Bcrypt.verify(input.password, created: existing.passwordHash) else {
+                throw Abort(.conflict, reason: "Dieses Konto existiert bereits. Bitte anmelden oder Passwort zurücksetzen.")
+            }
+            // A failed/expired verification email can be retried with the same account credentials.
+            user = existing
+        } else {
+            user = User(userID: UUID().uuidString, type: .team, firstName: input.firstName,
+                lastName: input.lastName, verified: false, email: email, tel: input.tel,
+                passwordHash: try Bcrypt.hash(input.password))
+            try await user.save(on: req.db)
+        }
+        try await sendTeamVerification(user, req: req)
+        return TeamAppRegistrationResponse(userId: try user.requireID(), email: email, verified: false)
+    }
 
-        // Create user with verified=false
-        let user = User(
-            userID: UUID().uuidString,
-            type: .team,
-            firstName: input.firstName,
-            lastName: input.lastName,
-            verified: false,
-            email: input.email,
-            tel: input.tel,
-            passwordHash: try Bcrypt.hash(input.password)
-        )
+    struct ResendTeamVerificationRequest: Content { let email: String; let password: String }
 
-        try await user.save(on: req.db)
+    func resendTeamVerification(req: Request) async throws -> HTTPStatus {
+        let input = try req.content.decode(ResendTeamVerificationRequest.self)
+        let email = input.email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard let user = try await User.query(on: req.db).filter(\.$email == email).first(),
+              user.type == .team, try Bcrypt.verify(input.password, created: user.passwordHash) else {
+            throw Abort(.unauthorized, reason: "Bitte prüfen Sie Ihre Zugangsdaten.")
+        }
+        if user.verified == true { return .ok }
+        try await sendTeamVerification(user, req: req)
+        return .ok
+    }
+
+    private func sendTeamVerification(_ user: User, req: Request) async throws {
+        let email = user.email
         let userId = try user.requireID()
+
+        if let previous = try await VerificationCode.query(on: req.db).filter(\.$userid == userId).sort(\.$created, .descending).first(),
+           let created = previous.created, created > Date.viennaNow.addingTimeInterval(-60) {
+            throw Abort(.tooManyRequests, reason: "Bitte eine Minute warten, bevor Sie den Bestätigungslink erneut anfordern.")
+        }
 
         // Link tokens must not be guessable. Keep the value URL-safe so it can
         // be embedded directly in the client verification route.
@@ -226,23 +232,21 @@ extension AppController {
         let verification = VerificationCode(
             code: code,
             userid: userId,
-            email: input.email,
+            email: email,
             status: .sent
         )
         try await verification.save(on: req.db)
 
         // Send verification LINK (backend GET route)
-        let verificationUrl = "https://www.oekfb.eu/#/app/application/user/verify/\(code)"
+        let verificationUrl = "\(try RegistrationFlow.homepageURL())/#/app/application/user/verify/\(code)"
         let emailController = EmailController()
-        try await emailController
-            .sendEmailVerificationLink(req: req, recipient: input.email, verificationUrl: verificationUrl)
-            .get()
+        do {
+            _ = try await emailController.sendEmailVerificationLink(req: req, recipient: email, verificationUrl: verificationUrl).get()
+        } catch {
+            try await verification.delete(on: req.db)
+            throw error
+        }
 
-        return TeamAppRegistrationResponse(
-            userId: userId,
-            email: input.email,
-            verified: false
-        )
     }
 
     // GET /app/user/verify/:code
@@ -258,7 +262,7 @@ extension AppController {
             .all()
 
         guard let verification = matches.first,
-              verification.status == .sent,
+              (verification.status == .sent || verification.status == .verified),
               let created = verification.created,
               created > Date.viennaNow.addingTimeInterval(-24 * 60 * 60) else {
             throw Abort(.badRequest, reason: "Invalid or expired verification link.")
@@ -335,6 +339,7 @@ extension AppController {
 
         try authorizeApplicationRegistration(registration, req: req)
         let isAdmin = try req.auth.require(User.self).type == .admin
+        try RegistrationFlow.requireEditable(registration)
 
         // Branch by Content-Type
         let contentType = req.headers.contentType
@@ -348,11 +353,15 @@ extension AppController {
             // 1) patch non-file fields (only if provided)
             if let primaryJSON = input.primary {
                 let primary = try decodeContactPersonJSON(primaryJSON, field: "primary")
-                registration.primary = primary
+                var updated = primary
+                updated.identification = registration.primary?.identification
+                registration.primary = updated
             }
             if let secondaryJSON = input.secondary {
                 let secondary = try decodeContactPersonJSON(secondaryJSON, field: "secondary")
-                registration.secondary = secondary
+                var updated = secondary
+                updated.identification = registration.secondary?.identification
+                registration.secondary = updated
             }
             if let verein = input.verein { registration.verein = verein }
 
@@ -365,7 +374,7 @@ extension AppController {
                 registration.assignedLeague = assignedLeague
             }
 
-            if let customerSignedContract = input.customerSignedContract {
+            if isAdmin, let customerSignedContract = input.customerSignedContract {
                 registration.customerSignedContract = customerSignedContract
             }
             if isAdmin, let adminSignedContract = input.adminSignedContract {
@@ -391,15 +400,16 @@ extension AppController {
                 input.signedContract != nil ||
                 input.teamLogoFile != nil
 
+            try [input.primaryIdentification, input.secondaryIdentification, input.signedContract, input.teamLogoFile].compactMap { $0 }.forEach(RegistrationFlow.validateFile)
             if hasAnyFile {
-                try await req.application.firebaseManager.authenticate().get()
+                try await RegistrationFlow.prepareUploads(req: req)
 
                 // stable path per registration (overwrite-friendly)
-                let basePath = "teamapplications/\(registration.user?.uuidString)/\(regId.uuidString)"
+                let basePath = "teamapplications/\(regId.uuidString)/\(UUID().uuidString)"
 
                 func uploadIfPresent(_ file: File?, to path: String) async throws -> String? {
                     guard let file else { return nil }
-                    return try await req.application.firebaseManager.uploadFile(file: file, to: path).get()
+                    return try await RegistrationFlow.upload(file, to: path, req: req)
                 }
 
                 if let url = try await uploadIfPresent(input.primaryIdentification, to: "\(basePath)/primary_id") {
@@ -423,7 +433,12 @@ extension AppController {
                 }
             }
 
+            guard !registration.teamName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw Abort(.badRequest, reason: "Mannschaftsname fehlt.") }
+            try RegistrationFlow.validateContact(registration.primary)
+            try RegistrationFlow.validateContact(registration.secondary)
+            if RegistrationFlow.documentsComplete(registration), registration.status == .draft { registration.status = .verified }
             try await registration.save(on: req.db)
+            if hasAnyFile { await RegistrationFlow.documentsReceived(registration, req: req) }
             return registration.asApplicationDetail()
         }
 
@@ -432,8 +447,8 @@ extension AppController {
         // ----------------------------
         let input = try req.content.decode(UpdateTeamRegistrationRequest.self)
 
-        if let primary = input.primary { registration.primary = primary }
-        if let secondary = input.secondary { registration.secondary = secondary }
+        if var primary = input.primary { primary.identification = registration.primary?.identification; registration.primary = primary }
+        if var secondary = input.secondary { secondary.identification = registration.secondary?.identification; registration.secondary = secondary }
         if let verein = input.verein { registration.verein = verein }
 
         if let teamName = input.teamName { registration.teamName = teamName }
@@ -443,7 +458,7 @@ extension AppController {
         if let refereerLink = input.refereerLink { registration.refereerLink = refereerLink }
         if isAdmin, let assignedLeague = input.assignedLeague { registration.assignedLeague = assignedLeague }
 
-        if let customerSignedContract = input.customerSignedContract { registration.customerSignedContract = customerSignedContract }
+        if isAdmin, let customerSignedContract = input.customerSignedContract { registration.customerSignedContract = customerSignedContract }
         if isAdmin, let adminSignedContract = input.adminSignedContract { registration.adminSignedContract = adminSignedContract }
         if let teamLogo = input.teamLogo { registration.teamLogo = teamLogo }
 
@@ -456,6 +471,9 @@ extension AppController {
             if let kaution = input.kaution { registration.kaution = kaution }
         }
 
+        guard !registration.teamName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw Abort(.badRequest, reason: "Mannschaftsname fehlt.") }
+        try RegistrationFlow.validateContact(registration.primary)
+        try RegistrationFlow.validateContact(registration.secondary)
         try await registration.save(on: req.db)
         return registration.asApplicationDetail()
     }
@@ -501,10 +519,10 @@ struct TeamAppApplicationRequest: Content {
     let secondary: ContactPerson
 
     // Files
-    let primaryIdentification: File
-    let secondaryIdentification: File
-    let signedContract: File
-    let teamLogo: File
+    let primaryIdentification: File?
+    let secondaryIdentification: File?
+    let signedContract: File?
+    let teamLogo: File?
 }
 
 struct TeamAppApplicationResponse: Content {
@@ -675,3 +693,5 @@ private func parseStatus(_ raw: String?) throws -> TeamRegistrationStatus? {
     }
     throw Abort(.badRequest, reason: "Invalid status.")
 }
+
+struct RegistrationContractResponse: Content { let url: String }

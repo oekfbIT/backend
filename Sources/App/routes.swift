@@ -20,6 +20,7 @@ func routes(_ app: Application) throws {
         AppController(path: "app"),
         AdminController(path: "admin"),
         LegalDocumentController(path: "legal"),
+        RegistrationDocumentsController(),
         EmailActionController()
     ]
 

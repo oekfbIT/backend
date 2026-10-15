@@ -199,54 +199,30 @@ final class EmailController {
         }
     }
     
+    func sendRegistrationNotice(req: Request, recipient: String, subject: String, body: String) throws -> EventLoopFuture<HTTPStatus> {
+        if let transport = req.application.storage[RegistrationMailTransportKey.self] { return transport(req, "sendRegistrationNotice") }
+        try applySMTPConfig(req)
+        let email = try Email(from: senderEmail(), to: [EmailAddress(address: recipient)],
+                              subject: subject, body: body, isBodyHtml: true)
+        return req.smtp.send(email).flatMapThrowing { result in
+            switch result {
+            case .success: return .ok
+            case .failure: throw Abort(.badGateway, reason: "E-Mail konnte nicht gesendet werden.")
+            }
+        }
+    }
+
     func sendWelcomeMail(req: Request, recipient: String, registration: TeamRegistration?) throws -> EventLoopFuture<HTTPStatus> {
+        if let transport = req.application.storage[RegistrationMailTransportKey.self] { return transport(req, "sendWelcomeMail") }
         // Apply the SMTP configuration
         try applySMTPConfig(req)
-        guard
-            let configuredContractURL = Environment.get("REGISTRATION_CONTRACT_URL"),
-            let contractURL = URL(string: configuredContractURL),
-            contractURL.scheme == "https",
-            contractURL.host != nil
-        else {
-            req.logger.error("REGISTRATION_CONTRACT_URL is not configured with a valid HTTPS URL.")
-            throw Abort(.internalServerError, reason: "Registration contract is not configured")
-        }
-        guard registration?.id != nil else {
-            throw Abort(.notFound)
-        }
-
-        // Print the SMTP configuration for debugging
-        req.logger.debug("SMTP configuration applied")
-
         let emailBody = """
-        <html>
-        <body>
-        <p>Sehr geehrter Mannschaftsleiter,</p>
-
-        <p>Herzlich Willkommen beim Österreichischen Kleinfeld Fußball Bund.</p>
-
-        <p>
-          Bitte laden Sie den Vertrag und die erforderlichen Unterlagen über die App hoch.
-          Sollte etwas fehlen oder nicht in Ordnung sein, können Sie die Dokumente jederzeit in der App erneut hochladen oder Ihre Angaben bearbeiten.
-          Je nach Status Ihrer Anmeldung werden bestimmte Bearbeitungsoptionen automatisch gesperrt.
-          Alternativ können Sie uns die Unterlagen auch per E-Mail an <strong>office@oekfb.eu</strong> senden.
-        </p>
-
-        <ul>
-          <li>Ausweiskopie beider Personen am Vertrag (<a href="\(contractURL.absoluteString)" style="font-size: 16px; color: #007bff; text-decoration: none;">Vertrag downloaden</a>)</li>
-          <li>Logo des Teams</li>
-          <li>Bilder der Trikots (Heim und Auswärts komplett inklusive Stutzen)</li>
-        </ul>
-
-        <p>
-          Falls Sie Trikots benötigen und noch keine haben, können Sie sich über die Angebote für ÖKFB Mannschaften hier erkundigen:
-          <a href="https://erima.shop/oekfb">https://erima.shop/oekfb</a>
-        </p>
-
-        <p>Wir freuen uns über Ihre baldige Rückmeldung und verbleiben.</p>
-        <p>Dies ist eine automatisch generierte E-Mail. Sollten Sie Fragen haben oder Unterstützung benötigen, zögern Sie bitte nicht, uns zu kontaktieren.</p>
-        </body>
-        </html>
+        <html><body><p>Herzlich willkommen beim ÖKFB!</p>
+        <p>Ihre Mannschaftsanmeldung ist eingegangen und wird von unserer Administration geprüft.
+        Es wurde noch keine Mannschaft angelegt.</p>
+        <p>Wenn Unterlagen benötigt werden, erhalten Sie eine separate E-Mail mit einem sicheren Link
+        zum Hochladen des unterschriebenen Vertrags und der Ausweise beider Kontaktpersonen.</p>
+        <p>Bei Fragen erreichen Sie uns unter office@oekfb.eu.</p></body></html>
         """
 
         let email = try Email(
@@ -269,6 +245,7 @@ final class EmailController {
     }
 
     func sendPaymentMail(req: Request, recipient: String, registration: TeamRegistration?) throws -> EventLoopFuture<HTTPStatus> {
+        if let transport = req.application.storage[RegistrationMailTransportKey.self] { return transport(req, "sendPaymentMail") }
         // Apply the SMTP configuration
         try applySMTPConfig(req)
         
@@ -278,15 +255,13 @@ final class EmailController {
         }
 
         // Calculate the amount
-        let amount: Double = abs(Double(String(format: "%.2f", registration.paidAmount ?? 0.0)) ?? 0.0)
+        let amount: Double = max(0, -(registration.paidAmount ?? 0))
 
         // Total amount to be paid including deposit
         var positivAmount: Double {
             return amount
         }
 
-        // Calculate the year for the deposit return
-        let year = Calendar.current.component(.year, from: Date.viennaNow) + 3
 
         // Debugging: Print the SMTP configuration
         req.logger.debug("SMTP configuration applied")
@@ -306,11 +281,11 @@ final class EmailController {
         <body>
             <p>Sehr geehrter Mannschaftsleiter,</p>
             
-            <p>Wir haben ihre korrekten Unterlagen erhalten. Anbei ist die Zahlungsaufforderung:</p>
+            <p>Ihrer Anmeldung wurde eine Liga zugewiesen. Hier finden Sie den aktuellen Zahlungsstand:</p>
             
             <ul>
-                <li>Teilbetrag der Saison: € \(amount)</li>
-                <li>Kaution: € \(String(format: "%.2f", registration.kaution ?? 0)) (Diese Kaution wird ihnen zur Saison \(year) auf ihr Guthaben dazugerechnet.)</li>
+                <li>Offener Gesamtbetrag inklusive Kaution: € \(String(format: "%.2f", amount))</li>
+                <li>Kaution: € \(String(format: "%.2f", registration.kaution ?? 0)) (im Gesamtbetrag enthalten)</li>
             </ul>
             
             <p>Bitte überweisen Sie die Summe von <strong>€ \(positivAmount)</strong> und verwenden Sie als Zahlungsreferenz bitte <strong>\(registration.teamName.uppercased())</strong>.</p>
@@ -434,6 +409,7 @@ final class EmailController {
     }
 
     func sendTeamLogin(req: Request, recipient: String, email: String, password: String) throws -> EventLoopFuture<HTTPStatus> {
+        if let transport = req.application.storage[RegistrationMailTransportKey.self] { return transport(req, "sendTeamLogin") }
         // Apply the SMTP configuration
         try applySMTPConfig(req)
 
@@ -451,7 +427,7 @@ final class EmailController {
         Email: \(email)
         Passwort: \(password)
         
-        Sie können sich einlogen unter https://team.oekfb.eu.
+        Ihre Mannschaft wurde freigegeben. Sie können sich in der ÖKFB App oder unter https://team.oekfb.eu anmelden.
         
         Dies ist eine automatisch generierte E-Mail. Sollten Sie Fragen haben oder Unterstützung benötigen, zögern Sie bitte nicht, uns unter support@oekfb.eu zu kontaktieren. Wir stehen Ihnen gerne zur Verfügung.
         """
@@ -821,6 +797,7 @@ extension EmailController {
         recipient: String,
         verificationUrl: String
     ) throws -> EventLoopFuture<HTTPStatus> {
+        if let transport = req.application.storage[RegistrationMailTransportKey.self] { return transport(req, "sendEmailVerificationLink") }
 
         // Apply the SMTP configuration
         try applySMTPConfig(req)
