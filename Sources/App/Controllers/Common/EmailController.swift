@@ -20,6 +20,17 @@ final class EmailController {
     private func senderEmail() -> EmailAddress {
         EmailAddress(address: fromAddress, name: fromName)
     }
+
+    /// Every outgoing message is copied privately to the backend's sender mailbox.
+    private func copyRecipients(recipient: String) -> [EmailAddress] {
+        let address = fromAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+        // A mailbox already in To must not receive a second copy.
+        guard !address.isEmpty,
+              address.caseInsensitiveCompare(recipient.trimmingCharacters(in: .whitespacesAndNewlines)) != .orderedSame else {
+            return []
+        }
+        return [EmailAddress(address: address)]
+    }
     
     private func applySMTPConfig(_ req: Request) throws {
         try applySMTPConfig(req.application)
@@ -60,6 +71,7 @@ final class EmailController {
             "sandbox": topUp.livemode ? "" : "SANDBOX: Dies war eine Testzahlung."
         ], on: application.db)
         let email = try Email(from: senderEmail(), to: [EmailAddress(address: topUp.recipient)],
+                              bcc: copyRecipients(recipient: topUp.recipient),
                               subject: rendered.subject, body: rendered.html, isBodyHtml: true)
         try await application.smtp.send(email)
     }
@@ -148,6 +160,7 @@ final class EmailController {
         req.eventLoop.makeFutureWithTask {
             let rendered = try await EmailTemplateService.render(key: key, values: values, on: req.db)
             let email = try Email(from: self.senderEmail(), to: [EmailAddress(address: recipient)],
+                                  bcc: self.copyRecipients(recipient: recipient),
                                   subject: rendered.subject, body: rendered.html, isBodyHtml: true)
             let result = try await req.smtp.send(email).get()
             switch result {
