@@ -718,6 +718,116 @@ final class CommentaryTests: XCTestCase {
         XCTAssertNil(CommentaryContextBuilder.goalOutlook(homeID: target.$homeTeam.id, awayID: target.$awayTeam.id, matches: awarded))
     }
 
+    func testAnonymousPreviewFeedbackIsIdempotentChangeableAndRemovable() async throws {
+        try await withMongo { app, store in
+            let context = try self.context(), settings = self.settings()
+            let runtime = CommentaryRuntime(configuration: settings, store: store, contexts: CommentaryStubContext(context: context), inference: CommentaryMockInference())
+            app.commentary = runtime
+            try app.register(collection: CommentatorController())
+            try await PreviewFeedbackIndexesMigration().prepare(on: app.db)
+            let job = try await runtime.jobs.enqueue(context: context, options: .init())
+            try await runtime.jobs.process(job.id, slot: 0)
+            let path = "webClient/match/\(context.matchID!)/preview"
+            var version: String?
+            try app.test(.GET, path) { response in
+                version = try response.content.decode(GeneratedCommentary.self).feedbackVersion
+                XCTAssertEqual(version?.count, 64)
+            }
+            let id = try XCTUnwrap(version), visitor = UUID()
+            for (vote, likes, dislikes) in [(PreviewFeedbackVote?.some(.like), 1, 0), (.some(.like), 1, 0), (.some(.dislike), 0, 1), (nil, 0, 0)] {
+                try app.test(.POST, path + "/feedback", beforeRequest: {
+                    try $0.content.encode(PreviewFeedbackRequest(visitorId: visitor, previewVersion: id, vote: vote))
+                }) {
+                    XCTAssertEqual($0.status, .ok)
+                    let summary = try $0.content.decode(PreviewFeedbackSummary.self)
+                    XCTAssertEqual(summary.likes, likes); XCTAssertEqual(summary.dislikes, dislikes)
+                    XCTAssertEqual(summary.vote, vote)
+                }
+            }
+            let feedback = PreviewFeedbackService(database: app.db)
+            _ = try await feedback.submit(matchID: context.matchID!, request: .init(visitorId: visitor, previewVersion: id, vote: .like))
+            _ = try await feedback.submit(matchID: context.matchID!, request: .init(visitorId: UUID(), previewVersion: id, vote: .dislike))
+            try app.test(.GET, path + "/feedback?preview_version=\(id)") {
+                let counts = try $0.content.decode(PreviewFeedbackSummary.self)
+                XCTAssertEqual(counts.likes, 1); XCTAssertEqual(counts.dislikes, 1)
+            }
+            let count = try await store.collection(PreviewFeedbackService.votes).count().get()
+            XCTAssertEqual(count, 2)
+            let documents = try await store.collection(PreviewFeedbackService.votes).find().allResults().get()
+            for document in documents {
+                XCTAssertNil(document["visitorId"]); XCTAssertNil(document["visitorID"])
+                XCTAssertNil(document["ip"]); XCTAssertNil(document["userID"])
+                XCTAssertFalse(String(describing: document).contains(visitor.uuidString))
+            }
+            try app.test(.GET, "commenter/v1/generate/match/\(context.matchID!)/feedback") { XCTAssertEqual($0.status, .unauthorized) }
+        }
+    }
+
+    func testFeedbackStaysWithPublicSnapshotAndArchivesExactTextAcrossRevisions() async throws {
+        try await withMongo { app, store in
+            let context = try self.context(), settings = self.settings()
+            let runtime = CommentaryRuntime(configuration: settings, store: store, contexts: CommentaryStubContext(context: context), inference: CommentaryMockInference())
+            app.commentary = runtime
+            try app.register(collection: CommentatorController())
+            let job = try await runtime.jobs.enqueue(context: context, options: .init())
+            try await runtime.jobs.process(job.id, slot: 0)
+            let stored = try await store.article(job.articleID)
+            var article = try XCTUnwrap(stored)
+            let old = article.content
+            let version = PreviewFeedbackService.version(articleID: article.id, content: old)
+            let service = PreviewFeedbackService(database: app.db), visitor = UUID()
+            _ = try await service.submit(matchID: context.matchID!, request: .init(visitorId: visitor, previewVersion: version, vote: .like))
+            article.content = .init(title: "Redaktionell überarbeitet", text: "Ein anderer Text.", html: "<p>Ein anderer Text.</p>", language: old.language,
+                generatedAt: old.generatedAt, provider: old.provider, model: old.model, promptVersion: old.promptVersion,
+                contextHash: old.contextHash, factIDs: [], inputTokens: old.inputTokens, outputTokens: old.outputTokens, status: .draft)
+            article.revision += 1
+            try await store.saveArticle(article, expectedRevision: article.revision - 1)
+            let stillPublic = try await service.summary(matchID: context.matchID!, expectedVersion: version)
+            XCTAssertEqual(stillPublic.likes, 1) // A draft edit cannot move the public votes.
+            let replacement = try await runtime.jobs.publish(article: article, overwrite: false)
+            let next = PreviewFeedbackService.version(articleID: replacement.id, content: replacement.content)
+            XCTAssertNotEqual(version, next)
+            let counts = try await service.summary(matchID: context.matchID!, expectedVersion: next)
+            XCTAssertEqual(counts.likes, 0)
+            try app.test(.POST, "webClient/match/\(context.matchID!)/preview/feedback", beforeRequest: {
+                try $0.content.encode(PreviewFeedbackRequest(visitorId: visitor, previewVersion: version, vote: .dislike))
+            }) { XCTAssertEqual($0.status, .conflict) }
+            _ = try await service.submit(matchID: context.matchID!, request: .init(visitorId: visitor, previewVersion: next, vote: .dislike))
+            try app.test(.GET, "commenter/v1/generate/match/\(context.matchID!)/feedback", beforeRequest: {
+                $0.headers.add(name: "X-Commentator-Key", value: settings.serviceKey)
+            }) {
+                XCTAssertEqual($0.status, .ok)
+                let report = try $0.content.decode(PreviewFeedbackReport.self)
+                XCTAssertEqual(report.versions.count, 2)
+                XCTAssertEqual(report.versions.first { $0.current }?.content.text, "Ein anderer Text.")
+                XCTAssertEqual(report.versions.first { !$0.current }?.content.text, old.text)
+                XCTAssertEqual(report.versions.first { !$0.current }?.likes, 1)
+            }
+        }
+    }
+
+    func testFeedbackRejectsMissingAndUnpublishedPreviewsAndInvalidInput() async throws {
+        try await withMongo { app, store in
+            let context = try self.context()
+            let runtime = CommentaryRuntime(configuration: self.settings(), store: store, contexts: CommentaryStubContext(context: context), inference: CommentaryMockInference())
+            app.commentary = runtime
+            try app.register(collection: CommentatorController())
+            let path = "webClient/match/\(context.matchID!)/preview/feedback"
+            try app.test(.GET, path) { XCTAssertEqual($0.status, .notFound) }
+            let job = try await runtime.jobs.enqueue(context: context, options: .init(publish: false))
+            try await runtime.jobs.process(job.id, slot: 0)
+            try app.test(.POST, path, beforeRequest: {
+                try $0.content.encode(PreviewFeedbackRequest(visitorId: UUID(), previewVersion: "unknown", vote: .like))
+            }) { XCTAssertEqual($0.status, .notFound) }
+            try app.test(.POST, path, beforeRequest: {
+                $0.headers.contentType = .json
+                $0.body = ByteBuffer(string: "{\"visitorId\":\"not-a-uuid\",\"previewVersion\":\"x\",\"vote\":\"like\"}")
+            }) { XCTAssertEqual($0.status, .badRequest) }
+            let count = try await store.collection(PreviewFeedbackService.votes).count().get()
+            XCTAssertEqual(count, 0)
+        }
+    }
+
     private func withMongo(_ run: (Application, MongoCommentaryStore) async throws -> Void) async throws {
         guard let port = Environment.get("COMMENTATOR_TEST_MONGO_PORT"), Int(port) != nil else {
             throw XCTSkip("Set COMMENTATOR_TEST_MONGO_PORT to an isolated loopback MongoDB.")

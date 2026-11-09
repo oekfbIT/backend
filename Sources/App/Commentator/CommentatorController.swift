@@ -190,12 +190,27 @@ struct CommentatorController: RouteCollection {
             try await self.runtime(req).contexts.gameDaySummary(req.parameters.require("seasonId", as: UUID.self),
                 gameday: req.parameters.require("number", as: Int.self), allowPartial: req.query[Bool.self, at: "allowPartial"] == true, now: Date())
         }
+        root.get("generate", "match", ":matchId", "feedback") { req async throws -> PreviewFeedbackReport in
+            let id = try req.parameters.require("matchId", as: UUID.self)
+            return try await PreviewFeedbackService(database: req.db).report(matchID: id)
+        }
         // Existing match-detail responses remain unchanged. Only explicitly published previews are public here.
         routes.get("webClient", "match", ":matchId", "preview") { req async throws -> GeneratedCommentary in
             let id = try req.parameters.require("matchId", as: UUID.self)
             guard let article = try await self.runtime(req).store.article(CommentaryJobService.articleID(target: "match:\(id)")),
                   let published = article.publishedPreview ?? (article.content.status == .published ? article.content : nil) else { throw Abort(.notFound) }
-            return published
+            var response = published
+            response.feedbackVersion = PreviewFeedbackService.version(articleID: article.id, content: published)
+            return response
+        }
+        routes.get("webClient", "match", ":matchId", "preview", "feedback") { req async throws -> PreviewFeedbackSummary in
+            let id = try req.parameters.require("matchId", as: UUID.self)
+            return try await PreviewFeedbackService(database: req.db).summary(matchID: id,
+                expectedVersion: req.query[String.self, at: "preview_version"])
+        }
+        routes.on(.POST, "webClient", "match", ":matchId", "preview", "feedback", body: .collect(maxSize: "2kb")) { req async throws -> PreviewFeedbackSummary in
+            let id = try req.parameters.require("matchId", as: UUID.self)
+            return try await PreviewFeedbackService(database: req.db).submit(matchID: id, request: req.content.decode(PreviewFeedbackRequest.self))
         }
         routes.get("webClient", "match", ":matchId", "form") { req async throws -> MatchTeamFormResponse in
             try await MatchTeamFormService.fetch(id: req.parameters.require("matchId", as: UUID.self), on: req.db)

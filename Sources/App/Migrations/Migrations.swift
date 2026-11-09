@@ -43,6 +43,7 @@ let app_migrations: [Migration] = [
     SeasonDateRangeMigration(),
     StatsQueryIndexesMigration(),
     CommentaryIndexesMigration(),
+    PreviewFeedbackIndexesMigration(),
     PrimaryLeagueOverviewIndexesMigration(),
     RefereeActiveMigration(),
     AchievementMigration(),

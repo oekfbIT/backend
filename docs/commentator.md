@@ -370,3 +370,57 @@ provider calls, endpoints, database reads or environment variables.
 Verified this follow-up with all 34 commentator tests passing, including improving,
 worsening and persistently loose defences, home/away assignment, insufficient samples,
 single outliers, awarded scores, recent tightening and retrospective wording.
+
+## Preview reader feedback
+
+Published match previews carry `feedback_version`, a digest of the exact public title,
+text, generation time and provider/model/prompt/context metadata. The homepage displays
+a small German AI disclaimer plus like/dislike controls beneath the preview. Reports
+and game-day news do not receive these controls.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/webClient/match/:matchId/preview/feedback?preview_version=HASH` | Anonymous current-version like/dislike counts; optional expected-version guard |
+| POST | `/webClient/match/:matchId/preview/feedback` | Record/change/remove an anonymous browser vote |
+| GET | `/commenter/v1/generate/match/:matchId/feedback` | Authenticated editorial report for up to 50 rated text versions with exact text and generation metadata |
+
+POST body:
+
+```json
+{"visitor_id":"RANDOM_BROWSER_UUID","preview_version":"HASH_FROM_PUBLIC_PREVIEW","vote":"like"}
+```
+
+Use `dislike` for negative feedback or `null` to clear the vote. The response contains
+`preview_version`, `likes`, `dislikes`, and the accepted `vote` when non-null. Repeating
+the same vote does not increment it. A changed public preview produces 409; the homepage
+asks the reader to reload rather than attributing an opinion to unseen text. Missing or
+unpublished previews return 404. Editing/regenerating an unpublished replacement leaves
+the existing public version and its votes intact until publication. Publication of a
+changed title/text or generation creates a separate rating version. Existing articles
+remain compatible; no generation or paid AI request is needed to enable feedback.
+
+New Mongo collections are `commentary_preview_feedback` (one deterministic per-edition
+voter digest, vote state and timestamps) and `commentary_preview_feedback_versions`
+(immutable snapshots of rated public texts and their model/prompt/context metadata).
+`PreviewFeedbackIndexesMigration` adds count and match-history indexes. The visitor UUID
+is generated only after an explicit vote and kept in the browser's local storage. It is
+not stored raw by the feedback service. Feedback records contain no IP address, login,
+user-agent fingerprint or contact information. Storage-blocked browsers can vote using
+an in-memory ID. Clearing browser storage or using another browser creates a new voter;
+this is lightweight anonymous editorial feedback, not verified unique-person polling.
+
+The frontend remembers the selected vote only for the exact match/text version, disables
+repeat clicks during submission, preserves votes on network errors, and allows changing
+or clearing them. Counts may reflect concurrent writes slightly later. Publishing new
+text resets its visible counts while retaining earlier feedback for editorial review.
+
+Feedback does not invoke inference, modify prompts, rewrite articles, or automatically
+fine-tune a model. It supplies evaluation data for later human review or a separately
+implemented training workflow. No new secrets, environment variables or scheduler are
+required. The disclaimer says: “Diese Spielvorschau wurde mit KI erstellt. Dein Feedback
+hilft uns, die Texte zu verbessern.”
+
+Feedback verification in the current workspace: 147 backend tests with zero failures
+and 33 existing skips, all 15 homepage tests passing, and a successful homepage build.
+A local browser check exercised like → dislike → remove and verified the public counts
+and confirmation messages. No new paid inference was used for these feedback tests.

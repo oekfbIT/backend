@@ -82,6 +82,8 @@ struct GeneratedCommentary: Content {
     let inputTokens: Int
     let outputTokens: Int
     var status: CommentaryStatus
+    /// Public preview response metadata. Not populated for news or stored generations.
+    var feedbackVersion: String? = nil
 }
 
 struct CommentaryArticle: Content {
