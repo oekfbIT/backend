@@ -12,7 +12,7 @@ struct CommentaryInferenceError: Error {
 }
 
 enum CommentaryPromptBuilder {
-    static let version = "matchup-brief-de-v3"
+    static let version = "matchup-brief-de-v4"
     static func instructions(for context: CommentaryContext, configuration: CommentaryConfiguration) -> String {
         """
         Du bist Sportredakteur des Österreichischen Kleinfeld Fußball Bundes. Erstelle eine abwechslungsreiche,
@@ -35,7 +35,7 @@ enum CommentaryPromptBuilder {
         Betone die nachrichtenwertesten Spiele; nicht jedes Spiel braucht einen eigenen Absatz.
         Keine Prognosen, Wetten, erfundenen Zitate, Verletzungen, Taktikanalysen oder nicht belegten Rivalitäten.
         Historische Vorberichte sind rückblickend, keine Ankündigungen. Teilberichte müssen klar als solche erscheinen.
-        Ziel: \(context.kind == .matchPreview ? "100–140" : "300–700") Wörter, sofern genügend interessante Fakten vorhanden sind.
+        \(context.kind == .matchPreview ? "Ein normaler Vorbericht bleibt meist bei 80–140 Wörtern. Das ist keine Pflichtlänge: Bei wichtigen Ausfällen, Torjäger-Meilensteinen oder anderem wirklich relevantem Kontext darf er länger werden. Jeder zusätzliche Satz muss eine neue interessante Information bringen. Lieber kurz als langweilig; niemals zum Erreichen einer Wortzahl auffüllen." : "Ziel: 300–700 Wörter, sofern genügend interessante Fakten vorhanden sind.")
         Obergrenze: \(CommentaryValidationService.wordLimits(context: context, configuration: configuration).maximum) Wörter.
         Bei dünner Datenlage lieber einen kürzeren korrekten Artikel. Maximal 8 Absätze, höchstens 8 Fakten je Absatz.
         """
@@ -105,9 +105,9 @@ struct OpenAICommentaryInference: AIInferenceService {
 enum CommentaryValidationService {
     static func wordLimits(context: CommentaryContext, configuration: CommentaryConfiguration) -> (minimum: Int, maximum: Int) {
         if context.kind == .matchPreview {
-            // Keep old installations with MAX_PREVIEW_WORDS=250 concise too.
-            let maximum = min(150, configuration.maxPreviewWords)
-            return (min(60, maximum, context.availableWords), maximum)
+            // The configured ceiling is an operational bound, not a target length.
+            let maximum = configuration.maxPreviewWords
+            return (min(25, maximum, context.availableWords), maximum)
         }
         return (context.availableWords >= 150 ? min(150, configuration.maxSummaryWords) : min(25, context.availableWords), configuration.maxSummaryWords)
     }

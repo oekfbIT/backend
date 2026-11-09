@@ -171,7 +171,7 @@ struct CommentaryConfiguration {
     var maxOutputTokens = 1800
     var maxAttempts = 3
     var batchLimit = 150
-    var maxPreviewWords = 150
+    var maxPreviewWords = 300
     var maxSummaryWords = 900
     var temperature: Double? = nil
     var pollSeconds = 5
@@ -196,7 +196,7 @@ struct CommentaryConfiguration {
         c.maxOutputTokens = int("COMMENTATOR_MAX_OUTPUT_TOKENS", 1800, 256...8000)
         c.maxAttempts = int("COMMENTATOR_MAX_ATTEMPTS", 3, 1...5)
         c.batchLimit = int("COMMENTATOR_BATCH_LIMIT", 150, 1...200)
-        c.maxPreviewWords = int("COMMENTATOR_MAX_PREVIEW_WORDS", 150, 50...500)
+        c.maxPreviewWords = int("COMMENTATOR_MAX_PREVIEW_WORDS", 300, 50...500)
         c.maxSummaryWords = int("COMMENTATOR_MAX_SUMMARY_WORDS", 900, 100...2000)
         c.pollSeconds = int("COMMENTATOR_POLL_SECONDS", 5, 1...60)
         if let t = Double(env("COMMENTATOR_TEMPERATURE") ?? ""), t.isFinite, (0...2).contains(t) { c.temperature = t }

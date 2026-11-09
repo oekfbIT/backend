@@ -148,7 +148,7 @@ final class CommentaryTests: XCTestCase {
             let normalized = CommentaryValidationService.normalize(.init(titleIndex: 0, language: "de", paragraphs: [ids]), context: context, configuration: settings())
             let rendered = try CommentaryValidationService.render(.init(selection: normalized, inputTokens: 0, outputTokens: 0), context: context, configuration: settings())
             let count = rendered.text.split(whereSeparator: \.isWhitespace).count
-            XCTAssertGreaterThanOrEqual(count, 60); XCTAssertLessThanOrEqual(count, 150)
+            XCTAssertGreaterThanOrEqual(count, 25); XCTAssertLessThanOrEqual(count, settings().maxPreviewWords)
             XCTAssertTrue(rendered.factIDs.contains("fixture"))
             XCTAssertTrue(Set(rendered.factIDs).isSubset(of: Set(context.facts.map(\.id))))
         }
@@ -599,17 +599,34 @@ final class CommentaryTests: XCTestCase {
         XCTAssertTrue(home.first { $0.id == "home.form" }?.text.contains("3 gespielten Partien") == true)
     }
 
-    func testPreviewSelectionAvoidsRepeatedTopicsAndStaysShortWithOldEnvironmentLimit() throws {
+    func testPreviewSelectionAvoidsRepeatedTopicsAndRespectsConfiguredLimit() throws {
         let context = try context()
         var configuration = settings(); configuration.maxPreviewWords = 250
         let requested = ["fixture", "home.form", "home.streak", "home.table", "away.form", "away.table", "gap"]
             .filter { id in context.facts.contains { $0.id == id } }
         let normalized = CommentaryValidationService.normalize(.init(titleIndex: 0, language: "de", paragraphs: [requested]), context: context, configuration: configuration)
         let article = try CommentaryValidationService.render(.init(selection: normalized, inputTokens: 0, outputTokens: 0), context: context, configuration: configuration)
-        XCTAssertLessThanOrEqual(article.text.split(whereSeparator: \.isWhitespace).count, 150)
+        XCTAssertLessThanOrEqual(article.text.split(whereSeparator: \.isWhitespace).count, configuration.maxPreviewWords)
         XCTAssertLessThanOrEqual(article.factIDs.filter { $0.hasSuffix(".table") || $0 == "gap" }.count, 1)
         XCTAssertFalse(article.factIDs.contains("home.form") && article.factIDs.contains("home.streak"))
         XCTAssertTrue(context.facts.first { $0.id == "home.form" }?.text.contains("S–U–N") == true)
+    }
+
+    func testInsightfulPreviewMayExceed150WordsWithoutForcingShortSelectionsToExpand() throws {
+        let original = try context()
+        let extra = CommentaryFact(id: "home.insight", group: "home", text: Array(repeating: "Belegter Zusatzkontext", count: 80).joined(separator: " "), sourceIDs: [])
+        let expanded = CommentaryContext(kind: original.kind, targetKey: original.targetKey, seasonID: original.seasonID,
+            matchID: original.matchID, gameday: original.gameday, cutoff: original.cutoff, historical: original.historical,
+            partial: original.partial, leagueCode: original.leagueCode, titles: original.titles,
+            facts: original.facts + [extra], requiredFactIDs: original.requiredFactIDs, warnings: original.warnings)
+        let selected = CommentaryValidationService.normalize(.init(titleIndex: 0, language: "de", paragraphs: [["fixture", "home.insight", "away.form"]]), context: expanded, configuration: settings())
+        let longer = try CommentaryValidationService.render(.init(selection: selected, inputTokens: 0, outputTokens: 0), context: expanded, configuration: settings())
+        XCTAssertGreaterThan(longer.text.split(whereSeparator: \.isWhitespace).count, 150)
+        XCTAssertLessThanOrEqual(longer.text.split(whereSeparator: \.isWhitespace).count, 300)
+        let brief = CommentaryValidationService.normalize(.init(titleIndex: 0, language: "de", paragraphs: [["fixture", "home.form", "away.form"]]), context: expanded, configuration: settings())
+        XCTAssertFalse(brief.paragraphs.flatMap { $0 }.contains(extra.id))
+        let shorter = try CommentaryValidationService.render(.init(selection: brief, inputTokens: 0, outputTokens: 0), context: expanded, configuration: settings())
+        XCTAssertLessThan(shorter.text.split(whereSeparator: \.isWhitespace).count, 150)
     }
 
     func testSuspensionsCoverKickoffAndExplainRecentInvolvementWithoutInventingStarts() throws {

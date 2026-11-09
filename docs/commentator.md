@@ -53,7 +53,7 @@ No real inference is called by the tests.
 | `COMMENTATOR_MAX_OUTPUT_TOKENS` | `1800` | Provider output budget, including any billed reasoning output |
 | `COMMENTATOR_MAX_ATTEMPTS` | `3` | Maximum inference/job attempts, bounded to 1–5 |
 | `COMMENTATOR_BATCH_LIMIT` | `150` | Maximum IDs in a batch, bounded to 1–200 |
-| `COMMENTATOR_MAX_PREVIEW_WORDS` | `150` | Preview upper word limit; editorial cap 150 even with an older larger value |
+| `COMMENTATOR_MAX_PREVIEW_WORDS` | `300` | Configurable safety ceiling, not a target length; normal previews remain short |
 | `COMMENTATOR_MAX_SUMMARY_WORDS` | `900` | Round review upper word limit |
 | `COMMENTATOR_POLL_SECONDS` | `5` | Pending-job polling interval |
 | `COMMENTATOR_TEMPERATURE` | empty | Optional temperature; leave unset for models which do not support it |
@@ -193,8 +193,11 @@ but the quality of the article still depends on those recorded facts and calcula
 
 ## Concise match previews and player angles
 
-`matchup-brief-de-v3` targets about 100–140 words (hard editorial ceiling 150), with a
-lower validation floor rather than padding every preview to 150 words. Compact records
+`matchup-brief-de-v4` usually targets about 80–140 words for routine previews, with
+no 150-word editorial ceiling. Important absences, scorer milestones and other meaningful
+stories may justify a longer article, up to the configurable safety ceiling (default
+300 words). Extra words must add relevant information; no padding to reach a word count.
+The validation floor is only 25 words, adapting down further to genuinely sparse context. Compact records
 use wins–draws–losses, labelled `S–U–N`. Selection avoids duplicate form/streak claims,
 multiple table comparisons and repeated scorer facts. Header date/venue are omitted from
 normal prose when team stories are available, while remaining in the context. Statistics provenance belongs in
@@ -336,3 +339,6 @@ selection, suspension expiry boundaries, recent involvement without invented sta
 of awarded goals from played attack/defence totals. A live local test on FC Playboys–FC
 Bacishta used the existing public squad/suspension feed to verify Semir Bedžeti’s recorded
 ban covers kickoff. No production records were changed.
+
+Flexible-length regression: the focused commentator suite covers allowing a supported
+preview above 150 words while preserving a shorter selection without padding.
