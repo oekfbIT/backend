@@ -118,6 +118,10 @@ final class AppTests: XCTestCase {
             XCTAssertEqual(res.status, .unauthorized, "Expected team photo uploads to require a bearer token")
         })
 
+        try app.test(.PUT, "app/player/\(id)/email", afterResponse: { res in
+            XCTAssertEqual(res.status, .unauthorized, "Expected player profile uploads to require a bearer token")
+        })
+
         try app.test(.DELETE, "app/match/\(id)/event/\(UUID())", afterResponse: { res in
             XCTAssertEqual(res.status, .unauthorized, "Expected referee event deletion to require a bearer token")
         })

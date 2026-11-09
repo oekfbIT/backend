@@ -133,9 +133,16 @@ extension CommentaryContextBuilder {
                 add("movement.\(row.id)", "table", "\(row.name) \(row.ranking < old.ranking ? "kletterte" : "fiel") von Platz \(old.ranking) auf \(row.ranking) und hält bei \(row.points) Punkten.", through.compactMap { $0.id?.uuidString })
             }
         }
+        let reportDates = results.compactMap { $0.details.date }.sorted()
+        guard let firstDate = reportDates.first, let lastDate = reportDates.last else {
+            throw Abort(.unprocessableEntity, reason: "A weekly report requires a reliable game-day date.")
+        }
+        let firstDay = dateText(firstDate), lastDay = dateText(lastDate)
+        let reportDate = firstDay == lastDay ? firstDay : "\(firstDay)–\(lastDay)"
+        let reportTitle = "ÖKFB Spielbericht \(reportDate) - \(data.league.name)\(partial ? " (Zwischenstand)" : "")"
         return .init(kind: .gameDaySummary, targetKey: "season:\(seasonID):gameday:\(gameday)", seasonID: seasonID,
                      matchID: nil, gameday: gameday, cutoff: now, historical: false, partial: partial, leagueCode: data.league.code ?? "",
-                     titles: ["\(data.league.name): \(partial ? "Zwischenstand zum" : "Der Rückblick auf den") \(gameday). Spieltag"],
+                     titles: [reportTitle],
                      facts: facts, requiredFactIDs: required,
                      warnings: ["Nur diese Saison und Ergebnisse bis zur Spieltagsnummer und zum Stichtag.", "Keine erfundenen Spielverläufe. Torjäger-Rangsprünge nur bei vollständigen Torereignissen. Tabellenplätze sind keine Abstiegsregeln."], sectionHeadings: headings)
     }

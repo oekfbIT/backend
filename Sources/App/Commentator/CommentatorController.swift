@@ -93,6 +93,16 @@ struct CommentatorController: RouteCollection {
         root.get("seasons", ":seasonId", "news") { req async throws -> CommentarySeasonOverview in
             try await CommentarySeasonOverview.fetch(req.parameters.require("seasonId", as: UUID.self), on: req.db)
         }
+        root.get("seasons", ":seasonId", "gamedays", ":number", "previews") { req async throws -> MatchdayPreviewOverview in
+            try await MatchdayPreviewService(database: req.db, runtime: self.runtime(req)).overview(
+                seasonID: req.parameters.require("seasonId", as: UUID.self), gameday: req.parameters.require("number", as: Int.self))
+        }
+        root.post("seasons", ":seasonId", "gamedays", ":number", "previews") { req async throws -> Response in
+            try self.mayPublish(req, requested: true)
+            let result = try await MatchdayPreviewService(database: req.db, runtime: self.runtime(req)).generateMissing(
+                seasonID: req.parameters.require("seasonId", as: UUID.self), gameday: req.parameters.require("number", as: Int.self))
+            return try await result.encodeResponse(status: .accepted, for: req)
+        }
         root.on(.POST, "generate", "match", ":matchId", body: .collect(maxSize: "32kb")) { req async throws -> Response in
             let id = try req.parameters.require("matchId", as: UUID.self)
             let job = try await MatchPreviewGenerationService(runtime: self.runtime(req)).generateMatchPreview(id, options: self.options(req))

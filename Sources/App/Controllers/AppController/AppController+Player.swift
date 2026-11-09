@@ -14,6 +14,7 @@ import Fluent
 struct UpdatePlayerRequest: Content {
     let email: String?
     let playerNumber: String?
+    let image: File?
 }
 
 extension AppController {
@@ -23,13 +24,13 @@ extension AppController {
         let ownedPlayer = player.grouped(":playerID")
             .grouped(PlayerParameterAccessMiddleware(parameter: "playerID"))
         ownedPlayer.get(use: getPlayerByID)
-        ownedPlayer.put("email", use: updatePlayerEmailAddress)
+        ownedPlayer.on(.PUT, "email", body: .collect(maxSize: "11mb"), use: updatePlayerEmailAddress)
         player.get("sid", ":sid", use: getPlayerBySID)
 
         // Backwards-compatible alias used by older app versions.
         root.grouped(":playerID")
             .grouped(PlayerParameterAccessMiddleware(parameter: "playerID"))
-            .put("email", use: updatePlayerEmailAddress)
+            .on(.PUT, "email", body: .collect(maxSize: "11mb"), use: updatePlayerEmailAddress)
 
         // Team registration via app
         root.on(
@@ -146,13 +147,20 @@ extension AppController {
         let playerID = try req.parameters.require("playerID", as: UUID.self)
         let payload = try req.content.decode(UpdatePlayerRequest.self)
 
-        // if both are nil -> 400
-        if payload.email == nil && payload.playerNumber == nil {
+        if payload.email == nil && payload.playerNumber == nil && payload.image == nil {
             throw Abort(.badRequest, reason: "No updatable fields provided.")
         }
 
-        guard let player = try await Player.find(playerID, on: req.db) else {
-            throw Abort(.notFound, reason: "Player not found")
+        let player = try await ApplicationAccess.requirePlayer(playerID, req: req)
+
+        if let image = payload.image {
+            try UploadValidation.validate(image, allowed: [.jpeg, .png])
+            let firebaseManager = req.application.firebaseManager
+            try await firebaseManager.authenticate().get()
+            player.image = try await firebaseManager.uploadFile(
+                file: image,
+                to: "players/\(playerID.uuidString)/image/\(UUID().uuidString)"
+            ).get()
         }
 
         if let newEmail = payload.email {
