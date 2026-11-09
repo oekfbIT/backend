@@ -175,10 +175,13 @@ struct CommentaryContextBuilder: CommentaryContextProviding {
         if let h = table.first(where: { $0.id == match.$homeTeam.id }), let a = table.first(where: { $0.id == match.$awayTeam.id }), !previous.isEmpty {
             add("gap", "closing", "In der Tabelle trennen \(home) und \(away) \(abs(h.points - a.points)) Punkte.", previous.compactMap { $0.id?.uuidString })
         }
+        if let outlook = goalOutlook(homeID: match.$homeTeam.id, awayID: match.$awayTeam.id, matches: previous, historical: historical) { facts.append(outlook) }
         return .init(kind: .matchPreview, targetKey: "match:\(id)", seasonID: seasonID, matchID: id,
             gameday: match.details.gameday, cutoff: cutoff, historical: historical, partial: false,
             leagueCode: data.league.code ?? "", titles: [historical ? "\(home) gegen \(away): die Ausgangslage vor dem Spiel" : "\(home) gegen \(away): der Vorbericht"],
-            facts: facts, requiredFactIDs: ["fixture"] + facts.filter { $0.id.hasSuffix(".suspended.summary") }.map(\.id), warnings: historical
+            facts: facts, requiredFactIDs: ["fixture"] + facts.filter {
+                $0.id.hasSuffix(".suspended.summary") || $0.id.hasSuffix(".defence_trend") || $0.id == "goal_outlook"
+            }.map(\.id), warnings: historical
                 ? ["Historische Sperren und aktuelle Kaderzuordnungen werden nicht rückwirkend behauptet.", "Datenkorrekturen nach dem Stichtag lassen sich ohne frühere Datenbank-Snapshots nicht rekonstruieren."]
                 : ["Unbekannte Verletzungen und unbestätigte Aufstellungen werden nicht behauptet.", "Torjäger-Meilensteine setzen vollständig zuordenbare Torereignisse voraus; Freistöße und Strafstöße sind keine Foulstatistik."])
     }
@@ -232,6 +235,7 @@ struct CommentaryContextBuilder: CommentaryContextProviding {
             if lost.count >= 2 { add("streak", "Nach \(lost.count) Niederlagen in Folge steht \(teamName) unter Druck.", Array(lost)) }
         }
         if let last = all.first { add("last", resultSentence(last, home: last.$homeTeam.id == teamID ? teamName : (last.homeBlanket?.name ?? "das Heimteam"), away: last.$awayTeam.id == teamID ? teamName : (last.awayBlanket?.name ?? "das Auswärtsteam")), [last]) }
+        if let trend = defensiveTrend(teamID: teamID, teamName: teamName, matches: all, label: label) { facts.append(trend) }
         return facts
     }
 

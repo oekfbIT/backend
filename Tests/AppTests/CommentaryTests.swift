@@ -664,6 +664,58 @@ final class CommentaryTests: XCTestCase {
         XCTAssertFalse(try build().facts.contains { $0.id.contains("suspended") })
     }
 
+    private func trendHistory(_ target: Match, now: Date, scored: [Int], conceded: [Int]) -> [Match] {
+        zip(scored, conceded).enumerated().map { index, scores in
+            let reverse = index % 2 == 1
+            let kickoff = now.addingTimeInterval(-Double(index + 1) * 86400)
+            let match = Match(id: UUID(), details: .init(gameday: index + 1, date: kickoff, location: "Testplatz"),
+                homeTeamId: reverse ? target.$awayTeam.id : target.$homeTeam.id,
+                awayTeamId: reverse ? target.$homeTeam.id : target.$awayTeam.id,
+                homeBlanket: nil, awayBlanket: nil,
+                score: .init(home: reverse ? scores.1 : scores.0, away: reverse ? scores.0 : scores.1), status: .done,
+                seasonId: target.$season.id, secondHalfEndDate: kickoff.addingTimeInterval(3600))
+            match.$events.value = []
+            return match
+        }
+    }
+
+    func testDefensiveTrendUsesSeparateWindowsAndDoesNotMistakeWinningForGoodDefending() throws {
+        let (_, target, now) = fixture()
+        for (conceded, expected) in [([1, 1, 1, 4, 4, 4], "zeigt Besserung"),
+                                    ([4, 4, 4, 1, 1, 1], "die andere Richtung"),
+                                    ([3, 3, 3, 3, 4, 3], "keine klare Entspannung")] {
+            let history = trendHistory(target, now: now, scored: [8, 8, 8, 8, 8, 8], conceded: conceded)
+            let trend = try XCTUnwrap(CommentaryContextBuilder.defensiveTrend(teamID: target.$homeTeam.id, teamName: "Heim", matches: history, label: "home"))
+            XCTAssertTrue(trend.text.contains(expected))
+            XCTAssertEqual(trend.sourceIDs.count, 6)
+            XCTAssertNil(CommentaryContextBuilder.defensiveTrend(teamID: target.$homeTeam.id, teamName: "Heim", matches: Array(history.prefix(5)), label: "home"))
+            history[0].status = .cancelled
+            XCTAssertNil(CommentaryContextBuilder.defensiveTrend(teamID: target.$homeTeam.id, teamName: "Heim", matches: history, label: "home"))
+        }
+    }
+
+    func testGoalRichOutlookRequiresBothCurrentAttacksAndDefencesAndIgnoresOutliersAndAwards() throws {
+        let (base, target, now) = fixture()
+        let history = trendHistory(target, now: now, scored: [6, 6, 6, 6, 6, 6], conceded: [4, 4, 4, 4, 4, 4])
+        let outlook = try XCTUnwrap(CommentaryContextBuilder.goalOutlook(homeID: target.$homeTeam.id, awayID: target.$awayTeam.id, matches: history))
+        XCTAssertTrue(outlook.text.contains("erwarten")); XCTAssertFalse(outlook.text.contains("garantiert"))
+        XCTAssertTrue(CommentaryContextBuilder.goalOutlook(homeID: target.$homeTeam.id, awayID: target.$awayTeam.id, matches: history, historical: true)?.text.contains("damaliger Sicht") == true)
+        let data = CommentarySeasonData(season: base.season, league: base.league, teams: base.teams, matches: history + [target], players: [])
+        let context = try CommentaryContextBuilder.preview(match: target, data: data, meetings: [], now: now)
+        XCTAssertTrue(context.requiredFactIDs.contains("goal_outlook"))
+        XCTAssertTrue(context.requiredFactIDs.contains("home.defence_trend"))
+        XCTAssertTrue(context.requiredFactIDs.contains("away.defence_trend"))
+        XCTAssertFalse(outlook.sourceIDs.contains(target.id!.uuidString))
+        for goals in [[0, 1, 0, 9, 9, 9], [12, 0, 0, 9, 9, 9]] {
+            let improved = trendHistory(target, now: now, scored: [6, 6, 6, 6, 6, 6], conceded: goals)
+            XCTAssertNil(CommentaryContextBuilder.goalOutlook(homeID: target.$homeTeam.id, awayID: target.$awayTeam.id, matches: improved))
+        }
+        XCTAssertNil(CommentaryContextBuilder.goalOutlook(homeID: target.$homeTeam.id, awayID: target.$awayTeam.id, matches: Array(history.prefix(2))))
+        let awarded = trendHistory(target, now: now, scored: [900, 1, 1, 1], conceded: [900, 1, 1, 1])
+        awarded[0].status = .cancelled
+        XCTAssertNil(CommentaryContextBuilder.goalOutlook(homeID: target.$homeTeam.id, awayID: target.$awayTeam.id, matches: awarded))
+    }
+
     private func withMongo(_ run: (Application, MongoCommentaryStore) async throws -> Void) async throws {
         guard let port = Environment.get("COMMENTATOR_TEST_MONGO_PORT"), Int(port) != nil else {
             throw XCTSkip("Set COMMENTATOR_TEST_MONGO_PORT to an isolated loopback MongoDB.")

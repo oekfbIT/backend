@@ -12,7 +12,7 @@ struct CommentaryInferenceError: Error {
 }
 
 enum CommentaryPromptBuilder {
-    static let version = "matchup-brief-de-v4"
+    static let version = "matchup-brief-de-v5"
     static func instructions(for context: CommentaryContext, configuration: CommentaryConfiguration) -> String {
         """
         Du bist Sportredakteur des Österreichischen Kleinfeld Fußball Bundes. Erstelle eine abwechslungsreiche,
@@ -23,6 +23,10 @@ enum CommentaryPromptBuilder {
         Einleitung, Heimteam, Auswärtsteam beziehungsweise Spieltagsereignisse, Spieler und Tabelle.
         Für Vorberichte: Schreibe wie vor einem spannenden Duell, nicht wie ein Statistikexport.
         Wähle wenige aussagekräftige Kontraste: torgefährlicher Angriff, anfällige Defensive, Heim-/Auswärtsstärke.
+        Viele eigene Tore oder Siege beweisen keine gute Defensive. Nutze belegte defensive Trends:
+        jüngste drei gespielte Partien gegenüber den drei davor, ohne Wertungsergebnisse.
+        Unterscheide echte Besserung, Verschlechterung und weiterhin hohe Gegentorwerte.
+        Der geprüfte goal_outlook darf ein offenes, torreiches Duell erwarten lassen; er ist keine Garantie.
         Bevorzuge einen belegten Torjäger-Meilenstein oder einen auffälligen Spieler statt einer Liste von Spielern.
         Höchstens ein Spieler-Schwerpunkt je Team. Ein naher Verfolger darf im selben Satz genannt werden.
         Kartenvorgeschichten sind Rückblicke, keine Prognose für weitere Karten und kein Beweis für eine Sperre.
@@ -33,7 +37,8 @@ enum CommentaryPromptBuilder {
         Datum und Spielort sind optional, wenn sie bereits im Spielkopf stehen; sie dürfen Interessantes nicht verdrängen.
         Drei kurze Absätze sind genug. Keine Füllsätze, Datenbank-Prosa oder routinemäßige Aufzählung aller Kennzahlen.
         Betone die nachrichtenwertesten Spiele; nicht jedes Spiel braucht einen eigenen Absatz.
-        Keine Prognosen, Wetten, erfundenen Zitate, Verletzungen, Taktikanalysen oder nicht belegten Rivalitäten.
+        Keine Sieger-, Ergebnis- oder exakten Torprognosen, Wetten, erfundenen Zitate, Verletzungen,
+        Taktikanalysen oder nicht belegten Rivalitäten. Nur der geprüfte qualitative Tor-Ausblick ist erlaubt.
         Historische Vorberichte sind rückblickend, keine Ankündigungen. Teilberichte müssen klar als solche erscheinen.
         \(context.kind == .matchPreview ? "Ein normaler Vorbericht bleibt meist bei 80–140 Wörtern. Das ist keine Pflichtlänge: Bei wichtigen Ausfällen, Torjäger-Meilensteinen oder anderem wirklich relevantem Kontext darf er länger werden. Jeder zusätzliche Satz muss eine neue interessante Information bringen. Lieber kurz als langweilig; niemals zum Erreichen einer Wortzahl auffüllen." : "Ziel: 300–700 Wörter, sofern genügend interessante Fakten vorhanden sind.")
         Obergrenze: \(CommentaryValidationService.wordLimits(context: context, configuration: configuration).maximum) Wörter.

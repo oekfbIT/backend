@@ -193,7 +193,7 @@ but the quality of the article still depends on those recorded facts and calcula
 
 ## Concise match previews and player angles
 
-`matchup-brief-de-v4` usually targets about 80–140 words for routine previews, with
+`matchup-brief-de-v5` usually targets about 80–140 words for routine previews, with
 no 150-word editorial ceiling. Important absences, scorer milestones and other meaningful
 stories may justify a longer article, up to the configurable safety ceiling (default
 300 words). Extra words must add relevant information; no padding to reach a word count.
@@ -342,3 +342,29 @@ ban covers kickoff. No production records were changed.
 
 Flexible-length regression: the focused commentator suite covers allowing a supported
 preview above 150 words while preserving a shorter selection without padding.
+
+## Defensive trajectory and qualitative goal outlook
+
+Meaningful defensive trends compare the latest three **played** matches with the
+preceding three, without overlapping windows or awarded scores. A change of at least
+three conceded goals between the equal windows (one per game) produces an improvement
+or worsening angle. Two windows with at least nine conceded goals each and a smaller
+change produce a persistent-defensive-weakness angle. Fewer than six played results
+produce no trend claim. Such facts are required in the preview so a generic five-game
+statistic cannot crowd out evidence of recent defensive improvement.
+
+A qualitative goal-rich outlook is allowed by the revised editorial requirements.
+It appears only with three recent played matches for **both** teams, each averaging
+at least two scored goals, at least eight conceded in three games, and at least six
+combined match goals per game. Each must have scored and conceded in at least two of
+those three games; one outlier cannot produce the signal alone. Recent defensive
+improvement below the thresholds suppresses the outlook, regardless of older scores.
+The supported sentence says the results *suggest/allow one to expect* an open,
+goal-rich match. It gives no guaranteed outcome, winner, exact score, betting tip,
+probability or modelled xG estimate. It is an explicit, traceable editorial heuristic.
+These calculations reuse the existing cutoff-filtered matches; there are no extra
+provider calls, endpoints, database reads or environment variables.
+
+Verified this follow-up with all 34 commentator tests passing, including improving,
+worsening and persistently loose defences, home/away assignment, insufficient samples,
+single outliers, awarded scores, recent tightening and retrospective wording.
