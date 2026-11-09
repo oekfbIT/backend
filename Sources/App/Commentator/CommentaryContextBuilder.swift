@@ -140,30 +140,32 @@ struct CommentaryContextBuilder: CommentaryContextProviding {
         }
         add("fixture", "opening", historical
             ? "Die Ausgangslage vor dem Duell zwischen \(home) und \(away) am \(match.details.gameday). Spieltag der \(data.league.name) steht im Mittelpunkt dieses historischen Vorberichts."
-            : "Am \(match.details.gameday). Spieltag der \(data.league.name) treffen \(home) und \(away) aufeinander; die bisherigen Ergebnisse liefern den Rahmen für dieses Duell.", [id.uuidString, seasonID.uuidString])
+            : "\(home) gegen \(away): Am \(match.details.gameday). Spieltag der \(data.league.name) treffen die beiden Teams aufeinander.", [id.uuidString, seasonID.uuidString])
         add("schedule", "opening", historical
             ? "Als Spieltermin ist der \(dateText(kickoff, time: true)) verzeichnet."
-            : "Angesetzt ist die Begegnung für den \(dateText(kickoff, time: true)).", [id.uuidString])
+            : "Anpfiff ist am \(dateText(kickoff, time: true)).", [id.uuidString])
         if let location = match.details.location?.trimmingCharacters(in: .whitespacesAndNewlines), !location.isEmpty {
-            add("venue", "opening", "Als Spielort ist \(location) eingetragen.", [id.uuidString])
+            add("venue", "opening", "Spielort: \(location).", [id.uuidString])
         }
         let table = TeamStatisticsService.table(teams: data.teams, matches: previous)
+        let race = scorerRace(previous)
+        let unavailable = Set(data.players.filter {
+            !historical && $0.eligibility == .Gesperrt && ($0.blockdate.map { $0 > kickoff } ?? false)
+        }.compactMap(\.id))
         for (label, teamID, teamName, atHome) in [("home", match.$homeTeam.id, home, true), ("away", match.$awayTeam.id, away, false)] {
             facts += teamFacts(teamID: teamID, teamName: teamName, matches: previous, label: label, atHome: atHome)
             if let row = table.first(where: { $0.id == teamID }), !previous.isEmpty {
-                add("\(label).table", label, "\(teamName) liegt in der aus den berücksichtigten Ergebnissen berechneten Tabelle mit \(row.points) Punkten auf Rang \(row.ranking).", previous.compactMap { $0.id?.uuidString })
+                add("\(label).table", label, "\(teamName) steht mit \(row.points) Punkten auf Platz \(row.ranking).", previous.compactMap { $0.id?.uuidString })
             }
-            facts += scorerFacts(teamID: teamID, teamName: teamName, matches: previous, label: label)
+            facts += scorerFacts(teamID: teamID, teamName: teamName, matches: previous, label: label, players: data.players, excludedPlayers: unavailable)
+            facts += playerAngles(teamID: teamID, teamName: teamName, matches: previous, players: data.players, label: label, race: race, excludedPlayers: unavailable)
             if !historical {
-                for player in data.players.filter({ $0.$team.id == teamID && $0.eligibility == .Gesperrt && ($0.blockdate.map { $0 >= kickoff } ?? false) }).sorted(by: { ($0.id?.uuidString ?? "") < ($1.id?.uuidString ?? "") }) {
-                    guard let playerID = player.id, let until = player.blockdate else { continue }
-                    add("\(label).suspended.\(playerID)", label, "Bei \(teamName) ist \(player.name) laut aktuellem Spielerregister bis \(dateText(until, time: true)) gesperrt; der eingetragene Sperrzeitraum umfasst den Anpfiff.", [playerID.uuidString, id.uuidString])
-                }
+                facts += suspensionFacts(teamID: teamID, teamName: teamName, players: data.players, matches: previous,
+                                         kickoff: kickoff, matchID: id, label: label)
             }
         }
         let pastMeetings = ordered(meetings.filter { $0.id != id && resultKnown($0, before: cutoff) }).prefix(5)
         if !pastMeetings.isEmpty {
-            add("h2h.count", "history", "Für den direkten Vergleich liegen \(pastMeetings.count) berücksichtigte frühere Begegnungen vor; ältere oder unvollständig datierte Spiele sind darin nicht zwingend enthalten.", pastMeetings.compactMap { $0.id?.uuidString })
             for (index, old) in pastMeetings.enumerated() {
                 let h = old.$homeTeam.id == match.$homeTeam.id ? home : away
                 let a = old.$awayTeam.id == match.$awayTeam.id ? away : home
@@ -171,14 +173,14 @@ struct CommentaryContextBuilder: CommentaryContextProviding {
             }
         }
         if let h = table.first(where: { $0.id == match.$homeTeam.id }), let a = table.first(where: { $0.id == match.$awayTeam.id }), !previous.isEmpty {
-            add("gap", "closing", "Zwischen den beiden Mannschaften liegen nach den berücksichtigten Saisonergebnissen \(abs(h.points - a.points)) Punkte; damit liefert auch die Tabellensituation einen konkreten Bezugspunkt für das Aufeinandertreffen.", previous.compactMap { $0.id?.uuidString })
+            add("gap", "closing", "In der Tabelle trennen \(home) und \(away) \(abs(h.points - a.points)) Punkte.", previous.compactMap { $0.id?.uuidString })
         }
         return .init(kind: .matchPreview, targetKey: "match:\(id)", seasonID: seasonID, matchID: id,
             gameday: match.details.gameday, cutoff: cutoff, historical: historical, partial: false,
             leagueCode: data.league.code ?? "", titles: [historical ? "\(home) gegen \(away): die Ausgangslage vor dem Spiel" : "\(home) gegen \(away): der Vorbericht"],
-            facts: facts, requiredFactIDs: ["fixture"], warnings: historical
+            facts: facts, requiredFactIDs: ["fixture"] + facts.filter { $0.id.hasSuffix(".suspended.summary") }.map(\.id), warnings: historical
                 ? ["Historische Sperren und aktuelle Kaderzuordnungen werden nicht rückwirkend behauptet.", "Datenkorrekturen nach dem Stichtag lassen sich ohne frühere Datenbank-Snapshots nicht rekonstruieren."]
-                : ["Unbekannte Verletzungen und unbestätigte Aufstellungen werden nicht behauptet."])
+                : ["Unbekannte Verletzungen und unbestätigte Aufstellungen werden nicht behauptet.", "Torjäger-Meilensteine setzen vollständig zuordenbare Torereignisse voraus; Freistöße und Strafstöße sind keine Foulstatistik."])
     }
 
     static func teamFacts(teamID: UUID, teamName: String, matches: [Match], label: String, atHome: Bool) -> [CommentaryFact] {
@@ -188,24 +190,53 @@ struct CommentaryContextBuilder: CommentaryContextProviding {
         func add(_ key: String, _ text: String, _ source: [Match]) {
             facts.append(.init(id: "\(label).\(key)", group: label, text: text, sourceIDs: source.compactMap { $0.id?.uuidString }.sorted()))
         }
-        let recent = Array(all.prefix(5)), stats = TeamStatisticsService.aggregate(teamID: teamID, matches: recent)
-        add("form", "Aus den letzten \(recent.count) berücksichtigten Partien nimmt \(teamName) \(stats.wins) \(stats.wins == 1 ? "Sieg" : "Siege"), \(stats.draws) Unentschieden und \(stats.losses) \(stats.losses == 1 ? "Niederlage" : "Niederlagen") mit; dabei stehen \(stats.totalScored) erzielte und \(stats.totalAgainst) erhaltene Tore zu Buche.", recent)
+        let recent = Array(all.prefix(5)), results = TeamStatisticsService.aggregate(teamID: teamID, matches: recent)
+        let played = recent.filter { $0.status != .cancelled }
+        let stats = TeamStatisticsService.aggregate(teamID: teamID, matches: played)
+        let awarded = recent.count - played.count
+        let record = "\(results.wins)–\(results.draws)–\(results.losses) (S–U–N\(awarded > 0 ? ", inkl. \(awarded) Wertung" : ""))"
+        if awarded > 0 {
+            let goals = played.isEmpty ? "" : " In \(played.count) gespielten Partien fielen \(stats.totalScored):\(stats.totalAgainst) Tore."
+            let caution = played.count >= 3 && stats.totalAgainst >= 3 * played.count ? " Die Defensive bleibt dabei eine Baustelle." : ""
+            add("form", "\(teamName): Die jüngste Ergebnisbilanz lautet \(record).\(goals)\(caution)", recent)
+        } else if recent.count >= 3 && stats.totalScored >= 3 * recent.count && stats.totalScored >= stats.totalAgainst {
+            let caution = stats.totalAgainst >= 3 * recent.count ? " Allerdings blieb die Defensive mit \(stats.totalAgainst) Gegentoren anfällig." : ""
+            add("form", "Die Offensive von \(teamName) läuft: \(stats.totalScored) Tore in den letzten \(recent.count) Spielen bei einer Bilanz von \(record).\(caution)", recent)
+        } else if recent.count >= 3 && stats.totalAgainst >= 3 * recent.count {
+            let attack = stats.totalScored >= 3 * recent.count ? " Vorne gelangen immerhin \(stats.totalScored) Tore." : ""
+            add("form", "\(teamName) hat vor allem hinten eine Baustelle: \(stats.totalAgainst) Gegentore in den letzten \(recent.count) Spielen, die Bilanz steht bei \(record).\(attack)", recent)
+        } else {
+            add("form", "\(teamName) kommt aus den letzten \(recent.count) Spielen mit einer Bilanz von \(record) und \(stats.totalScored):\(stats.totalAgainst) Toren.", recent)
+        }
         let split = all.filter { atHome ? $0.$homeTeam.id == teamID : $0.$awayTeam.id == teamID }
         if !split.isEmpty {
             let s = TeamStatisticsService.aggregate(teamID: teamID, matches: split)
-            add("split", "\(atHome ? "In den Heimspielen" : "Auf fremdem Platz") verbucht \(teamName) bei \(split.count) erfassten Begegnungen \(s.wins) \(s.wins == 1 ? "Sieg" : "Siege"), \(s.draws) Remis und \(s.losses) \(s.losses == 1 ? "Niederlage" : "Niederlagen") sowie ein Torverhältnis von \(s.totalScored):\(s.totalAgainst).", split)
+            let playedSplit = split.filter { $0.status != .cancelled }
+            let g = TeamStatisticsService.aggregate(teamID: teamID, matches: playedSplit)
+            if playedSplit.count != split.count {
+                add("split", "\(atHome ? "Zu Hause" : "Auswärts") lautet die Ergebnisbilanz von \(teamName) \(s.wins)–\(s.draws)–\(s.losses) (S–U–N, inkl. Wertungen); die \(playedSplit.count) gespielten Partien brachten \(g.totalScored):\(g.totalAgainst) Tore.", split)
+            } else {
+                add("split", "\(atHome ? "Zu Hause" : "Auswärts") steht \(teamName) bei \(s.wins)–\(s.draws)–\(s.losses) (S–U–N) und \(s.totalScored):\(s.totalAgainst) Toren aus \(split.count) Spielen.", split)
+            }
+        }
+        if played.count >= 3 && stats.totalAgainst >= 3 * played.count {
+            add("defence", "Die Defensive von \(teamName) bleibt eine Baustelle: In den letzten \(played.count) gespielten Partien fielen \(stats.totalAgainst) Gegentore.", played)
+        }
+        if played.count >= 3 && stats.totalScored >= 3 * played.count {
+            add("attack", "Torgefahr bringt \(teamName) mit: \(stats.totalScored) Treffer in den letzten \(played.count) gespielten Partien sprechen für die Offensive.", played)
         }
         let unbeaten = all.prefix { m in m.$homeTeam.id == teamID ? m.score.home >= m.score.away : m.score.away >= m.score.home }
-        if unbeaten.count >= 2 { add("streak", "\(teamName) blieb in den letzten \(unbeaten.count) berücksichtigten Spielen ohne Niederlage.", Array(unbeaten)) }
+        if unbeaten.count >= 2 { add("streak", "\(teamName) ist seit \(unbeaten.count) Spielen ungeschlagen.", Array(unbeaten)) }
         else {
             let lost = all.prefix { m in m.$homeTeam.id == teamID ? m.score.home < m.score.away : m.score.away < m.score.home }
-            if lost.count >= 2 { add("streak", "Für \(teamName) stehen zuletzt \(lost.count) Niederlagen in Folge in der Ergebnisliste.", Array(lost)) }
+            if lost.count >= 2 { add("streak", "Nach \(lost.count) Niederlagen in Folge steht \(teamName) unter Druck.", Array(lost)) }
         }
         if let last = all.first { add("last", resultSentence(last, home: last.$homeTeam.id == teamID ? teamName : (last.homeBlanket?.name ?? "das Heimteam"), away: last.$awayTeam.id == teamID ? teamName : (last.awayBlanket?.name ?? "das Auswärtsteam")), [last]) }
         return facts
     }
 
-    static func scorerFacts(teamID: UUID, teamName: String, matches: [Match], label: String) -> [CommentaryFact] {
+    static func scorerFacts(teamID: UUID, teamName: String, matches: [Match], label: String,
+                            players: [Player] = [], excludedPlayers: Set<UUID> = []) -> [CommentaryFact] {
         var counts = [String: (String, Int, Set<String>)]()
         for match in matches where match.status != .cancelled {
             guard match.$homeTeam.id == teamID || match.$awayTeam.id == teamID else { continue }
@@ -215,6 +246,7 @@ struct CommentaryContextBuilder: CommentaryContextProviding {
                 if let id = event.id, !seen.insert(id).inserted { continue }
                 guard TeamStatisticsService.scoringAssignment(for: event, in: match) == side else { continue }
                 guard let playerID = event.$player.id else { continue }
+                guard !excludedPlayers.contains(playerID), players.first(where: { $0.id == playerID }).map({ $0.$team.id == teamID }) ?? true else { continue }
                 let sheet = side == .home ? match.homeBlanket : match.awayBlanket
                 guard let playerName = event.name ?? sheet?.players.first(where: { $0.id == playerID })?.name, !playerName.isEmpty else { continue }
                 let key = playerID.uuidString
@@ -227,7 +259,7 @@ struct CommentaryContextBuilder: CommentaryContextProviding {
         }
         return counts.sorted { $0.value.1 != $1.value.1 ? $0.value.1 > $1.value.1 : $0.key < $1.key }.prefix(3).map { key, row in
             CommentaryFact(id: "\(label).scorer.\(key)", group: label,
-                text: "Für \(teamName) ist \(row.0) in den berücksichtigten Spielen mit \(row.1) persönlich zugeordneten Toren verzeichnet; die Angabe beruht auf den erfassten Torereignissen.", sourceIDs: row.2.sorted())
+                text: "Im Angriff von \(teamName) fällt \(row.0.trimmingCharacters(in: .whitespacesAndNewlines)) auf: Er traf bereits \(row.1)-mal.", sourceIDs: row.2.sorted())
         }
     }
 

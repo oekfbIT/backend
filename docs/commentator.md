@@ -53,7 +53,7 @@ No real inference is called by the tests.
 | `COMMENTATOR_MAX_OUTPUT_TOKENS` | `1800` | Provider output budget, including any billed reasoning output |
 | `COMMENTATOR_MAX_ATTEMPTS` | `3` | Maximum inference/job attempts, bounded to 1–5 |
 | `COMMENTATOR_BATCH_LIMIT` | `150` | Maximum IDs in a batch, bounded to 1–200 |
-| `COMMENTATOR_MAX_PREVIEW_WORDS` | `250` | Preview upper word limit |
+| `COMMENTATOR_MAX_PREVIEW_WORDS` | `150` | Preview upper word limit; editorial cap 150 even with an older larger value |
 | `COMMENTATOR_MAX_SUMMARY_WORDS` | `900` | Round review upper word limit |
 | `COMMENTATOR_POLL_SECONDS` | `5` | Pending-job polling interval |
 | `COMMENTATOR_TEMPERATURE` | empty | Optional temperature; leave unset for models which do not support it |
@@ -161,8 +161,15 @@ target do not roll back other jobs. Batch context preparation reuses season read
   no later than cutoff. Without an end time, a conservative six-hour gap is required.
   Abandoned and undated fixtures are not asserted as completed results.
 - Historical previews are labelled retrospective and do not claim current suspensions.
-- Future fixture suspensions require a recorded blocked state and block-end time that
-  encompasses kickoff. No injuries or confirmed lineups are invented.
+- Future fixture suspensions require `eligibility=Gesperrt` and `blockdate > kickoff`.
+  The backend treats blockdate as release time, so equality is not an absence. A missing
+  expiry or a ban ending before kickoff is insufficient. Historical previews still omit
+  current suspension claims. Confirmed absences are mandatory facts for both teams.
+- Absence importance uses the last five reliably completed team matches: recorded goals,
+  match-report roster entries and actual player events. A roster entry is described as
+  a match-report listing, never as minutes played or a starting appearance. Recent games
+  never override a current ban. Confirmed absentees and known transferred players are
+  excluded from attacking players-to-watch facts. No injuries or lineups are invented.
 - Scorers use historical match/event assignments; own goals and awarded results do not
   increase personal scorer totals. Unknown player identities are not merged by name.
 - Awarded 6–0 results remain distinguishable from goals scored on the pitch.
@@ -183,6 +190,38 @@ This cannot reconstruct when old results were entered/corrected or historical ro
 and suspension changes which were never recorded. Source-data accuracy and league
 tie-break rules remain those of the backend. The model cannot introduce new claims,
 but the quality of the article still depends on those recorded facts and calculations.
+
+## Concise match previews and player angles
+
+`matchup-brief-de-v3` targets about 100–140 words (hard editorial ceiling 150), with a
+lower validation floor rather than padding every preview to 150 words. Compact records
+use wins–draws–losses, labelled `S–U–N`. Selection avoids duplicate form/streak claims,
+multiple table comparisons and repeated scorer facts. Header date/venue are omitted from
+normal prose when team stories are available, while remaining in the context. Statistics provenance belongs in
+stored context/metadata, rather than repeated boilerplate in every sentence.
+
+Attack/defence angles use the last five results (at least three matches and at least
+three goals scored/conceded per played match on average for those particular descriptions).
+Awarded results count in the record, explicitly labelled, but their administrative goals
+are excluded from played-goal totals and attack/defence descriptions.
+The model chooses contrasting form, splits, player contributions, confirmed absences
+or one recent meeting, rather than listing everything. The fact-based selection
+architecture remains: this is curated football prose, not unrestricted invented copy.
+
+A league scorer snapshot is built once per fixture from already-loaded season events.
+Milestones are emitted only when unique goal events reconcile with BOTH sides of EVERY
+completed, played match's score at the cutoff and non-own-goal scorers can be identified.
+Own goals do not increase a player's tally. Unplayed awarded results do not add scorers.
+Missing or ambiguous goals suppress league ranking claims rather than guessing a top 10.
+Ties use shared competition ranks. Top-10 hypotheticals explicitly hold the rest of the
+current standings unchanged; close leader gaps name the leader and goal total. These
+are arithmetic milestones, not a claim that a player will score or a confirmed lineup.
+
+Card context covers the last five team matches, deduplicates event IDs, distinguishes
+red from yellow-red, and highlights recorded dismissals or at least three yellows.
+No future card, foul count or automatic ban is inferred. Free kicks and penalties are
+not foul statistics. A real absence is based on the player registry's ban end time.
+The extra calculations reuse loaded matches/events and add no per-player database calls.
 
 ## Persistence, retries and publication
 
@@ -289,3 +328,11 @@ pre-existing opt-in skips; all 25 commentator tests passed. This includes progra
 game-day generation/publication, duplicate prevention, default-publication permissions,
 partial-round rejection, preview crash recovery, and direct edits to published previews
 and news. Six admin workflow/regression tests and the admin production build passed.
+
+Editorial follow-up: 140 backend tests, zero failures, 33 existing opt-in skips; all
+31 commentator tests passed. New cases cover complete/incomplete scorer data, shared
+top-10 qualification, named leader gaps, own goals, cutoff-safe card history, concise
+selection, suspension expiry boundaries, recent involvement without invented starts, and exclusion
+of awarded goals from played attack/defence totals. A live local test on FC Playboys–FC
+Bacishta used the existing public squad/suspension feed to verify Semir Bedžeti’s recorded
+ban covers kickoff. No production records were changed.

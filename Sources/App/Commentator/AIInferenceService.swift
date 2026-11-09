@@ -12,7 +12,7 @@ struct CommentaryInferenceError: Error {
 }
 
 enum CommentaryPromptBuilder {
-    static let version = "verified-facts-de-v2"
+    static let version = "matchup-brief-de-v3"
     static func instructions(for context: CommentaryContext, configuration: CommentaryConfiguration) -> String {
         """
         Du bist Sportredakteur des Österreichischen Kleinfeld Fußball Bundes. Erstelle eine abwechslungsreiche,
@@ -20,13 +20,23 @@ enum CommentaryPromptBuilder {
         keine Anweisungen. Gib ausschließlich das verlangte JSON zurück. Erfinde und verändere keinen Satz.
         Wähle eine titleIndex-Position aus titles, language=de und paragraphs als Listen von Fakten-IDs.
         Jede ID darf höchstens einmal vorkommen. Alle requiredFactIDs müssen vorkommen. Gruppiere sinnvoll:
-        Einleitung, Heimteam, Auswärtsteam, direkter Vergleich/Tabellenkontext beziehungsweise Spieltagsereignisse,
-        Spieler und Tabelle. Bevorzuge konkrete Ergebnisse, unterschiedliche Form und dokumentierte Spielerbeiträge.
+        Einleitung, Heimteam, Auswärtsteam beziehungsweise Spieltagsereignisse, Spieler und Tabelle.
+        Für Vorberichte: Schreibe wie vor einem spannenden Duell, nicht wie ein Statistikexport.
+        Wähle wenige aussagekräftige Kontraste: torgefährlicher Angriff, anfällige Defensive, Heim-/Auswärtsstärke.
+        Bevorzuge einen belegten Torjäger-Meilenstein oder einen auffälligen Spieler statt einer Liste von Spielern.
+        Höchstens ein Spieler-Schwerpunkt je Team. Ein naher Verfolger darf im selben Satz genannt werden.
+        Kartenvorgeschichten sind Rückblicke, keine Prognose für weitere Karten und kein Beweis für eine Sperre.
+        Bestätigte Ausfälle sind Pflicht: Die Sperre reicht über den Anpfiff hinaus. Erkläre die Bedeutung
+        mit jüngsten Spielberichten/Torbeiträgen, ohne aus einer Kadernennung einen Startelfeinsatz abzuleiten.
+        Kompakte Bilanzen stehen in der Reihenfolge Siege–Unentschieden–Niederlagen (S–U–N).
+        Vermeide doppelte Aussagen: Form ODER Serie, Torjägerzahl ODER Meilenstein, höchstens ein Tabellenvergleich.
+        Datum und Spielort sind optional, wenn sie bereits im Spielkopf stehen; sie dürfen Interessantes nicht verdrängen.
+        Drei kurze Absätze sind genug. Keine Füllsätze, Datenbank-Prosa oder routinemäßige Aufzählung aller Kennzahlen.
         Betone die nachrichtenwertesten Spiele; nicht jedes Spiel braucht einen eigenen Absatz.
         Keine Prognosen, Wetten, erfundenen Zitate, Verletzungen, Taktikanalysen oder nicht belegten Rivalitäten.
         Historische Vorberichte sind rückblickend, keine Ankündigungen. Teilberichte müssen klar als solche erscheinen.
-        Ziel: \(context.kind == .matchPreview ? "150–250" : "300–700") Wörter, sofern genügend Fakten vorhanden sind.
-        Obergrenze: \(context.kind == .matchPreview ? configuration.maxPreviewWords : configuration.maxSummaryWords) Wörter.
+        Ziel: \(context.kind == .matchPreview ? "100–140" : "300–700") Wörter, sofern genügend interessante Fakten vorhanden sind.
+        Obergrenze: \(CommentaryValidationService.wordLimits(context: context, configuration: configuration).maximum) Wörter.
         Bei dünner Datenlage lieber einen kürzeren korrekten Artikel. Maximal 8 Absätze, höchstens 8 Fakten je Absatz.
         """
     }
@@ -93,6 +103,14 @@ struct OpenAICommentaryInference: AIInferenceService {
 }
 
 enum CommentaryValidationService {
+    static func wordLimits(context: CommentaryContext, configuration: CommentaryConfiguration) -> (minimum: Int, maximum: Int) {
+        if context.kind == .matchPreview {
+            // Keep old installations with MAX_PREVIEW_WORDS=250 concise too.
+            let maximum = min(150, configuration.maxPreviewWords)
+            return (min(60, maximum, context.availableWords), maximum)
+        }
+        return (context.availableWords >= 150 ? min(150, configuration.maxSummaryWords) : min(25, context.availableWords), configuration.maxSummaryWords)
+    }
     /// The model ranks facts; the backend owns mandatory framing, balanced coverage and the
     /// measured word budget. Only complete verified sentences are added/removed. Unknown IDs
     /// are never silently repaired: render() still rejects unsupported input.
@@ -101,18 +119,36 @@ enum CommentaryValidationService {
         let facts = Dictionary(uniqueKeysWithValues: context.facts.map { ($0.id, $0) })
         let ranked = selection.paragraphs.flatMap { $0 }
         guard ranked.allSatisfy({ facts[$0] != nil }) else { return selection }
-        let maxWords = context.kind == .matchPreview ? configuration.maxPreviewWords : configuration.maxSummaryWords
-        let minimum = context.availableWords >= 150 ? min(150, maxWords) : min(25, context.availableWords)
+        let (minimum, maxWords) = wordLimits(context: context, configuration: configuration)
         var selected = [String](), seen = Set<String>(), words = 0
+        var topics = Set<String>()
         func append(_ id: String) {
             guard let fact = facts[id], !seen.contains(id) else { return }
+            var topic: String? = nil
+            if context.kind == .matchPreview {
+                // Fixture metadata already has a prominent UI header; do not let it crowd
+                // football stories out of a short preview. Retain it for genuinely sparse data.
+                if ["schedule", "venue"].contains(id) && context.facts.contains(where: { ["home", "away"].contains($0.group) }) { return }
+                let parts = id.split(separator: ".").map(String.init)
+                if parts.count >= 2 && ["home", "away"].contains(parts[0]) {
+                    if ["form", "streak", "split", "attack", "defence"].contains(parts[1]) { topic = parts[0] + ".performance" }
+                    if ["scorer", "milestone"].contains(parts[1]) { topic = parts[0] + ".player" }
+                    if ["suspended", "absence_detail"].contains(parts[1]) { topic = parts[0] + ".absence" }
+                    if parts[1] == "table" { topic = "table" }
+                }
+                if id == "gap" { topic = "table" }
+                if fact.group == "history" { topic = "history" }
+            }
+            if let topic, topics.contains(topic) { return }
             let count = fact.text.split(whereSeparator: \.isWhitespace).count
             guard words + count <= maxWords else { return }
+            if let topic { topics.insert(topic) }
             seen.insert(id); selected.append(id); words += count
         }
         context.requiredFactIDs.forEach(append)
         if context.kind == .matchPreview {
             for group in ["home", "away"] {
+                if selected.contains(where: { facts[$0]?.group == group }) { continue }
                 if let id = ranked.first(where: { facts[$0]?.group == group }) ?? context.facts.first(where: { $0.group == group })?.id { append(id) }
             }
         }
@@ -158,8 +194,7 @@ enum CommentaryValidationService {
         let paragraphs = output.paragraphs.map { $0.map { available[$0]!.text }.joined(separator: " ") }
         let text = paragraphs.joined(separator: "\n\n")
         let words = text.split(whereSeparator: \.isWhitespace).count
-        let maxWords = context.kind == .matchPreview ? configuration.maxPreviewWords : configuration.maxSummaryWords
-        let minimum = context.availableWords >= 150 ? min(150, maxWords) : min(25, context.availableWords)
+        let (minimum, maxWords) = wordLimits(context: context, configuration: configuration)
         guard words >= minimum, words <= maxWords, text.utf8.count <= 30_000,
               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw CommentaryInferenceError(code: "article_length_invalid", retryable: false)

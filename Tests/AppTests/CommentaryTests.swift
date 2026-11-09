@@ -148,7 +148,7 @@ final class CommentaryTests: XCTestCase {
             let normalized = CommentaryValidationService.normalize(.init(titleIndex: 0, language: "de", paragraphs: [ids]), context: context, configuration: settings())
             let rendered = try CommentaryValidationService.render(.init(selection: normalized, inputTokens: 0, outputTokens: 0), context: context, configuration: settings())
             let count = rendered.text.split(whereSeparator: \.isWhitespace).count
-            XCTAssertGreaterThanOrEqual(count, 150); XCTAssertLessThanOrEqual(count, 250)
+            XCTAssertGreaterThanOrEqual(count, 60); XCTAssertLessThanOrEqual(count, 150)
             XCTAssertTrue(rendered.factIDs.contains("fixture"))
             XCTAssertTrue(Set(rendered.factIDs).isSubset(of: Set(context.facts.map(\.id))))
         }
@@ -521,6 +521,132 @@ final class CommentaryTests: XCTestCase {
         }
     }
 
+    func testTopTenMilestoneRequiresReconciledGoalsAndUsesSharedRanks() throws {
+        let (data, target, now) = fixture()
+        let previous = Array(data.matches.prefix(4))
+        previous.forEach { $0.score = .init(home: 0, away: 0); $0.$events.value = [] }
+        let match = previous[0], hero = UUID()
+        var events = [MatchEvent(id: UUID(), matchId: match.id!, type: .goal, playerId: hero, minute: 1, name: "Top-Ten-Kandidat", image: nil, number: nil, assign: .home)]
+        for i in 0..<10 {
+            let id = UUID()
+            for minute in 1...2 {
+                events.append(MatchEvent(id: UUID(), matchId: match.id!, type: .goal, playerId: id, minute: minute, name: "Torjäger \(i)", image: nil, number: nil, assign: .away))
+            }
+        }
+        match.score = .init(home: 1, away: 20); match.$events.value = events
+        let race = CommentaryContextBuilder.scorerRace(previous)
+        XCTAssertTrue(race.complete)
+        let context = try CommentaryContextBuilder.preview(match: target, data: data, meetings: [], now: now)
+        let milestone = try XCTUnwrap(context.facts.first { $0.id == "home.milestone.\(hero)" })
+        XCTAssertTrue(milestone.text.contains("beim jetzigen Stand"))
+        XCTAssertTrue(milestone.text.contains("geteilten Top-10-Platz"))
+        XCTAssertFalse(milestone.sourceIDs.contains(target.id!.uuidString))
+        let repeated = try CommentaryContextBuilder.preview(match: target, data: data, meetings: [], now: now)
+        XCTAssertEqual(try context.contextHash, try repeated.contextHash)
+        match.score.home += 1 // A missing goal event invalidates a purported league-wide rank.
+        let incomplete = try CommentaryContextBuilder.preview(match: target, data: data, meetings: [], now: now)
+        XCTAssertFalse(incomplete.facts.contains { $0.id.contains(".milestone.") })
+    }
+
+    func testScorerLeaderGapNamesTheLeaderAndOwnGoalsDoNotCountForPlayers() throws {
+        let (data, _, _) = fixture()
+        let match = data.matches[0], challenger = UUID(), leader = UUID()
+        var events = [MatchEvent]()
+        for (id, name, side, count) in [(challenger, "Angreifer", MatchAssignment.home, 5), (leader, "Spitzenreiter", .away, 6)] {
+            for minute in 1...count {
+                events.append(MatchEvent(id: UUID(), matchId: match.id!, type: .goal, playerId: id, minute: minute, name: name, image: nil, number: nil, assign: side))
+            }
+        }
+        events.append(MatchEvent(id: UUID(), matchId: match.id!, type: .goal, playerId: challenger, minute: 20, name: "Angreifer", image: nil, number: nil, assign: .away, ownGoal: true))
+        match.$events.value = events; match.score = .init(home: 5, away: 7)
+        let race = CommentaryContextBuilder.scorerRace([match])
+        XCTAssertTrue(race.complete)
+        XCTAssertEqual(race.rows.first { $0.id == challenger }?.goals, 5)
+        let facts = CommentaryContextBuilder.playerAngles(teamID: match.$homeTeam.id, teamName: "Heim", matches: [match], players: [], label: "home")
+        let milestone = try XCTUnwrap(facts.first { $0.id.contains("milestone") })
+        XCTAssertTrue(milestone.text.contains("fehlt noch ein Treffer"))
+        XCTAssertTrue(milestone.text.contains("Spitzenreiter"))
+        XCTAssertTrue(milestone.text.contains("(6)"))
+        XCTAssertFalse(CommentaryContextBuilder.playerAngles(teamID: match.$homeTeam.id, teamName: "Heim", matches: [match], players: [], label: "home", excludedPlayers: [challenger]).contains { $0.id.contains("milestone") })
+    }
+
+    func testCardHistoryUsesRecordedCardsAtCutoffAndNeverInfersFoulsOrSuspensions() throws {
+        let (data, target, now) = fixture()
+        let player = UUID(), homeID = target.$homeTeam.id
+        for match in data.matches {
+            let side: MatchAssignment = match.$homeTeam.id == homeID ? .home : .away
+            let card = MatchEvent(id: UUID(), matchId: match.id!, type: .yellowCard, playerId: player, minute: 10, name: "Karten-Spieler", image: nil, number: nil, assign: side)
+            let freeKick = MatchEvent(id: UUID(), matchId: match.id!, type: .freeKick, playerId: player, minute: 11, name: "Karten-Spieler", image: nil, number: nil, assign: side)
+            match.$events.value = [card, card, freeKick] // Duplicate event IDs count once.
+        }
+        let context = try CommentaryContextBuilder.preview(match: target, data: data, meetings: [], now: now)
+        let fact = try XCTUnwrap(context.facts.first { $0.id == "home.discipline.\(player)" })
+        XCTAssertTrue(fact.text.contains("4 Gelbe Karten"))
+        XCTAssertFalse(fact.text.contains("6 Gelbe"))
+        XCTAssertFalse(fact.text.contains("Foul")); XCTAssertFalse(fact.text.contains("gesperrt"))
+        XCTAssertFalse(fact.sourceIDs.contains(target.id!.uuidString))
+        for id in [target.id!, data.matches.last!.id!] { XCTAssertFalse(fact.sourceIDs.contains(id.uuidString)) }
+    }
+
+    func testAwardedScoresStayInRecordsButNeverBecomePlayedAttackOrDefenceGoals() throws {
+        let (data, target, now) = fixture()
+        data.matches[0].status = .cancelled; data.matches[0].score = .init(home: 600, away: 0)
+        let context = try CommentaryContextBuilder.preview(match: target, data: data, meetings: [], now: now)
+        let home = context.facts.filter { $0.group == "home" && ["home.form", "home.split", "home.attack", "home.defence"].contains($0.id) }
+        XCTAssertFalse(home.isEmpty)
+        XCTAssertFalse(home.map(\.text).joined().contains("600"))
+        XCTAssertTrue(home.first { $0.id == "home.form" }?.text.contains("Wertung") == true)
+        XCTAssertTrue(home.first { $0.id == "home.form" }?.text.contains("3 gespielten Partien") == true)
+    }
+
+    func testPreviewSelectionAvoidsRepeatedTopicsAndStaysShortWithOldEnvironmentLimit() throws {
+        let context = try context()
+        var configuration = settings(); configuration.maxPreviewWords = 250
+        let requested = ["fixture", "home.form", "home.streak", "home.table", "away.form", "away.table", "gap"]
+            .filter { id in context.facts.contains { $0.id == id } }
+        let normalized = CommentaryValidationService.normalize(.init(titleIndex: 0, language: "de", paragraphs: [requested]), context: context, configuration: configuration)
+        let article = try CommentaryValidationService.render(.init(selection: normalized, inputTokens: 0, outputTokens: 0), context: context, configuration: configuration)
+        XCTAssertLessThanOrEqual(article.text.split(whereSeparator: \.isWhitespace).count, 150)
+        XCTAssertLessThanOrEqual(article.factIDs.filter { $0.hasSuffix(".table") || $0 == "gap" }.count, 1)
+        XCTAssertFalse(article.factIDs.contains("home.form") && article.factIDs.contains("home.streak"))
+        XCTAssertTrue(context.facts.first { $0.id == "home.form" }?.text.contains("S–U–N") == true)
+    }
+
+    func testSuspensionsCoverKickoffAndExplainRecentInvolvementWithoutInventingStarts() throws {
+        let (base, target, now) = fixture()
+        let player = Player(id: UUID(), sid: "blocked", image: nil, team_oeid: nil, email: nil, name: "Wichtiger Spieler", number: "9", birthday: "1990-01-01",
+                            teamID: target.$homeTeam.id, nationality: "AT", position: "Sturm", eligibility: .Gesperrt,
+                            registerDate: "", identification: nil, status: true, blockdate: target.details.date!.addingTimeInterval(1))
+        let recent = base.matches[0]
+        recent.homeBlanket?.players = [.init(id: player.id!, sid: "p", name: player.name, number: 9)]
+        let goal = MatchEvent(id: UUID(), matchId: recent.id!, type: .goal, playerId: player.id!, minute: 10, name: player.name, image: nil, number: nil, assign: .home)
+        recent.$events.value = [goal]
+        func build() throws -> CommentaryContext {
+            try CommentaryContextBuilder.preview(match: target, data: .init(season: base.season, league: base.league, teams: base.teams, matches: base.matches, players: [player]), meetings: [], now: now)
+        }
+        let blocked = try build()
+        let absence = try XCTUnwrap(blocked.facts.first { $0.id == "home.suspended.summary" })
+        XCTAssertTrue(absence.text.contains("Sperre reicht")); XCTAssertTrue(absence.text.contains("1 Treffer"))
+        XCTAssertTrue(blocked.requiredFactIDs.contains(absence.id))
+        XCTAssertFalse(blocked.facts.contains { $0.id == "home.scorer.\(player.id!)" })
+        XCTAssertFalse(absence.text.contains("Stammspieler")); XCTAssertFalse(absence.text.contains("Startelf"))
+        let normalized = CommentaryValidationService.normalize(.init(titleIndex: 0, language: "de", paragraphs: [["fixture", "home.form", "away.form"]]), context: blocked)
+        XCTAssertTrue(normalized.paragraphs.flatMap { $0 }.contains(absence.id))
+        recent.$events.value = []
+        XCTAssertTrue(try build().facts.first { $0.id == absence.id }?.text.contains("Teamspielberichte") == true)
+        for until in [target.details.date!, target.details.date!.addingTimeInterval(-1)] {
+            player.blockdate = until
+            XCTAssertFalse(try build().facts.contains { $0.id.contains("suspended") })
+        }
+        player.blockdate = nil
+        XCTAssertFalse(try build().facts.contains { $0.id.contains("suspended") })
+        player.blockdate = target.details.date!.addingTimeInterval(86400)
+        player.eligibility = .Spielberechtigt
+        XCTAssertFalse(try build().facts.contains { $0.id.contains("suspended") })
+        player.eligibility = .Gesperrt; target.status = .done
+        XCTAssertFalse(try build().facts.contains { $0.id.contains("suspended") })
+    }
+
     private func withMongo(_ run: (Application, MongoCommentaryStore) async throws -> Void) async throws {
         guard let port = Environment.get("COMMENTATOR_TEST_MONGO_PORT"), Int(port) != nil else {
             throw XCTSkip("Set COMMENTATOR_TEST_MONGO_PORT to an isolated loopback MongoDB.")
@@ -554,7 +680,7 @@ private actor CommentaryMockInference: AIInferenceService {
         }
         var paragraphs = [[String]]()
         for start in stride(from: 0, to: selected.count, by: 4) { paragraphs.append(Array(selected[start..<min(start + 4, selected.count)])) }
-        return .init(titleIndex: 0, language: "de", paragraphs: paragraphs)
+        return CommentaryValidationService.normalize(.init(titleIndex: 0, language: "de", paragraphs: paragraphs), context: context)
     }
     func generate(context: CommentaryContext, configuration: CommentaryConfiguration) async throws -> CommentaryInferenceResult {
         calls += 1
