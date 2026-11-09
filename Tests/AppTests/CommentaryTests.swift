@@ -705,6 +705,8 @@ final class CommentaryTests: XCTestCase {
         XCTAssertTrue(context.requiredFactIDs.contains("goal_outlook"))
         XCTAssertTrue(context.requiredFactIDs.contains("home.defence_trend"))
         XCTAssertTrue(context.requiredFactIDs.contains("away.defence_trend"))
+        XCTAssertFalse(context.facts.first { $0.id == "home.form" }?.text.contains("Gegentore") == true)
+        XCTAssertFalse(context.facts.contains { $0.id == "home.defence" })
         XCTAssertFalse(outlook.sourceIDs.contains(target.id!.uuidString))
         for goals in [[0, 1, 0, 9, 9, 9], [12, 0, 0, 9, 9, 9]] {
             let improved = trendHistory(target, now: now, scored: [6, 6, 6, 6, 6, 6], conceded: goals)

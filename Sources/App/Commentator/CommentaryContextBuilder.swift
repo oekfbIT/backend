@@ -197,11 +197,20 @@ struct CommentaryContextBuilder: CommentaryContextProviding {
         let played = recent.filter { $0.status != .cancelled }
         let stats = TeamStatisticsService.aggregate(teamID: teamID, matches: played)
         let awarded = recent.count - played.count
+        let trend = defensiveTrend(teamID: teamID, teamName: teamName, matches: all, label: label)
         let record = "\(results.wins)–\(results.draws)–\(results.losses) (S–U–N\(awarded > 0 ? ", inkl. \(awarded) Wertung" : ""))"
         if awarded > 0 {
             let goals = played.isEmpty ? "" : " In \(played.count) gespielten Partien fielen \(stats.totalScored):\(stats.totalAgainst) Tore."
-            let caution = played.count >= 3 && stats.totalAgainst >= 3 * played.count ? " Die Defensive bleibt dabei eine Baustelle." : ""
+            let caution = trend == nil && played.count >= 3 && stats.totalAgainst >= 3 * played.count ? " Die Defensive bleibt dabei eine Baustelle." : ""
             add("form", "\(teamName): Die jüngste Ergebnisbilanz lautet \(record).\(goals)\(caution)", recent)
+        } else if trend != nil {
+            // The required trend already explains the defence. Do not repeat five-game
+            // defensive totals or generic weakness claims in the accompanying form sentence.
+            if recent.count >= 3 && stats.totalScored >= 3 * recent.count {
+                add("form", "Vorne liefert \(teamName): \(stats.totalScored) Tore in den letzten \(recent.count) Spielen bei einer Bilanz von \(record).", recent)
+            } else {
+                add("form", "Die jüngste Ergebnisbilanz von \(teamName) lautet \(record).", recent)
+            }
         } else if recent.count >= 3 && stats.totalScored >= 3 * recent.count && stats.totalScored >= stats.totalAgainst {
             let caution = stats.totalAgainst >= 3 * recent.count ? " Allerdings blieb die Defensive mit \(stats.totalAgainst) Gegentoren anfällig." : ""
             add("form", "Die Offensive von \(teamName) läuft: \(stats.totalScored) Tore in den letzten \(recent.count) Spielen bei einer Bilanz von \(record).\(caution)", recent)
@@ -222,7 +231,7 @@ struct CommentaryContextBuilder: CommentaryContextProviding {
                 add("split", "\(atHome ? "Zu Hause" : "Auswärts") steht \(teamName) bei \(s.wins)–\(s.draws)–\(s.losses) (S–U–N) und \(s.totalScored):\(s.totalAgainst) Toren aus \(split.count) Spielen.", split)
             }
         }
-        if played.count >= 3 && stats.totalAgainst >= 3 * played.count {
+        if trend == nil && played.count >= 3 && stats.totalAgainst >= 3 * played.count {
             add("defence", "Die Defensive von \(teamName) bleibt eine Baustelle: In den letzten \(played.count) gespielten Partien fielen \(stats.totalAgainst) Gegentore.", played)
         }
         if played.count >= 3 && stats.totalScored >= 3 * played.count {
@@ -235,7 +244,7 @@ struct CommentaryContextBuilder: CommentaryContextProviding {
             if lost.count >= 2 { add("streak", "Nach \(lost.count) Niederlagen in Folge steht \(teamName) unter Druck.", Array(lost)) }
         }
         if let last = all.first { add("last", resultSentence(last, home: last.$homeTeam.id == teamID ? teamName : (last.homeBlanket?.name ?? "das Heimteam"), away: last.$awayTeam.id == teamID ? teamName : (last.awayBlanket?.name ?? "das Auswärtsteam")), [last]) }
-        if let trend = defensiveTrend(teamID: teamID, teamName: teamName, matches: all, label: label) { facts.append(trend) }
+        if let trend { facts.append(trend) }
         return facts
     }
 

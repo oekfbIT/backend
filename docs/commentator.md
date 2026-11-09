@@ -351,7 +351,9 @@ three conceded goals between the equal windows (one per game) produces an improv
 or worsening angle. Two windows with at least nine conceded goals each and a smaller
 change produce a persistent-defensive-weakness angle. Fewer than six played results
 produce no trend claim. Such facts are required in the preview so a generic five-game
-statistic cannot crowd out evidence of recent defensive improvement.
+statistic cannot crowd out evidence of recent defensive improvement. When a trend
+is available, the accompanying form sentence keeps the attack/record and omits generic
+defensive claims and repeated five-game conceded totals.
 
 A qualitative goal-rich outlook is allowed by the revised editorial requirements.
 It appears only with three recent played matches for **both** teams, each averaging
