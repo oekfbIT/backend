@@ -43,7 +43,12 @@ struct CommentaryGameDayRequest: Content {
     }
 }
 struct CommentaryPublishRequest: Content { var overwrite: Bool? = nil }
-struct CommentaryEditRequest: Content { let expectedRevision: Int; let title: String; let text: String }
+struct CommentaryEditRequest: Content {
+    let expectedRevision: Int
+    let title: String
+    let text: String
+    var publish: Bool? = nil
+}
 
 struct MatchPreviewGenerationService {
     let runtime: CommentaryRuntime
@@ -78,7 +83,7 @@ struct CommentatorController: RouteCollection {
         var options = (req.body.data?.readableBytes ?? 0) > 0 ? try req.content.decode(CommentaryGenerationOptions.self) : .init()
         if let header = req.headers.first(name: "Idempotency-Key") { options.idempotencyKey = header }
         try options.validate()
-        try mayPublish(req, requested: options.publish == true)
+        try mayPublish(req, requested: options.shouldPublish)
         return options
     }
 
@@ -95,7 +100,7 @@ struct CommentatorController: RouteCollection {
             let body = try req.content.decode(CommentaryBatchRequest.self)
             var options = body.options ?? .init()
             if let header = req.headers.first(name: "Idempotency-Key") { options.idempotencyKey = header }
-            try options.validate(); try self.mayPublish(req, requested: options.publish == true)
+            try options.validate(); try self.mayPublish(req, requested: options.shouldPublish)
             try runtime.configuration.requireInference()
             guard !body.matchIds.isEmpty, body.matchIds.count <= runtime.configuration.batchLimit else {
                 throw Abort(.badRequest, reason: "Provide 1–\(runtime.configuration.batchLimit) match IDs.")
@@ -122,7 +127,7 @@ struct CommentatorController: RouteCollection {
             let body = try req.content.decode(CommentaryGameDayRequest.self)
             var options = body.options
             if let header = req.headers.first(name: "Idempotency-Key") { options.idempotencyKey = header }
-            try options.validate(); try self.mayPublish(req, requested: options.publish == true)
+            try options.validate(); try self.mayPublish(req, requested: options.shouldPublish)
             let job = try await GameDayNewsGenerationService(runtime: self.runtime(req)).generateGameDaySummary(body.seasonId, gameday: body.gameday, options: options)
             return try await job.encodeResponse(status: .accepted, for: req)
         }
@@ -153,8 +158,14 @@ struct CommentatorController: RouteCollection {
             let runtime = try self.runtime(req), id = try req.parameters.require("articleId")
             let edit = try req.content.decode(CommentaryEditRequest.self)
             guard var article = try await runtime.store.article(id) else { throw Abort(.notFound) }
-            guard article.revision == edit.expectedRevision, (1...200).contains(edit.title.count), (1...30_000).contains(edit.text.utf8.count) else {
-                throw Abort(.conflict, reason: "Invalid content or stale draft revision.")
+            guard article.revision == edit.expectedRevision, !edit.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  !edit.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  (1...200).contains(edit.title.count), (1...30_000).contains(edit.text.utf8.count) else {
+                throw Abort(.conflict, reason: "Invalid content or stale article revision.")
+            }
+            let publish = edit.publish ?? (article.content.status == .published)
+            guard !publish || !article.context.partial || runtime.configuration.allowPartialPublish else {
+                throw Abort(.conflict, reason: "Publication of partial game days is disabled.")
             }
             let old = article.content
             article.content = .init(title: edit.title, text: edit.text,
@@ -162,7 +173,14 @@ struct CommentatorController: RouteCollection {
                 language: old.language, generatedAt: old.generatedAt, provider: old.provider, model: old.model,
                 promptVersion: old.promptVersion, contextHash: old.contextHash, factIDs: [], inputTokens: old.inputTokens, outputTokens: old.outputTokens, status: .draft)
             article.manuallyEdited = true; article.revision += 1
+            if publish && article.context.kind == .matchPreview {
+                article.content.status = .published
+                article.publishedPreview = article.content
+            }
             try await runtime.store.saveArticle(article, expectedRevision: edit.expectedRevision)
+            if publish && article.context.kind == .gameDaySummary {
+                return try await runtime.jobs.publish(article: article, overwrite: false)
+            }
             return article
         }
         root.get("context", "match", ":matchId") { req async throws -> CommentaryContext in

@@ -245,7 +245,7 @@ struct CommentaryContextBuilder: CommentaryContextProviding {
         guard !fixtures.isEmpty else { throw Abort(.notFound, reason: "No fixtures exist for this season/game day.") }
         let results = ordered(fixtures.filter { resultKnown($0, before: now) })
         let partial = results.count != fixtures.count
-        guard !partial || allowPartial else { throw Abort(.conflict, reason: "Game day is incomplete. Explicitly allow_partial to create a labelled partial draft.") }
+        guard !partial || allowPartial else { throw Abort(.conflict, reason: "Game day is incomplete. Explicitly allow_partial to create a labelled partial summary.") }
         guard !results.isEmpty else { throw Abort(.conflict, reason: "No confirmed, reliably dated results are available.") }
         var facts = [CommentaryFact]()
         func add(_ key: String, _ group: String, _ text: String, _ ids: [String]) {

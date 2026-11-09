@@ -138,6 +138,9 @@ struct CommentaryGenerationOptions: Content {
     var allowPartial: Bool? = nil
     var idempotencyKey: String? = nil
 
+    /// Publication is the normal pipeline. Explicit opt-out is for local tests/review.
+    var shouldPublish: Bool { dryRun != true && publish != false }
+
     func validate() throws {
         guard language == nil || language == "de" || language == "de-AT" else {
             throw Abort(.badRequest, reason: "Only German (de/de-AT) is supported.")

@@ -131,7 +131,7 @@ struct MongoCommentaryStore: CommentaryStore {
         }
         do {
             guard let current = try await self.article(article.id), current.revision == article.revision else {
-                throw Abort(.conflict, reason: "The draft changed before publication.")
+                throw Abort(.conflict, reason: "The article changed before publication.")
             }
             let newsID = CommentaryEncoding.uuid("news:\(article.id)")
             let key = try BSONEncoder().encodePrimitive(newsID)!

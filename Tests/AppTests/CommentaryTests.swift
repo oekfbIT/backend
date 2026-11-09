@@ -205,6 +205,9 @@ final class CommentaryTests: XCTestCase {
             $0.headers.add(name: "X-Commentator-Key", value: self.settings().serviceKey)
             try $0.content.encode(CommentaryGenerationOptions(publish: true))
         }) { XCTAssertEqual($0.status, .forbidden) }
+        try app.test(.POST, "commenter/v1/generate/match/\(id)", beforeRequest: {
+            $0.headers.add(name: "X-Commentator-Key", value: self.settings().serviceKey)
+        }) { XCTAssertEqual($0.status, .forbidden) } // Omitted publish means publication, never a bypass.
         let readOnly = User(userID: "test", type: .admin, firstName: "Test", lastName: "Admin", email: "test@example.com", passwordHash: "unused")
         readOnly.permissions = [.analyticsRead]
         let req = Request(application: app, on: app.eventLoopGroup.next()); req.auth.login(readOnly)
@@ -228,7 +231,8 @@ final class CommentaryTests: XCTestCase {
             try await service.process(job.id, slot: 0)
             try await service.process(job.id, slot: 0)
             let saved = try await store.job(job.id), article = try await store.article(job.articleID)
-            XCTAssertEqual(saved?.state, .completed); XCTAssertEqual(article?.content.status, .draft)
+            XCTAssertEqual(saved?.state, .completed); XCTAssertEqual(article?.content.status, .published)
+            XCTAssertEqual(article?.publishedPreview?.status, .published)
             let calls = await mock.calls; XCTAssertEqual(calls, 1)
             let newsCount = try await store.collection(NewsItem.schema).count().get()
             XCTAssertEqual(newsCount, 0)
@@ -313,6 +317,8 @@ final class CommentaryTests: XCTestCase {
             try await service.process(job.id, slot: 0, now: now.addingTimeInterval(2))
             let saved = try await store.job(job.id), calls = await mock.calls
             XCTAssertEqual(saved?.state, .completed); XCTAssertEqual(calls, 0)
+            let recovered = try await store.article(job.articleID)
+            XCTAssertEqual(recovered?.publishedPreview?.status, .published)
         }
     }
 
@@ -321,7 +327,7 @@ final class CommentaryTests: XCTestCase {
             let (data, _, now) = self.fixture()
             let context = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now)
             let service = CommentaryJobService(store: store, inference: CommentaryMockInference(), configuration: self.settings())
-            let job = try await service.enqueue(context: context, options: .init())
+            let job = try await service.enqueue(context: context, options: .init(publish: false))
             try await service.process(job.id, slot: 0)
             let beforeCount = try await store.collection(NewsItem.schema).count().get(); XCTAssertEqual(beforeCount, 0)
             let storedDraft = try await store.article(job.articleID)
@@ -371,7 +377,7 @@ final class CommentaryTests: XCTestCase {
             let initial = try await store.article(first.articleID)
             let published = try await service.publish(article: XCTUnwrap(initial), overwrite: false)
             XCTAssertEqual(published.publishedPreview?.status, .published)
-            let next = try await service.enqueue(context: context, options: .init(overwrite: true, idempotencyKey: "replacement"))
+            let next = try await service.enqueue(context: context, options: .init(publish: false, overwrite: true, idempotencyKey: "replacement"))
             try await service.process(next.id, slot: 0)
             let replacement = try await store.article(first.articleID)
             XCTAssertEqual(replacement?.content.status, .draft)
@@ -405,8 +411,113 @@ final class CommentaryTests: XCTestCase {
             try app.test(.GET, "webClient/match/\(context.matchID!)/preview") { XCTAssertEqual($0.status, .notFound) }
             try app.test(.POST, "commenter/v1/generate/matches/batch", beforeRequest: {
                 $0.headers.add(name: "X-Commentator-Key", value: self.settings().serviceKey)
-                try $0.content.encode(CommentaryBatchRequest(matchIds: Array(repeating: UUID(), count: 151)))
+                try $0.content.encode(CommentaryBatchRequest(matchIds: Array(repeating: UUID(), count: 151), options: .init(publish: false)))
             }) { XCTAssertEqual($0.status, .badRequest) }
+        }
+    }
+
+    func testProgrammaticWeeklySummaryPublishesOnceWithoutApproval() async throws {
+        try await withMongo { app, store in
+            let (data, _, now) = self.fixture()
+            let context = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now)
+            var settings = self.settings(); settings.allowServicePublish = true
+            let mock = CommentaryMockInference()
+            let runtime = CommentaryRuntime(configuration: settings, store: store, contexts: CommentaryStubContext(context: context), inference: mock)
+            app.commentary = runtime
+            try app.register(collection: CommentatorController())
+            var jobID: String?
+            for _ in 0..<2 {
+                try app.test(.POST, "commenter/v1/generate/gameday", beforeRequest: {
+                    $0.headers.add(name: "X-Commentator-Key", value: settings.serviceKey)
+                    try $0.content.encode(CommentaryGameDayRequest(seasonId: context.seasonID, gameday: 2))
+                }) {
+                    XCTAssertEqual($0.status, .accepted)
+                    let job = try $0.content.decode(CommentaryJob.self)
+                    XCTAssertTrue(job.publish)
+                    if let previous = jobID { XCTAssertEqual(previous, job.id) }
+                    jobID = job.id
+                }
+                try await runtime.jobs.process(XCTUnwrap(jobID), slot: 0)
+            }
+            let job = try await store.job(XCTUnwrap(jobID))
+            XCTAssertEqual(job?.state, .completed)
+            XCTAssertEqual(job?.result?.status, .published)
+            let article = try await store.article(XCTUnwrap(job?.articleID))
+            let news = try await NewsItem.find(XCTUnwrap(article?.publishedNewsID), on: app.db)
+            XCTAssertEqual(news?.title, article?.content.title)
+            let count = try await store.collection(NewsItem.schema).count().get()
+            XCTAssertEqual(count, 1)
+            let calls = await mock.calls; XCTAssertEqual(calls, 1)
+        }
+    }
+
+    func testPublishedEditsUpdatePublicPreviewAndRejectStaleRevision() async throws {
+        try await withMongo { app, store in
+            let context = try self.context()
+            var settings = self.settings(); settings.allowServicePublish = true
+            let runtime = CommentaryRuntime(configuration: settings, store: store, contexts: CommentaryStubContext(context: context), inference: CommentaryMockInference())
+            app.commentary = runtime
+            try app.register(collection: CommentatorController())
+            let job = try await runtime.jobs.enqueue(context: context, options: .init())
+            try await runtime.jobs.process(job.id, slot: 0)
+            let initial = try await store.article(job.articleID)
+            let revision = try XCTUnwrap(initial?.revision)
+            for expected in [HTTPResponseStatus.ok, .conflict] {
+                try app.test(.PATCH, "commenter/v1/articles/\(job.articleID)", beforeRequest: {
+                    $0.headers.add(name: "X-Commentator-Key", value: settings.serviceKey)
+                    // No publish flag: an edit of published content stays public.
+                    try $0.content.encode(CommentaryEditRequest(expectedRevision: revision, title: "Korrigierte Überschrift", text: "Manuell korrigierter Vorbericht."))
+                }) { XCTAssertEqual($0.status, expected) }
+            }
+            try app.test(.GET, "webClient/match/\(context.matchID!)/preview") {
+                XCTAssertEqual($0.status, .ok)
+                let content = try $0.content.decode(GeneratedCommentary.self)
+                XCTAssertEqual(content.text, "Manuell korrigierter Vorbericht.")
+                XCTAssertEqual(content.status, .published)
+            }
+            let edited = try await store.article(job.articleID)
+            XCTAssertTrue(edited?.manuallyEdited == true)
+        }
+    }
+
+    func testDefaultPublicationModesAndPartialRoundProtection() async throws {
+        XCTAssertTrue(CommentaryGenerationOptions().shouldPublish)
+        XCTAssertFalse(CommentaryGenerationOptions(publish: false).shouldPublish)
+        XCTAssertFalse(CommentaryGenerationOptions(dryRun: true).shouldPublish)
+        let (data, _, now) = fixture()
+        data.matches.first { $0.details.gameday == 2 }?.status = .pending
+        let context = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: true, now: now)
+        XCTAssertTrue(context.partial)
+        let service = CommentaryJobService(store: UnavailableCommentaryStore(), inference: CommentaryMockInference(), configuration: settings())
+        do { _ = try await service.enqueue(context: context, options: .init()); XCTFail("Must not publish an incomplete round by default") }
+        catch let error as AbortError { XCTAssertEqual(error.status, .conflict) }
+    }
+
+    func testPublishedNewsEditsUpdateExistingStoryWithoutAnotherApproval() async throws {
+        try await withMongo { app, store in
+            let (data, _, now) = self.fixture()
+            let context = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now)
+            var settings = self.settings(); settings.allowServicePublish = true
+            let runtime = CommentaryRuntime(configuration: settings, store: store, contexts: CommentaryStubContext(context: context), inference: CommentaryMockInference())
+            app.commentary = runtime
+            try app.register(collection: CommentatorController())
+            let job = try await runtime.jobs.enqueue(context: context, options: .init())
+            try await runtime.jobs.process(job.id, slot: 0)
+            let article = try await store.article(job.articleID)
+            let revision = try XCTUnwrap(article?.revision)
+            let newsID = try XCTUnwrap(article?.publishedNewsID)
+            try app.test(.PATCH, "commenter/v1/articles/\(job.articleID)", beforeRequest: {
+                $0.headers.add(name: "X-Commentator-Key", value: settings.serviceKey)
+                try $0.content.encode(CommentaryEditRequest(expectedRevision: revision, title: "Spieltag korrigiert", text: "Redaktionell ergänzte Zusammenfassung."))
+            }) {
+                XCTAssertEqual($0.status, .ok)
+                XCTAssertEqual(try $0.content.decode(CommentaryArticle.self).content.status, .published)
+            }
+            let news = try await NewsItem.find(newsID, on: app.db)
+            XCTAssertEqual(news?.title, "Spieltag korrigiert")
+            XCTAssertEqual(news?.text, "<p>Redaktionell ergänzte Zusammenfassung.</p>")
+            let count = try await store.collection(NewsItem.schema).count().get()
+            XCTAssertEqual(count, 1)
         }
     }
 

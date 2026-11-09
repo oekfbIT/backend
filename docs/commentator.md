@@ -7,9 +7,9 @@ application, MCP server, Droplet, n8n installation, or automatic publication sch
 An external scheduler or a later MCP adapter can invoke the same authenticated API.
 
 The implementation plan was: inspect existing models/renderers; build cutoff-aware
-shared facts; add a provider boundary; persist drafts and durable jobs; add bounded
+shared facts; add a provider boundary; persist articles and durable jobs; add bounded
 processing/authenticated routes; verify locally using mocked inference and disposable
-MongoDB; push the feature branch without deployment.
+MongoDB; prepare the feature branch for the owner to push without deployment.
 
 Corrections identified before implementation:
 
@@ -47,7 +47,7 @@ No real inference is called by the tests.
 | `COMMENTATOR_AI_API_KEY` | empty | Optional non-OpenAI/provider override; falls back to `OPENAI_API_KEY` |
 | `COMMENTATOR_SERVICE_KEY` | empty | Dedicated service key, at least 32 bytes; empty disables service-key access |
 | `COMMENTATOR_ALLOW_SERVICE_PUBLISH` | `false` | Explicitly grants publication/editing to the service credential |
-| `COMMENTATOR_ALLOW_PARTIAL_PUBLISH` | `false` | Permits publication of clearly labelled incomplete-round drafts |
+| `COMMENTATOR_ALLOW_PARTIAL_PUBLISH` | `false` | Permits publication of clearly labelled incomplete-round summaries |
 | `COMMENTATOR_CONCURRENCY` | `3` | Global generation slots across replicas; bounded to 1–5 |
 | `COMMENTATOR_TIMEOUT_SECONDS` | `60` | Per-provider-call timeout; bounded to 5–120 |
 | `COMMENTATOR_MAX_OUTPUT_TOKENS` | `1800` | Provider output budget, including any billed reasoning output |
@@ -77,7 +77,7 @@ All `/commenter/v1` endpoints accept either:
 Service calls require no user login or refresh token. The key is compared through
 fixed-length SHA-256 digests. Keep it in the caller's credential store; replace the
 environment secret to rotate/revoke it. It is never part of model input or a URL.
-The default service credential can create/read drafts but cannot publish or edit.
+The default service credential can read context and run explicit nonpublishing tests, but cannot publish or edit. For a trusted automation caller, set `COMMENTATOR_ALLOW_SERVICE_PUBLISH=true`; generation then publishes without a human approval step.
 Existing user authentication remains unchanged. The generated OpenAPI lists both
 authentication alternatives.
 
@@ -94,33 +94,46 @@ Job/article documents currently expose their stable identifier as `_id`.
 | GET | `/commenter/v1/generate/match/:matchId/status` | Latest job plus current article |
 | POST | `/commenter/v1/generate/gameday` | Enqueue a season/round review; 202 |
 | GET | `/commenter/v1/generate/gameday/:seasonId/:number/status` | Latest job plus current round article |
-| POST | `/commenter/v1/generate/gameday/:seasonId/:number/publish` | Explicitly publish draft to existing news feed |
-| POST | `/commenter/v1/generate/match/:matchId/publish` | Explicitly publish preview |
+| POST | `/commenter/v1/generate/gameday/:seasonId/:number/publish` | Publish an optionally withheld article to the existing news feed |
+| POST | `/commenter/v1/generate/match/:matchId/publish` | Publish an optionally withheld preview |
 | GET | `/commenter/v1/jobs/:jobId` | Exact job, attempts, safe error, result and snapshot |
-| GET | `/commenter/v1/articles/:articleId` | Current draft/published article and metadata |
-| PATCH | `/commenter/v1/articles/:articleId` | Explicit editorial edit with `expected_revision`, `title`, `text` |
+| GET | `/commenter/v1/articles/:articleId` | Current article and metadata |
+| PATCH | `/commenter/v1/articles/:articleId` | Editorial edit with `expected_revision`, `title`, `text`; published edits update the public copy directly |
 | GET | `/commenter/v1/context/match/:matchId` | Traceable pre-match snapshot, no inference |
 | GET | `/commenter/v1/context/gameday/:seasonId/:number` | Round snapshot; `?allowPartial=true` for incomplete rounds |
-| GET | `/webClient/match/:matchId/preview` | Public, explicitly published preview only; otherwise 404 |
+| GET | `/webClient/match/:matchId/preview` | Public published preview only; otherwise 404 |
 | GET | `/webClient/match/:matchId/form` | Home/away recent form in this season, before the fixture cutoff |
 
 Match options (all optional):
 
 ```json
-{"language":"de","publish":false,"overwrite":false,"dry_run":false,"idempotency_key":"preview-pass-1"}
+{"language":"de","publish":true,"overwrite":false,"dry_run":false,"idempotency_key":"preview-pass-1"}
 ```
 
 Batch body:
 
 ```json
-{"match_ids":["MATCH_UUID"],"options":{"language":"de","publish":false,"idempotency_key":"batch-pass-1"}}
+{"match_ids":["MATCH_UUID"],"options":{"language":"de","publish":true,"idempotency_key":"batch-pass-1"}}
 ```
 
 Round body:
 
 ```json
-{"season_id":"SEASON_UUID","gameday":12,"language":"de","publish":false,"overwrite":false,"allow_partial":false}
+{"season_id":"SEASON_UUID","gameday":12,"language":"de","publish":true,"overwrite":false,"allow_partial":false}
 ```
+
+**Publication is the default**, including when the body/options or `publish` field is
+omitted. Normal processing is context → AI selection → factual validation → persistence
+→ publication → completed job. No admin session, confirmation or later publish request
+is needed for an authorized service caller. Match previews become public and game-day
+reviews create/update their single existing news record. Jobs only report completed
+after requested publication succeeds. This supersedes the original attached document's
+draft-by-default workflow.
+
+Use `publish:false` only to deliberately withhold a test/review article. The internal
+`draft` value is retained for these opt-out articles and backward compatibility; it is
+not a required editorial stage. `dry_run:true` defaults to nonpublishing and stores only
+the job result. Explicit `dry_run:true,publish:true` remains invalid.
 
 `Idempotency-Key` can also supply the key. With no key, `initial` is used per target,
 language and dry-run/persist mode. Repeating an initial request returns the original
@@ -128,6 +141,12 @@ job rather than spending again. To intentionally regenerate, supply `overwrite:t
 and a **new** explicit idempotency key. Reuse a key when retrying the same request.
 A key cannot be reused to change publication or overwrite intent. Language is limited
 to `de`/`de-AT` and stored canonically as `de`.
+
+Existing pre-change jobs keep their recorded publication intent. Reusing an old test
+key with automatic publication now returns 409 rather than silently returning an
+unpublished result; publish that saved article directly or use a new key with explicit
+overwrite to regenerate. Existing saved articles require no migration or automatic
+backfill/publication.
 
 `dry_run:true` still performs paid inference and stores a job/result for inspection;
 it does not save an article or create news. Use the context GETs for a no-inference
@@ -196,11 +215,25 @@ does not wait for AI completion.
 
 ## Manual admin and homepage workflow
 
-The admin match-detail screen has a **KI-Spielvorschau** tab. It creates a draft only
-after clicking **Spielvorschau erstellen**, shows durable job progress, and reloads the
-saved text. Editors can change and save it, then explicitly choose **Auf Homepage
-veröffentlichen**. Regeneration uses a new idempotency key and does not replace the
-published preview until that replacement draft is explicitly published.
+The admin match-detail screen has a **KI-Spielvorschau** tab for manual triggers,
+testing and review; it never triggers generation merely by opening the screen.
+**Spielvorschau erstellen** shows durable progress and automatically publishes the
+validated result. No separate approval is required. **Nur testen (nicht veröffentlichen)**
+is an explicit opt-out for testing, and preserves any existing public version.
+
+A readable **Textansicht** updates while editing the title/body. **Speichern und
+veröffentlichen** writes edits directly to the public preview. Only deliberately
+unpublished test articles offer a separate publish button. Regeneration uses a new
+idempotency key, and requires confirmation before replacing existing content.
+The programmatic endpoints do not require that UI confirmation.
+
+`PATCH /commenter/v1/articles/:articleId` accepts optional `publish`. When omitted,
+editing published content keeps it published, including game-day news; unpublished
+articles remain unpublished. `publish:true` saves/publishes in one call, while
+`publish:false` deliberately withholds the edit. Expected revisions prevent stale edits
+from overwriting newer changes. News edits through the existing news editor are also
+preserved unless an explicit overwrite is requested; use the commentator article PATCH
+for changes that should remain synchronized with generation metadata.
 
 The homepage fetches the published preview and home/away form independently of its
 match-detail request. It displays five result slots underneath each team identity,
@@ -248,5 +281,11 @@ tests passed, and both frontend production builds succeeded.
 
 Automated tests use mocked inference. A separate live local browser check used the
 configured OpenAI key, found and corrected reference/word-budget consistency failures,
-then verified generation, draft editing, explicit local publication and homepage display.
+then verified generation, editing, local publication and homepage display.
 Only the isolated local database was written. No production data or scheduler was changed.
+
+Automatic-publication follow-up verification: 134 backend tests, zero failures, 33
+pre-existing opt-in skips; all 25 commentator tests passed. This includes programmatic
+game-day generation/publication, duplicate prevention, default-publication permissions,
+partial-round rejection, preview crash recovery, and direct edits to published previews
+and news. Six admin workflow/regression tests and the admin production build passed.

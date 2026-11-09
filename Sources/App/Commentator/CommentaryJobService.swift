@@ -16,14 +16,14 @@ actor CommentaryJobService {
     func enqueue(context: CommentaryContext, options: CommentaryGenerationOptions, now: Date = Date()) async throws -> CommentaryJob {
         try options.validate()
         try configuration.requireInference()
-        if options.publish == true && context.partial && !configuration.allowPartialPublish {
+        if options.shouldPublish && context.partial && !configuration.allowPartialPublish {
             throw Abort(.conflict, reason: "Publication of partial game days is disabled.")
         }
         let target = context.targetKey + ":de"
         let key = options.idempotencyKey ?? "initial"
         let id = CommentaryEncoding.hash("\(target):\(key):\(options.dryRun == true ? "dry" : "persist")")
         if let existing = try await store.job(id) {
-            guard existing.publish == (options.publish == true), existing.overwrite == (options.overwrite == true) else {
+            guard existing.publish == options.shouldPublish, existing.overwrite == (options.overwrite == true) else {
                 throw Abort(.conflict, reason: "Idempotency key was already used with different options.")
             }
             return existing
@@ -31,11 +31,11 @@ actor CommentaryJobService {
         let articleID = Self.articleID(target: context.targetKey)
         let existing = try await store.article(articleID)
         guard existing == nil || options.overwrite == true || options.dryRun == true else {
-            throw Abort(.conflict, reason: "A draft already exists. Use overwrite=true and a new idempotency_key to regenerate.")
+            throw Abort(.conflict, reason: "An article already exists. Use overwrite=true and a new idempotency_key to regenerate.")
         }
         let job = CommentaryJob(id: id, targetKey: target, articleID: articleID, state: .pending, context: context,
             language: "de", provider: configuration.provider, model: configuration.model, promptVersion: CommentaryPromptBuilder.version,
-            dryRun: options.dryRun == true, publish: options.publish == true, overwrite: options.overwrite == true,
+            dryRun: options.dryRun == true, publish: options.shouldPublish, overwrite: options.overwrite == true,
             expectedRevision: existing?.revision ?? 0, attempts: 0, createdAt: now, updatedAt: now, availableAt: now)
         return try await store.insertJob(job)
     }
@@ -108,6 +108,11 @@ actor CommentaryJobService {
                     }
                 }
                 if job.publish && !job.dryRun && job.context.kind == .gameDaySummary {
+                    guard let article = try await store.article(job.articleID) else { throw Abort(.internalServerError) }
+                    _ = try await publish(article: article, overwrite: job.overwrite)
+                }
+                // Also repair the save/complete crash window for preview publication.
+                if job.publish && !job.dryRun && job.context.kind == .matchPreview {
                     guard let article = try await store.article(job.articleID) else { throw Abort(.internalServerError) }
                     _ = try await publish(article: article, overwrite: job.overwrite)
                 }
