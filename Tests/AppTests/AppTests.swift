@@ -95,6 +95,7 @@ final class AppTests: XCTestCase {
             "payments/config",
             "app/player/\(id)",
             "app/team/\(id)",
+            "app/team/\(id)/teamfoto",
             "app/account",
             "app/match/\(id)",
             "app/transfer/\(id)",
@@ -111,6 +112,10 @@ final class AppTests: XCTestCase {
 
         try app.test(.POST, "admin/uploads", afterResponse: { res in
             XCTAssertEqual(res.status, .unauthorized, "Expected /admin/uploads to require an administrator bearer token")
+        })
+
+        try app.test(.PUT, "app/team/\(id)/teamfoto", afterResponse: { res in
+            XCTAssertEqual(res.status, .unauthorized, "Expected team photo uploads to require a bearer token")
         })
 
         try app.test(.DELETE, "app/match/\(id)/event/\(UUID())", afterResponse: { res in

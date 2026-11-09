@@ -16,6 +16,14 @@ struct UpdateTrainerRequest: Content {
     let image: File?   // ⬅️ MUST be File for upload
 }
 
+struct UpdateTeamFotoRequest: Content {
+    let coverimg: File
+}
+
+struct TeamFotoResponse: Content {
+    let coverimg: String?
+}
+
 // MARK: - TEAM ENDPOINTS
 extension AppController {
     
@@ -29,6 +37,8 @@ extension AppController {
         ownedTeam.get("balance", use: getTeamBalance)
         ownedTeam.get("overdraft", use: setOverdraftLimit)
         ownedTeam.get("overdraftInfo", use: getOverdraftInfo)
+        ownedTeam.get("teamfoto", use: getTeamFoto)
+        ownedTeam.on(.PUT, "teamfoto", body: .collect(maxSize: "11mb"), use: updateTeamFoto)
 
         // Trainer (kept as-is but grouped neatly)
         let trainer = root.grouped("trainer", ":teamID")
@@ -38,6 +48,32 @@ extension AppController {
         trainer.get(use: getTrainer)
         trainer.get("alt", use: getAltTrainer)
 
+    }
+
+    // GET /app/team/:teamID/teamfoto
+    func getTeamFoto(req: Request) async throws -> TeamFotoResponse {
+        let teamID = try req.parameters.require("teamID", as: UUID.self)
+        let team = try await ApplicationAccess.requireTeam(teamID, req: req)
+        return TeamFotoResponse(coverimg: team.coverimg)
+    }
+
+    // PUT /app/team/:teamID/teamfoto (multipart/form-data, coverimg file)
+    func updateTeamFoto(req: Request) async throws -> TeamFotoResponse {
+        let teamID = try req.parameters.require("teamID", as: UUID.self)
+        let team = try await ApplicationAccess.requireTeam(teamID, req: req)
+        let payload = try req.content.decode(UpdateTeamFotoRequest.self)
+        try UploadValidation.validate(payload.coverimg, allowed: [.jpeg, .png])
+
+        let firebaseManager = req.application.firebaseManager
+        try await firebaseManager.authenticate().get()
+        let url = try await firebaseManager.uploadFile(
+            file: payload.coverimg,
+            to: "teams/\(teamID.uuidString)/coverimg/\(UUID().uuidString)"
+        ).get()
+
+        team.coverimg = url
+        try await team.save(on: req.db)
+        return TeamFotoResponse(coverimg: url)
     }
 
     // MARK: - Overdraft Info DTO
