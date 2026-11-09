@@ -189,11 +189,11 @@ struct CommentaryContextBuilder: CommentaryContextProviding {
             facts.append(.init(id: "\(label).\(key)", group: label, text: text, sourceIDs: source.compactMap { $0.id?.uuidString }.sorted()))
         }
         let recent = Array(all.prefix(5)), stats = TeamStatisticsService.aggregate(teamID: teamID, matches: recent)
-        add("form", "Aus den letzten \(recent.count) berücksichtigten Partien nimmt \(teamName) \(stats.wins) Siege, \(stats.draws) Unentschieden und \(stats.losses) Niederlagen mit; dabei stehen \(stats.totalScored) erzielte und \(stats.totalAgainst) erhaltene Tore zu Buche.", recent)
+        add("form", "Aus den letzten \(recent.count) berücksichtigten Partien nimmt \(teamName) \(stats.wins) \(stats.wins == 1 ? "Sieg" : "Siege"), \(stats.draws) Unentschieden und \(stats.losses) \(stats.losses == 1 ? "Niederlage" : "Niederlagen") mit; dabei stehen \(stats.totalScored) erzielte und \(stats.totalAgainst) erhaltene Tore zu Buche.", recent)
         let split = all.filter { atHome ? $0.$homeTeam.id == teamID : $0.$awayTeam.id == teamID }
         if !split.isEmpty {
             let s = TeamStatisticsService.aggregate(teamID: teamID, matches: split)
-            add("split", "\(atHome ? "In den Heimspielen" : "Auf fremdem Platz") verbucht \(teamName) bei \(split.count) erfassten Begegnungen \(s.wins) Siege, \(s.draws) Remis und \(s.losses) Niederlagen sowie ein Torverhältnis von \(s.totalScored):\(s.totalAgainst).", split)
+            add("split", "\(atHome ? "In den Heimspielen" : "Auf fremdem Platz") verbucht \(teamName) bei \(split.count) erfassten Begegnungen \(s.wins) \(s.wins == 1 ? "Sieg" : "Siege"), \(s.draws) Remis und \(s.losses) \(s.losses == 1 ? "Niederlage" : "Niederlagen") sowie ein Torverhältnis von \(s.totalScored):\(s.totalAgainst).", split)
         }
         let unbeaten = all.prefix { m in m.$homeTeam.id == teamID ? m.score.home >= m.score.away : m.score.away >= m.score.home }
         if unbeaten.count >= 2 { add("streak", "\(teamName) blieb in den letzten \(unbeaten.count) berücksichtigten Spielen ohne Niederlage.", Array(unbeaten)) }

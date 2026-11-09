@@ -12,7 +12,7 @@ struct CommentaryInferenceError: Error {
 }
 
 enum CommentaryPromptBuilder {
-    static let version = "verified-facts-de-v1"
+    static let version = "verified-facts-de-v2"
     static func instructions(for context: CommentaryContext, configuration: CommentaryConfiguration) -> String {
         """
         Du bist Sportredakteur des Österreichischen Kleinfeld Fußball Bundes. Erstelle eine abwechslungsreiche,
@@ -46,8 +46,8 @@ struct OpenAICommentaryInference: AIInferenceService {
         let schema: [String: Any] = [
             "type": "object", "additionalProperties": false,
             "properties": [
-                "titleIndex": ["type": "integer"], "language": ["type": "string", "enum": ["de"]],
-                "paragraphs": ["type": "array", "items": ["type": "array", "items": ["type": "string"]]]
+                "titleIndex": ["type": "integer", "enum": Array(context.titles.indices)], "language": ["type": "string", "enum": ["de"]],
+                "paragraphs": ["type": "array", "items": ["type": "array", "items": ["type": "string", "enum": context.facts.map(\.id)]]]
             ], "required": ["titleIndex", "language", "paragraphs"]
         ]
         var body: [String: Any] = [
@@ -87,12 +87,54 @@ struct OpenAICommentaryInference: AIInferenceService {
             throw CommentaryInferenceError(code: "provider_invalid_json", retryable: false)
         }
         let usage = object["usage"] as? [String: Any] ?? [:]
-        return .init(selection: selection, inputTokens: usage["input_tokens"] as? Int ?? 0,
+        return .init(selection: CommentaryValidationService.normalize(selection, context: context, configuration: configuration), inputTokens: usage["input_tokens"] as? Int ?? 0,
             outputTokens: usage["output_tokens"] as? Int ?? 0)
     }
 }
 
 enum CommentaryValidationService {
+    /// The model ranks facts; the backend owns mandatory framing, balanced coverage and the
+    /// measured word budget. Only complete verified sentences are added/removed. Unknown IDs
+    /// are never silently repaired: render() still rejects unsupported input.
+    static func normalize(_ selection: CommentarySelection, context: CommentaryContext,
+                          configuration: CommentaryConfiguration = .init()) -> CommentarySelection {
+        let facts = Dictionary(uniqueKeysWithValues: context.facts.map { ($0.id, $0) })
+        let ranked = selection.paragraphs.flatMap { $0 }
+        guard ranked.allSatisfy({ facts[$0] != nil }) else { return selection }
+        let maxWords = context.kind == .matchPreview ? configuration.maxPreviewWords : configuration.maxSummaryWords
+        let minimum = context.availableWords >= 150 ? min(150, maxWords) : min(25, context.availableWords)
+        var selected = [String](), seen = Set<String>(), words = 0
+        func append(_ id: String) {
+            guard let fact = facts[id], !seen.contains(id) else { return }
+            let count = fact.text.split(whereSeparator: \.isWhitespace).count
+            guard words + count <= maxWords else { return }
+            seen.insert(id); selected.append(id); words += count
+        }
+        context.requiredFactIDs.forEach(append)
+        if context.kind == .matchPreview {
+            for group in ["home", "away"] {
+                if let id = ranked.first(where: { facts[$0]?.group == group }) ?? context.facts.first(where: { $0.group == group })?.id { append(id) }
+            }
+        }
+        ranked.forEach(append)
+        if words < minimum {
+            for fact in context.facts where words < minimum { append(fact.id) }
+        }
+        let groupOrder = context.kind == .matchPreview ? ["opening", "home", "away", "history", "closing"] : ["opening", "matches", "players", "table"]
+        var groups = [String: [String]]()
+        for id in selected {
+            let raw = facts[id]!.group
+            let group = groupOrder.contains(raw) ? raw : "players"
+            groups[group, default: []].append(id)
+        }
+        var paragraphs = [[String]]()
+        for group in groupOrder {
+            let ids = groups[group] ?? []
+            for start in stride(from: 0, to: ids.count, by: 8) { paragraphs.append(Array(ids[start..<min(start + 8, ids.count)])) }
+        }
+        return .init(titleIndex: selection.titleIndex, language: selection.language, paragraphs: paragraphs)
+    }
+
     static func render(_ response: CommentaryInferenceResult, context: CommentaryContext,
                        configuration: CommentaryConfiguration, now: Date = Date()) throws -> GeneratedCommentary {
         let output = response.selection

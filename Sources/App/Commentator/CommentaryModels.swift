@@ -94,8 +94,9 @@ struct CommentaryArticle: Content {
     var content: GeneratedCommentary
     var publishedNewsID: UUID?
     var publishedContentHash: String?
+    var publishedPreview: GeneratedCommentary? = nil
     enum CodingKeys: String, CodingKey {
-        case id = "_id", jobID, revision, manuallyEdited, context, content, publishedNewsID, publishedContentHash
+        case id = "_id", jobID, revision, manuallyEdited, context, content, publishedNewsID, publishedContentHash, publishedPreview
     }
 }
 

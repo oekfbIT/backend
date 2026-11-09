@@ -175,8 +175,12 @@ struct CommentatorController: RouteCollection {
         // Existing match-detail responses remain unchanged. Only explicitly published previews are public here.
         routes.get("webClient", "match", ":matchId", "preview") { req async throws -> GeneratedCommentary in
             let id = try req.parameters.require("matchId", as: UUID.self)
-            guard let article = try await self.runtime(req).store.article(CommentaryJobService.articleID(target: "match:\(id)")), article.content.status == .published else { throw Abort(.notFound) }
-            return article.content
+            guard let article = try await self.runtime(req).store.article(CommentaryJobService.articleID(target: "match:\(id)")),
+                  let published = article.publishedPreview ?? (article.content.status == .published ? article.content : nil) else { throw Abort(.notFound) }
+            return published
+        }
+        routes.get("webClient", "match", ":matchId", "form") { req async throws -> MatchTeamFormResponse in
+            try await MatchTeamFormService.fetch(id: req.parameters.require("matchId", as: UUID.self), on: req.db)
         }
     }
 

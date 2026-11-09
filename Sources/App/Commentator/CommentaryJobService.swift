@@ -102,7 +102,8 @@ actor CommentaryJobService {
                         if job.publish && job.context.kind == .matchPreview { content.status = .published }
                         let article = CommentaryArticle(id: job.articleID, jobID: job.id, revision: job.expectedRevision + 1,
                             manuallyEdited: false, context: job.context, content: content,
-                            publishedNewsID: old?.publishedNewsID, publishedContentHash: old?.publishedContentHash)
+                            publishedNewsID: old?.publishedNewsID, publishedContentHash: old?.publishedContentHash,
+                            publishedPreview: job.publish && job.context.kind == .matchPreview ? content : (old?.publishedPreview ?? (old?.content.status == .published ? old?.content : nil)))
                         try await store.saveArticle(article, expectedRevision: job.expectedRevision)
                     }
                 }
@@ -141,6 +142,7 @@ actor CommentaryJobService {
         if article.content.status == .published { return article }
         var saved = article
         saved.content.status = .published; saved.revision += 1
+        saved.publishedPreview = saved.content
         try await store.saveArticle(saved, expectedRevision: article.revision)
         return saved
     }

@@ -102,6 +102,7 @@ Job/article documents currently expose their stable identifier as `_id`.
 | GET | `/commenter/v1/context/match/:matchId` | Traceable pre-match snapshot, no inference |
 | GET | `/commenter/v1/context/gameday/:seasonId/:number` | Round snapshot; `?allowPartial=true` for incomplete rounds |
 | GET | `/webClient/match/:matchId/preview` | Public, explicitly published preview only; otherwise 404 |
+| GET | `/webClient/match/:matchId/form` | Home/away recent form in this season, before the fixture cutoff |
 
 Match options (all optional):
 
@@ -154,6 +155,11 @@ target do not roll back other jobs. Batch context preparation reuses season read
   and token usage are stored. Edited articles are marked manual and lose automatic
   fact-selection attribution.
 
+The provider schema enumerates the allowed title/fact IDs. The backend inserts mandatory
+framing, deduplicates references, ensures both teams have coverage, and measures the word
+budget using complete verified sentences. It can trim/add facts from the same snapshot;
+it cannot repair an unknown fact by inventing text. Unsupported IDs still fail validation.
+
 This cannot reconstruct when old results were entered/corrected or historical roster
 and suspension changes which were never recorded. Source-data accuracy and league
 tie-break rules remain those of the backend. The model cannot introduce new claims,
@@ -188,6 +194,36 @@ No scheduled publication is configured. A future scheduler can POST the same gen
 endpoints with a stable run key. Generation is always asynchronous; the HTTP request
 does not wait for AI completion.
 
+## Manual admin and homepage workflow
+
+The admin match-detail screen has a **KI-Spielvorschau** tab. It creates a draft only
+after clicking **Spielvorschau erstellen**, shows durable job progress, and reloads the
+saved text. Editors can change and save it, then explicitly choose **Auf Homepage
+veröffentlichen**. Regeneration uses a new idempotency key and does not replace the
+published preview until that replacement draft is explicitly published.
+
+The homepage fetches the published preview and home/away form independently of its
+match-detail request. It displays five result slots underneath each team identity,
+oldest on the left and newest on the right, with a link/tooltip for each known result.
+The preview paragraphs are centered beneath the match status. Missing previews remain
+absent, and unavailable form is distinguished from genuinely missing historical results.
+
+For an isolated local run, start MongoDB on a loopback port, load test/public fixtures
+into `oekfb_commentator_local`, build the API, then run:
+
+```sh
+python3 tools/run_commentator_local.py --model gpt-4.1-mini
+```
+
+The helper reads the ignored `.env` for model credentials, forces MongoDB to
+`127.0.0.1:27029/oekfb_commentator_local`, binds the API to `127.0.0.1:8080`, and disables
+unrelated analytics imports. It never uses the production connection string. Override
+the local ports with `--mongo-port` / `--port`. The model is an explicit operator choice,
+not a hardcoded production default. No automatic generation/publication schedule is added.
+
+The existing frontend development servers default to the local API:
+admin `http://localhost:3000`, homepage `http://localhost:1234`.
+
 ## Local verification
 
 Run the existing test suite with a disposable, loopback-only MongoDB port:
@@ -205,6 +241,12 @@ preservation of post-match reports. Without the explicit local port, database te
 The checked-in `.env.example` contains empty credentials. Local `.env` must remain ignored.
 Push/deployment are separate: pushing this branch does not authorize changes to production.
 
-Verified locally on 2026-11-09: build succeeded; one full test run reported 126 tests,
-zero failures and 33 pre-existing opt-in skips. All 17 commentator tests passed,
-including isolated MongoDB integration tests. No paid inference was performed.
+Verified locally on 2026-11-09: final backend run reported 130 tests, zero failures
+and 33 pre-existing opt-in skips. All 21 commentator tests passed, including isolated
+MongoDB integration tests. The admin's four workflow/regression tests and nine homepage
+tests passed, and both frontend production builds succeeded.
+
+Automated tests use mocked inference. A separate live local browser check used the
+configured OpenAI key, found and corrected reference/word-budget consistency failures,
+then verified generation, draft editing, explicit local publication and homepage display.
+Only the isolated local database was written. No production data or scheduler was changed.

@@ -130,6 +130,30 @@ final class CommentaryTests: XCTestCase {
         XCTAssertFalse(article.text.contains("Sieg"))
     }
 
+    func testRequiredFramingIsInsertedAndDuplicateReferencesAreRemovedWithoutAcceptingUnknownFacts() throws {
+        let context = try context()
+        let original = CommentaryMockInference.selection(context)
+        let missing = CommentarySelection(titleIndex: 0, language: "de", paragraphs: original.paragraphs.map { $0.filter { $0 != "fixture" } } + [["home.form"]])
+        let normalized = CommentaryValidationService.normalize(missing, context: context)
+        XCTAssertEqual(normalized.paragraphs.flatMap { $0 }.filter { $0 == "fixture" }.count, 1)
+        XCTAssertEqual(normalized.paragraphs.flatMap { $0 }.filter { $0 == "home.form" }.count, 1)
+        XCTAssertNoThrow(try CommentaryValidationService.render(.init(selection: normalized, inputTokens: 0, outputTokens: 0), context: context, configuration: settings()))
+        let unknown = CommentaryValidationService.normalize(.init(titleIndex: 0, language: "de", paragraphs: [["invented-injury"]]), context: context)
+        XCTAssertThrowsError(try CommentaryValidationService.render(.init(selection: unknown, inputTokens: 0, outputTokens: 0), context: context, configuration: settings()))
+    }
+
+    func testEditorialWordBudgetUsesWholeVerifiedSentencesForLongAndThinModelSelections() throws {
+        let context = try context()
+        for ids in [context.facts.map(\.id), ["fixture"]] {
+            let normalized = CommentaryValidationService.normalize(.init(titleIndex: 0, language: "de", paragraphs: [ids]), context: context, configuration: settings())
+            let rendered = try CommentaryValidationService.render(.init(selection: normalized, inputTokens: 0, outputTokens: 0), context: context, configuration: settings())
+            let count = rendered.text.split(whereSeparator: \.isWhitespace).count
+            XCTAssertGreaterThanOrEqual(count, 150); XCTAssertLessThanOrEqual(count, 250)
+            XCTAssertTrue(rendered.factIDs.contains("fixture"))
+            XCTAssertTrue(Set(rendered.factIDs).isSubset(of: Set(context.facts.map(\.id))))
+        }
+    }
+
     func testConfigurationFailsClosedAndNoCredentialsAreHardcoded() throws {
         let c = CommentaryConfiguration.load { _ in nil }
         XCTAssertFalse(c.enabled); XCTAssertTrue(c.apiKey.isEmpty); XCTAssertTrue(c.model.isEmpty)
@@ -324,6 +348,35 @@ final class CommentaryTests: XCTestCase {
         let service = CommentaryJobService(store: UnavailableCommentaryStore(), inference: CommentaryMockInference(), configuration: settings())
         do { _ = try await service.enqueue(context: context(), options: .init()); XCTFail("Expected DB failure") }
         catch let error as AbortError { XCTAssertEqual(error.status, .serviceUnavailable) }
+    }
+
+    func testBothTeamFormsExcludeTheTargetAndLaterResults() {
+        let (data, target, now) = fixture()
+        target.status = .done
+        target.score = .init(home: 777, away: 0)
+        let form = MatchTeamFormService.forms(for: target, history: data.matches, now: now.addingTimeInterval(30 * 86400))
+        XCTAssertEqual(form.home.count, 4); XCTAssertEqual(form.away.count, 4)
+        XCTAssertFalse(form.home.contains { $0.matchID == target.id })
+        XCTAssertFalse(form.home.contains { $0.score?.home == 999 })
+        XCTAssertEqual(form.home.first?.result, .L)
+        XCTAssertEqual(form.away.first?.result, .W)
+    }
+
+    func testPublishedPreviewSurvivesRegenerationUntilReplacementIsPublished() async throws {
+        try await withMongo { _, store in
+            let context = try self.context()
+            let service = CommentaryJobService(store: store, inference: CommentaryMockInference(), configuration: self.settings())
+            let first = try await service.enqueue(context: context, options: .init())
+            try await service.process(first.id, slot: 0)
+            let initial = try await store.article(first.articleID)
+            let published = try await service.publish(article: XCTUnwrap(initial), overwrite: false)
+            XCTAssertEqual(published.publishedPreview?.status, .published)
+            let next = try await service.enqueue(context: context, options: .init(overwrite: true, idempotencyKey: "replacement"))
+            try await service.process(next.id, slot: 0)
+            let replacement = try await store.article(first.articleID)
+            XCTAssertEqual(replacement?.content.status, .draft)
+            XCTAssertEqual(replacement?.publishedPreview?.generatedAt, published.content.generatedAt)
+        }
     }
 
     func testHTTPGenerationStatusDryRunAndBatchBounds() async throws {
