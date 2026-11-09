@@ -70,6 +70,7 @@ public func configure(_ app: Application) throws {
     
     app_migrations.forEach { app.migrations.add($0) }
     try app.autoMigrate().wait()
+    configureCommentary(app)
     
     // Configure multiple allowed origins
     let allowedOrigins: [String] = [

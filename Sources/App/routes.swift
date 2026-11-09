@@ -16,6 +16,7 @@ func routes(_ app: Application) throws {
     let publicRoutes: [RouteCollection] = [
         HomepageController(path: "client"),
         ClientController(path: "webClient"),
+        CommentatorController(),
         TeamPaymentController(),
         AppController(path: "app"),
         AdminController(path: "admin"),

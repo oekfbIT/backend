@@ -18,7 +18,7 @@ final class NewsItem: Model, Content, Codable {
     @OptionalField(key: FieldKeys.title) var title: String?
     @OptionalField(key: FieldKeys.youtube) var youtube: String?
     @OptionalField(key: FieldKeys.tag) var tag: String?
-    @OptionalField(key: FieldKeys.tag) var matchID: String?
+    @OptionalField(key: FieldKeys.matchID) var matchID: String?
     @Timestamp(key: FieldKeys.created, on: .create) var created: Date?
 
     struct FieldKeys {
@@ -27,6 +27,7 @@ final class NewsItem: Model, Content, Codable {
         static var text: FieldKey { "text" }
         static var title: FieldKey { "title" }
         static var tag: FieldKey { "tag" }
+        static var matchID: FieldKey { "matchID" }
         static var created: FieldKey { "created" }
         static var youtube: FieldKey { "youtube" }
     }

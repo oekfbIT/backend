@@ -68,6 +68,9 @@ enum OpenAPISupport {
             if let security = operation.securityRequirement {
                 lines.append("      security:")
                 lines.append("        - \(security): []")
+                if operation.path.hasPrefix("/commenter/") {
+                    lines.append("        - bearerAuth: []")
+                }
             }
 
             if !operation.parameters.isEmpty {
@@ -116,6 +119,10 @@ enum OpenAPISupport {
         lines.append(contentsOf: [
             "components:",
             "  securitySchemes:",
+            "    commentatorKey:",
+            "      type: apiKey",
+            "      in: header",
+            "      name: X-Commentator-Key",
             "    bearerAuth:",
             "      type: http",
             "      scheme: bearer",
@@ -338,6 +345,7 @@ private struct RouteOperation: Comparable {
         guard let first = components.first else {
             return nil
         }
+        if first == "commenter" { return "commentatorKey" }
 
         if first == "admin" {
             if components.dropFirst().prefix(2).elementsEqual(["auth", "login"]) {
