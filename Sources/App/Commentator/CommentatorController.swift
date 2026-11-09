@@ -90,6 +90,9 @@ struct CommentatorController: RouteCollection {
     func boot(routes: RoutesBuilder) throws {
         let settings = (routes as? Application)?.commentary?.configuration ?? CommentaryConfiguration.load()
         let root = routes.grouped("commenter", "v1").grouped(Token.authenticator(), CommentaryAccessMiddleware(configuration: settings), ProtectedResponseMiddleware())
+        root.get("seasons", ":seasonId", "news") { req async throws -> CommentarySeasonOverview in
+            try await CommentarySeasonOverview.fetch(req.parameters.require("seasonId", as: UUID.self), on: req.db)
+        }
         root.on(.POST, "generate", "match", ":matchId", body: .collect(maxSize: "32kb")) { req async throws -> Response in
             let id = try req.parameters.require("matchId", as: UUID.self)
             let job = try await MatchPreviewGenerationService(runtime: self.runtime(req)).generateMatchPreview(id, options: self.options(req))

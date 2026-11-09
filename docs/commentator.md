@@ -98,6 +98,7 @@ Job/article documents currently expose their stable identifier as `_id`.
 | POST | `/commenter/v1/generate/match/:matchId/publish` | Publish an optionally withheld preview |
 | GET | `/commenter/v1/jobs/:jobId` | Exact job, attempts, safe error, result and snapshot |
 | GET | `/commenter/v1/articles/:articleId` | Current article and metadata |
+| GET | `/commenter/v1/seasons/:seasonId/news` | Compact news and latest real report job per game day, scoped to this season |
 | PATCH | `/commenter/v1/articles/:articleId` | Editorial edit with `expected_revision`, `title`, `text`; published edits update the public copy directly |
 | GET | `/commenter/v1/context/match/:matchId` | Traceable pre-match snapshot, no inference |
 | GET | `/commenter/v1/context/gameday/:seasonId/:number` | Round snapshot; `?allowPartial=true` for incomplete rounds |
@@ -256,6 +257,31 @@ endpoints with a stable run key. Generation is always asynchronous; the HTTP req
 does not wait for AI completion.
 
 ## Manual admin and homepage workflow
+
+The season-detail **Spielplan** tab shows one selected game day beneath a header card.
+Its default is the round with the earliest upcoming/live dated match, then an undated
+open round, then the configured current/last round. Number buttons and previous/next
+controls select other rounds without discarding unsaved match edits. Existing admin
+styling and match editing remain; wide tables scroll within their card.
+
+The header's weekly-report action uses the existing season/round generator. Completed,
+reliably dated rounds can be generated manually and publish automatically. Incomplete
+rounds explain why generation is unavailable. Existing news opens its current editor;
+an existing unpublished/deleted-news article can be published without another AI call.
+Network retries reuse the generation key, and pending jobs are polled until completion.
+
+The **AI-News** tab groups responsive article cards beneath game-day headings. A weekly
+story appears once per season/game day; other news is included only when its explicit
+`matchID` belongs to that season/round. A matching league tag/date alone is not enough
+to guess an association. Cards open `/admin/news_detail/:id`. The grid adapts to screen
+width (up to eight columns on very wide screens), rather than squeezing eight columns
+onto a laptop. Existing news edits are read from the news record, not an old AI snapshot.
+
+The overview endpoint uses `content.manage`/service-key authentication. MongoDB groups
+the latest non-dry-run job per target and returns compact fields, excluding full fact
+snapshots/job history. Additive `CommentarySeasonIndexesMigration` indexes season/kind,
+latest jobs, and news match links. Opening either tab never starts generation. No schedule
+has been added.
 
 The admin match-detail screen has a **KI-Spielvorschau** tab for manual triggers,
 testing and review; it never triggers generation merely by opening the screen.

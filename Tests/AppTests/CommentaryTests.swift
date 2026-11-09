@@ -198,6 +198,7 @@ final class CommentaryTests: XCTestCase {
         for path in ["commenter/v1/generate/match/\(id)/status", "commenter/v1/context/match/\(id)", "commenter/v1/jobs/test"] {
             try app.test(.GET, path) { XCTAssertEqual($0.status, .unauthorized) }
         }
+        try app.test(.GET, "commenter/v1/seasons/\(id)/news") { XCTAssertEqual($0.status, .unauthorized) }
         try app.test(.GET, "commenter/v1/context/match/\(id)", beforeRequest: { $0.headers.add(name: "X-Commentator-Key", value: "wrong") }) { XCTAssertEqual($0.status, .unauthorized) }
         try app.test(.GET, "commenter/v1/context/match/\(id)", beforeRequest: { $0.headers.add(name: "X-Commentator-Key", value: self.settings().serviceKey) }) { XCTAssertEqual($0.status, .ok) }
         try app.test(.POST, "commenter/v1/generate/gameday/\(id)/2/publish", beforeRequest: { $0.headers.add(name: "X-Commentator-Key", value: self.settings().serviceKey) }) { XCTAssertEqual($0.status, .forbidden) }
@@ -716,6 +717,45 @@ final class CommentaryTests: XCTestCase {
         let awarded = trendHistory(target, now: now, scored: [900, 1, 1, 1], conceded: [900, 1, 1, 1])
         awarded[0].status = .cancelled
         XCTAssertNil(CommentaryContextBuilder.goalOutlook(homeID: target.$homeTeam.id, awayID: target.$awayTeam.id, matches: awarded))
+    }
+
+    func testSeasonNewsOverviewScopesBySeasonAndRoundAndReadsActualNewsEdits() async throws {
+        try await withMongo { app, store in
+            let (data, _, now) = self.fixture()
+            try await data.league.create(on: app.db)
+            try await data.season.create(on: app.db)
+            for match in data.matches { try await match.create(on: app.db) }
+            try await CommentarySeasonIndexesMigration().prepare(on: app.db)
+            let context = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now)
+            let runtime = CommentaryRuntime(configuration: self.settings(), store: store, contexts: CommentaryStubContext(context: context), inference: CommentaryMockInference())
+            app.commentary = runtime; try app.register(collection: CommentatorController())
+            let job = try await runtime.jobs.enqueue(context: context, options: .init())
+            try await runtime.jobs.process(job.id, slot: 0)
+            let article = try await store.article(job.articleID)
+            let weeklyID = try XCTUnwrap(article?.publishedNewsID)
+            let weekly = try await NewsItem.find(weeklyID, on: app.db)
+            weekly?.title = "Redaktionell geändert"; try await weekly?.save(on: app.db)
+            let linked = NewsItem(id: UUID(), text: "<p>Ein Spielbericht.</p>", title: "Zum ersten Spiel", tag: "TEST")
+            linked.matchID = data.matches[0].id!.uuidString.lowercased(); try await linked.create(on: app.db)
+            let unrelated = NewsItem(id: UUID(), text: "Andere Saison", title: "Nicht zuordnen", tag: "TEST")
+            unrelated.matchID = UUID().uuidString; try await unrelated.create(on: app.db)
+            // A newer dry run must not hide the real completed/published job.
+            _ = try await runtime.jobs.enqueue(context: context, options: .init(dryRun: true, idempotencyKey: "later-test"), now: Date().addingTimeInterval(60))
+            let overview = try await CommentarySeasonOverview.fetch(data.season.id!, on: app.db)
+            let round = try XCTUnwrap(overview.rounds.first { $0.gameday == 2 })
+            XCTAssertEqual(round.job?.id, job.id); XCTAssertEqual(round.job?.state, .completed)
+            XCTAssertEqual(round.weeklyNewsID, weeklyID)
+            XCTAssertEqual(round.news.first?.title, "Redaktionell geändert")
+            XCTAssertEqual(overview.rounds.first { $0.gameday == 1 }?.news.first?.id, linked.id)
+            XCTAssertFalse(overview.rounds.flatMap(\.news).contains { $0.id == unrelated.id })
+            try app.test(.GET, "commenter/v1/seasons/\(data.season.id!)/news", beforeRequest: {
+                $0.headers.add(name: "X-Commentator-Key", value: self.settings().serviceKey)
+            }) { XCTAssertEqual($0.status, .ok) }
+            try await weekly?.delete(on: app.db)
+            let afterDelete = try await CommentarySeasonOverview.fetch(data.season.id!, on: app.db)
+            let saved = try XCTUnwrap(afterDelete.rounds.first { $0.gameday == 2 })
+            XCTAssertNil(saved.weeklyNewsID); XCTAssertNotNil(saved.articleID)
+        }
     }
 
     func testAnonymousPreviewFeedbackIsIdempotentChangeableAndRemovable() async throws {
