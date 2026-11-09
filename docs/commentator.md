@@ -248,8 +248,10 @@ completion but before durable storage can result in one additional paid attempt.
 
 News publication uses the existing `news` collection, its league code tag and a stable
 news UUID per season/round/language. A retry cannot insert another story. Published news
-which changed outside this workflow requires explicit overwrite. No image URL or push
-notification is generated. Revisions are recorded through job results/context; the
+which changed outside this workflow requires explicit overwrite. New news items use the owner-provided Football Observatory image by default when no
+image is supplied. AI publication sets it only on insertion; retries, regeneration and
+news edits preserve admin-selected alternatives. Existing articles are not backfilled.
+No push notification is generated. Revisions are recorded through job results/context; the
 article collection stores the current editorial revision, not a full manual-edit log.
 
 No scheduled publication is configured. A future scheduler can POST the same generation

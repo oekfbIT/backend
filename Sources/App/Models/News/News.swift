@@ -11,6 +11,7 @@ import Vapor
 
 final class NewsItem: Model, Content, Codable {
     static let schema = "news"
+    static let defaultImageURL = "https://football-observatory.com/local/adapt-img/450/10x/IMG/logo/survey2026_900x600-2.jpg?1792746206"
 
     @ID(custom: FieldKeys.id) var id: UUID?
     @OptionalField(key: FieldKeys.image) var image: String?
@@ -36,7 +37,7 @@ final class NewsItem: Model, Content, Codable {
 
     init(id: UUID? = nil, image: String? = nil, text: String? = nil, title: String? = nil, tag: String? = nil, youtube: String? = nil) {
         self.id = id
-        self.image = image
+        self.image = image?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? image : Self.defaultImageURL
         self.text = text
         self.title = title
         self.tag = tag

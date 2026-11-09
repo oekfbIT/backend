@@ -341,7 +341,13 @@ final class CommentaryTests: XCTestCase {
             let count = try await store.collection(NewsItem.schema).count().get(); XCTAssertEqual(count, 1)
             let news = try await NewsItem.find(published.publishedNewsID!, on: app.db)
             XCTAssertEqual(news?.tag, "TEST"); XCTAssertTrue(news?.text?.hasPrefix("<p>") == true)
-            XCTAssertNil(news?.image); XCTAssertNil(news?.matchID)
+            XCTAssertEqual(news?.image, NewsItem.defaultImageURL); XCTAssertNil(news?.matchID)
+            let customImage = "https://www.oekfb.eu/editor-selected.jpg"
+            news?.image = customImage; try await news?.save(on: app.db)
+            let imageArticle = try await store.article(job.articleID)
+            _ = try await service.publish(article: XCTUnwrap(imageArticle), overwrite: false)
+            let republished = try await NewsItem.find(published.publishedNewsID!, on: app.db)
+            XCTAssertEqual(republished?.image, customImage)
             let key = try BSONEncoder().encodePrimitive(published.publishedNewsID!)!
             try await store.update(NewsItem.schema, query: ["_id": key], changes: ["$set": ["text": "Manuell bearbeitet"]])
             let storedSaved = try await store.article(job.articleID)
@@ -866,6 +872,12 @@ final class CommentaryTests: XCTestCase {
             let count = try await store.collection(PreviewFeedbackService.votes).count().get()
             XCTAssertEqual(count, 0)
         }
+    }
+
+    func testNewNewsUsesDefaultImageAndKeepsExplicitAlternative() {
+        XCTAssertEqual(NewsItem(title: "Neue News").image, NewsItem.defaultImageURL)
+        XCTAssertEqual(NewsItem(image: "  ", title: "Neue News").image, NewsItem.defaultImageURL)
+        XCTAssertEqual(NewsItem(image: "https://www.oekfb.eu/alternative.jpg").image, "https://www.oekfb.eu/alternative.jpg")
     }
 
     private func withMongo(_ run: (Application, MongoCommentaryStore) async throws -> Void) async throws {

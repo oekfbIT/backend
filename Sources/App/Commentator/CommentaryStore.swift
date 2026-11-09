@@ -154,7 +154,8 @@ struct MongoCommentaryStore: CommentaryStore {
             } else {
                 // Deterministic _id + setOnInsert makes a crash/retry unable to create a second news story.
                 try await update(NewsItem.schema, query: ["_id": key], changes: ["$setOnInsert": [
-                    "_id": key, "title": article.content.title, "text": article.content.html, "tag": tag, "created": now
+                    "_id": key, "title": article.content.title, "text": article.content.html, "tag": tag, "created": now,
+                    "image": NewsItem.defaultImageURL
                 ] as Document], upsert: true)
             }
             var saved = article
