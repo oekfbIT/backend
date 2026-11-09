@@ -34,7 +34,7 @@ actor CommentaryJobService {
             throw Abort(.conflict, reason: "An article already exists. Use overwrite=true and a new idempotency_key to regenerate.")
         }
         let job = CommentaryJob(id: id, targetKey: target, articleID: articleID, state: .pending, context: context,
-            language: "de", provider: configuration.provider, model: configuration.model, promptVersion: CommentaryPromptBuilder.version,
+            language: "de", provider: configuration.provider, model: configuration.model, promptVersion: CommentaryPromptBuilder.version(for: context.kind),
             dryRun: options.dryRun == true, publish: options.shouldPublish, overwrite: options.overwrite == true,
             expectedRevision: existing?.revision ?? 0, attempts: 0, createdAt: now, updatedAt: now, availableAt: now)
         return try await store.insertJob(job)

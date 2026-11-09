@@ -50,6 +50,7 @@ struct CommentaryContext: Content {
     let facts: [CommentaryFact]
     let requiredFactIDs: [String]
     let warnings: [String]
+    var sectionHeadings: [String: String]? = nil
 
     var contextHash: String { get throws { try CommentaryEncoding.hash(self) } }
     var availableWords: Int { facts.reduce(0) { $0 + $1.text.split(whereSeparator: \.isWhitespace).count } }

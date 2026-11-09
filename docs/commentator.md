@@ -194,7 +194,7 @@ but the quality of the article still depends on those recorded facts and calcula
 
 ## Concise match previews and player angles
 
-`matchup-brief-de-v5` usually targets about 80–140 words for routine previews, with
+`matchup-brief-de-v6` usually targets about 80–140 words for routine previews, with
 no 150-word editorial ceiling. Important absences, scorer milestones and other meaningful
 stories may justify a longer article, up to the configurable safety ceiling (default
 300 words). Extra words must add relevant information; no padding to reach a word count.
@@ -226,6 +226,34 @@ red from yellow-red, and highlights recorded dismissals or at least three yellow
 No future card, foul count or automatic ban is inferred. Free kicks and penalties are
 not foul statistics. A real absence is based on the player registry's ban end time.
 The extra calculations reuse loaded matches/events and add no per-player database calls.
+
+## Weekly reviews are a separate format
+
+`league-review-de-v2` is a played-match recap, not an expanded preview. One article
+covers one season/game day in one league. Every completed result is required and gets
+an escaped HTML `<h2>` match heading. The plain-text version includes the same headings.
+The generator prioritizes basic report data: scores, high-scoring/close/clear result
+margins, multiple goals by named players, and recorded yellow/red/yellow-red cards.
+It does not build a full form/home-away/player-availability dossier for each match.
+
+Reports normally use about 40–80 words per match and roughly 300–750 for four to eight
+fixtures, depending on available evidence. The configured maximum remains 900 words by
+default. A round-sized minimum and balanced fact selection prevent a three-paragraph
+summary from silently leaving games out. Required results always come before optional
+highlights, with the table section at the end. Sparse source data is not padded with
+invented tempo, chances, tactical descriptions, quotations or match chronology.
+
+Round tables show actual placements and movements versus the previous round. Scorer
+rank gains inside the top 10, entering the top 10 or reaching the lead require complete goal records for
+both snapshots and use shared ranks for ties. Other leagues/seasons and later rounds
+are excluded before calculating the recap.
+
+Previews now include a table-context fact when standings exist. Conditional scenarios
+use current points and the scheduled round: a win can make the lead/top three/top five
+reachable, while defeat can let a nearby pursuer catch up or pass on points. Other
+results and goal difference remain explicit conditions. These are opportunities and
+risks, not promised finishing places. Lower-table pressure is not labelled relegation:
+no structured relegation/survival rules are recorded in this context.
 
 ## Persistence, retries and publication
 
@@ -452,3 +480,9 @@ Feedback verification in the current workspace: 147 backend tests with zero fail
 and 33 existing skips, all 15 homepage tests passing, and a successful homepage build.
 A local browser check exercised like → dislike → remove and verified the public counts
 and confirmation messages. No new paid inference was used for these feedback tests.
+
+League-review/table-stakes verification: the final backend suite reported 152 tests,
+zero failures and 33 existing skips; all 43 commentator tests passed. The local
+WPL round-8 example was regenerated in its existing news record, grew from about 231 to
+436 words, and now contains all six fixtures plus the table section. Manual text edits
+were checked before replacement; no production record was changed.

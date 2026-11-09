@@ -880,6 +880,84 @@ final class CommentaryTests: XCTestCase {
         XCTAssertEqual(NewsItem(image: "https://www.oekfb.eu/alternative.jpg").image, "https://www.oekfb.eu/alternative.jpg")
     }
 
+    func testWeeklyReviewCoversEveryMatchWithSafeHeadingsAndStaysWithinItsSeason() throws {
+        let (data, _, now) = fixture()
+        let (other, _, _) = fixture()
+        other.matches[1].score = .init(home: 999, away: 998)
+        let mixed = CommentarySeasonData(season: data.season, league: data.league, teams: data.teams, matches: data.matches + other.matches, players: [])
+        let context = try CommentaryContextBuilder.summary(data: mixed, gameday: 2, allowPartial: false, now: now)
+        let results = data.matches.filter { $0.details.gameday == 2 }
+        XCTAssertEqual(context.facts.filter { $0.id.hasPrefix("result.") }.count, results.count)
+        XCTAssertFalse(context.facts.map(\.text).joined().contains("999"))
+        let minimal = CommentarySelection(titleIndex: 0, language: "de", paragraphs: [["round"]])
+        let selected = CommentaryValidationService.normalize(minimal, context: context, configuration: settings())
+        let article = try CommentaryValidationService.render(.init(selection: selected, inputTokens: 0, outputTokens: 0), context: context, configuration: settings())
+        for match in results { XCTAssertTrue(article.factIDs.contains("result.\(match.id!)")) }
+        XCTAssertEqual(article.html.components(separatedBy: "<h2>").count - 1, results.count + 1) // Each game + table.
+        XCTAssertEqual(article.promptVersion, "league-review-de-v2")
+        XCTAssertFalse(CommentaryPromptBuilder.instructions(for: context, configuration: settings()).contains("Drei kurze Absätze"))
+        XCTAssertTrue(article.text.contains("So steht die Liga"))
+        data.teams[0].teamName = "<script>Heim</script>"
+        let escapedContext = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now)
+        let escapedSelection = CommentaryValidationService.normalize(minimal, context: escapedContext, configuration: settings())
+        let escaped = try CommentaryValidationService.render(.init(selection: escapedSelection, inputTokens: 0, outputTokens: 0), context: escapedContext, configuration: settings())
+        XCTAssertTrue(escaped.html.contains("&lt;script&gt;")); XCTAssertFalse(escaped.html.contains("<script>"))
+    }
+
+    func testWeeklyReviewHighlightsRecordedCardsAndMultipleGoalsWithoutInventingFlow() throws {
+        let (data, _, now) = fixture()
+        let match = data.matches[2], player = UUID()
+        var events = [MatchEvent]()
+        for minute in [2, 15, 20] { events.append(.init(id: UUID(), matchId: match.id!, type: .goal, playerId: player, minute: minute, name: "Dreifachtorschütze", image: nil, number: nil, assign: .home)) }
+        events.append(.init(id: UUID(), matchId: match.id!, type: .yellowCard, playerId: player, minute: 21, name: "Dreifachtorschütze", image: nil, number: nil, assign: .home))
+        events.append(.init(id: UUID(), matchId: match.id!, type: .redCard, playerId: player, minute: 30, name: "Dreifachtorschütze", image: nil, number: nil, assign: .home))
+        match.$events.value = events + [events.last!]
+        let context = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now)
+        let text = context.facts.map(\.text).joined(separator: " ")
+        XCTAssertTrue(text.contains("mindestens 3 Treffer"))
+        XCTAssertTrue(text.contains("1 Gelbe Karte"))
+        XCTAssertEqual(context.facts.filter { $0.id.hasPrefix("card.") }.count, 1)
+        XCTAssertTrue(text.contains("Rote Karte in Minute 30"))
+        XCTAssertFalse(text.contains("Führungswechsel")); XCTAssertFalse(context.facts.contains { $0.id.hasPrefix("race.") })
+    }
+
+    func testPreviewTableStakesAreConditionalAndDoNotInventRelegationRules() throws {
+        let (data, match, now) = fixture()
+        func row(_ rank: Int, _ points: Int, id: UUID = UUID()) -> TableItem {
+            .init(shortName: nil, image: "", name: "Team \(rank)", points: points, id: id, goals: 0, ranking: rank,
+                  wins: 0, draws: 0, losses: 0, scored: 0, against: 0, difference: 0, form: [])
+        }
+        let rows = [row(1, 20), row(2, 16), row(3, 12), row(4, 10, id: match.$homeTeam.id), row(5, 9, id: match.$awayTeam.id), row(6, 5), row(7, 4), row(8, 2)]
+        let facts = CommentaryContextBuilder.tableStakes(match: match, table: rows, fixtures: [match], previous: [data.matches[0]], now: now)
+        let home = try XCTUnwrap(facts.first { $0.id == "home.stakes" })
+        XCTAssertTrue(home.text.contains("Top 3")); XCTAssertTrue(home.text.contains("13 Punkten"))
+        XCTAssertTrue(home.text.contains("könnte")); XCTAssertTrue(home.text.contains("Andere Ergebnisse und die Tordifferenz"))
+        XCTAssertFalse(home.text.contains("Abstieg")); XCTAssertFalse(home.text.contains("nächsten Saison"))
+        let lower = [row(1, 30), row(2, 25), row(3, 20), row(4, 15), row(5, 10), row(6, 5, id: match.$homeTeam.id), row(7, 4, id: match.$awayTeam.id), row(8, 2)]
+        let lowerFacts = CommentaryContextBuilder.tableStakes(match: match, table: lower, fixtures: [match], previous: [data.matches[0]], now: now)
+        XCTAssertTrue(lowerFacts.first { $0.id == "home.stakes" }?.text.contains("unteren Tabellenbereich") == true)
+    }
+
+    func testWeeklyScorerMovementUsesCompleteBeforeAfterTablesAndDistinguishesSharedLead() throws {
+        let (data, _, now) = fixture()
+        let leader = UUID(), chaser = UUID(), first = data.matches[0], second = data.matches[1]
+        for match in data.matches { match.$events.value = []; match.score = .init(home: 0, away: 0) }
+        func goals(_ match: Match, id: UUID, name: String, count: Int, side: MatchAssignment) -> [MatchEvent] {
+            (1...count).map { minute in .init(id: UUID(), matchId: match.id!, type: .goal, playerId: id, minute: minute, name: name, image: nil, number: nil, assign: side) }
+        }
+        first.score = .init(home: 2, away: 1)
+        first.$events.value = goals(first, id: leader, name: "Bisher Erster", count: 2, side: .home) + goals(first, id: chaser, name: "Verfolger", count: 1, side: .away)
+        for count in [3, 1] {
+            second.score = .init(home: count, away: 0)
+            second.$events.value = goals(second, id: chaser, name: "Verfolger", count: count, side: .home)
+            let context = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now)
+            let movement = try XCTUnwrap(context.facts.first { $0.id == "race.\(chaser)" })
+            XCTAssertTrue(movement.text.contains("\(count + 1) Saisontoren"))
+            XCTAssertTrue(movement.text.contains("von Rang 2"))
+            XCTAssertTrue(movement.text.contains(count == 1 ? "geteilten Spitzenplatz" : "den Spitzenplatz"))
+        }
+    }
+
     private func withMongo(_ run: (Application, MongoCommentaryStore) async throws -> Void) async throws {
         guard let port = Environment.get("COMMENTATOR_TEST_MONGO_PORT"), Int(port) != nil else {
             throw XCTSkip("Set COMMENTATOR_TEST_MONGO_PORT to an isolated loopback MongoDB.")

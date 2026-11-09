@@ -148,6 +148,7 @@ struct CommentaryContextBuilder: CommentaryContextProviding {
             add("venue", "opening", "Spielort: \(location).", [id.uuidString])
         }
         let table = TeamStatisticsService.table(teams: data.teams, matches: previous)
+        if !historical { facts += tableStakes(match: match, table: table, fixtures: data.matches, previous: previous, now: now) }
         let race = scorerRace(previous)
         let unavailable = Set(data.players.filter {
             !historical && $0.eligibility == .Gesperrt && ($0.blockdate.map { $0 > kickoff } ?? false)
@@ -176,12 +177,13 @@ struct CommentaryContextBuilder: CommentaryContextProviding {
             add("gap", "closing", "In der Tabelle trennen \(home) und \(away) \(abs(h.points - a.points)) Punkte.", previous.compactMap { $0.id?.uuidString })
         }
         if let outlook = goalOutlook(homeID: match.$homeTeam.id, awayID: match.$awayTeam.id, matches: previous, historical: historical) { facts.append(outlook) }
+        let tableContext = facts.first { $0.id.hasSuffix(".stakes") } ?? facts.first { $0.id.hasSuffix(".table") }
         return .init(kind: .matchPreview, targetKey: "match:\(id)", seasonID: seasonID, matchID: id,
             gameday: match.details.gameday, cutoff: cutoff, historical: historical, partial: false,
             leagueCode: data.league.code ?? "", titles: [historical ? "\(home) gegen \(away): die Ausgangslage vor dem Spiel" : "\(home) gegen \(away): der Vorbericht"],
             facts: facts, requiredFactIDs: ["fixture"] + facts.filter {
                 $0.id.hasSuffix(".suspended.summary") || $0.id.hasSuffix(".defence_trend") || $0.id == "goal_outlook"
-            }.map(\.id), warnings: historical
+            }.map(\.id) + (tableContext.map { [$0.id] } ?? []), warnings: historical
                 ? ["Historische Sperren und aktuelle Kaderzuordnungen werden nicht rückwirkend behauptet.", "Datenkorrekturen nach dem Stichtag lassen sich ohne frühere Datenbank-Snapshots nicht rekonstruieren."]
                 : ["Unbekannte Verletzungen und unbestätigte Aufstellungen werden nicht behauptet.", "Torjäger-Meilensteine setzen vollständig zuordenbare Torereignisse voraus; Freistöße und Strafstöße sind keine Foulstatistik."])
     }
@@ -285,62 +287,6 @@ struct CommentaryContextBuilder: CommentaryContextProviding {
     }
 
     static func summary(data: CommentarySeasonData, gameday: Int, allowPartial: Bool, now: Date) throws -> CommentaryContext {
-        guard gameday >= 0, let seasonID = data.season.id else { throw Abort(.badRequest, reason: "Invalid game day.") }
-        let fixtures = data.matches.filter { $0.details.gameday == gameday }
-        guard !fixtures.isEmpty else { throw Abort(.notFound, reason: "No fixtures exist for this season/game day.") }
-        let results = ordered(fixtures.filter { resultKnown($0, before: now) })
-        let partial = results.count != fixtures.count
-        guard !partial || allowPartial else { throw Abort(.conflict, reason: "Game day is incomplete. Explicitly allow_partial to create a labelled partial summary.") }
-        guard !results.isEmpty else { throw Abort(.conflict, reason: "No confirmed, reliably dated results are available.") }
-        var facts = [CommentaryFact]()
-        func add(_ key: String, _ group: String, _ text: String, _ ids: [String]) {
-            facts.append(.init(id: key, group: group, text: text, sourceIDs: ids.sorted()))
-        }
-        let ids = results.compactMap { $0.id?.uuidString }
-        add("round", "opening", "\(partial ? "Der Zwischenstand" : "Der Ergebnisüberblick") zum \(gameday). Spieltag der \(data.league.name) umfasst \(results.count) bestätigte Ergebnisse bei insgesamt \(fixtures.count) angesetzten Begegnungen in der Saison \(data.season.name).", [seasonID.uuidString] + ids)
-        if partial { add("partial", "opening", "Dieser Bericht ist eine Teilzusammenfassung: Für \(fixtures.count - results.count) Begegnungen liegt zum Stichtag noch kein hier berücksichtigtes bestätigtes Ergebnis vor.", fixtures.compactMap { $0.id?.uuidString }) }
-        let played = results.filter { $0.status != .cancelled }
-        let goals = played.reduce(0) { $0 + $1.score.home + $1.score.away }
-        add("totals", "opening", "In den \(played.count) berücksichtigten gespielten Begegnungen stehen insgesamt \(goals) Tore in der Ergebnisliste; administrativ gewertete Partien sind in dieser Torbilanz nicht enthalten.", played.compactMap { $0.id?.uuidString })
-        for match in results.sorted(by: { ($0.score.home + $0.score.away) > ($1.score.home + $1.score.away) }) {
-            let home = name(match.$homeTeam.id, in: data, fallback: match.homeBlanket?.name)
-            let away = name(match.$awayTeam.id, in: data, fallback: match.awayBlanket?.name)
-            add("result.\(match.id!)", "matches", resultSentence(match, home: home, away: away), [match.id!.uuidString])
-            guard match.status != .cancelled else { continue }
-            var seen = Set<UUID>()
-            for event in (match.$events.value ?? []).sorted(by: { $0.minute != $1.minute ? $0.minute < $1.minute : ($0.id?.uuidString ?? "") < ($1.id?.uuidString ?? "") }) where event.type == .goal {
-                guard let eventID = event.id, seen.insert(eventID).inserted,
-                      let side = TeamStatisticsService.scoringAssignment(for: event, in: match) else { continue }
-                let sheet = TeamStatisticsService.assignment(for: event, in: match) == .home ? match.homeBlanket : match.awayBlanket
-                guard let playerName = event.name ?? sheet?.players.first(where: { $0.id == event.$player.id })?.name else { continue }
-                add("event.\(eventID)", "players", "Im Spiel \(home) gegen \(away) ist \(playerName) in Minute \(event.minute) \(event.ownGoal == true ? "mit einem Eigentor zugunsten von" : "als Torschütze für") \(side == .home ? home : away) eingetragen.", [match.id!.uuidString, eventID.uuidString])
-            }
-        }
-        let throughRound = data.matches.filter { $0.details.gameday <= gameday && resultKnown($0, before: now) }
-        let beforeRound = throughRound.filter { $0.details.gameday < gameday }
-        let after = TeamStatisticsService.table(teams: data.teams, matches: throughRound)
-        let before = TeamStatisticsService.table(teams: data.teams, matches: beforeRound)
-        for row in after.prefix(3) {
-            add("table.\(row.id)", "table", "In der aus den erfassten Ergebnissen bis einschließlich dieses Spieltags berechneten Tabelle steht \(row.name) mit \(row.points) Punkten und \(row.scored):\(row.against) Toren auf Rang \(row.ranking).", throughRound.compactMap { $0.id?.uuidString })
-        }
-        if let a = after.first, let b = after.dropFirst().first {
-            add("table.gap", "table", "Der Abstand zwischen \(a.name) und \(b.name) beträgt in dieser Tabelle \(a.points - b.points) Punkte.", throughRound.compactMap { $0.id?.uuidString })
-        }
-        if !beforeRound.isEmpty, let old = before.first, let new = after.first, old.id != new.id {
-            add("table.change", "table", "Im Vergleich zur auf früheren Spieltagen beruhenden Tabelle steht nun \(new.name) statt \(old.name) an erster Stelle.", throughRound.compactMap { $0.id?.uuidString })
-        }
-        let involved = Set(results.flatMap { [$0.$homeTeam.id, $0.$awayTeam.id] })
-        for teamID in involved.sorted(by: { $0.uuidString < $1.uuidString }) {
-            facts += scorerFacts(teamID: teamID, teamName: name(teamID, in: data), matches: results, label: "round.\(teamID)")
-        }
-        var titles = ["\(data.league.name): \(partial ? "Zwischenstand zum" : "Rückblick auf den") \(gameday). Spieltag"]
-        if !partial, let top = played.max(by: { $0.score.home + $0.score.away < $1.score.home + $1.score.away }), top.score.home + top.score.away >= 6 {
-            titles.append("\(data.league.name): \(top.score.home):\(top.score.away) zwischen \(name(top.$homeTeam.id, in: data)) und \(name(top.$awayTeam.id, in: data)) am \(gameday). Spieltag")
-        }
-        return .init(kind: .gameDaySummary, targetKey: "season:\(seasonID):gameday:\(gameday)", seasonID: seasonID,
-            matchID: nil, gameday: gameday, cutoff: now, historical: false, partial: partial,
-            leagueCode: data.league.code ?? "", titles: titles,
-            facts: facts, requiredFactIDs: partial ? ["round", "partial"] : ["round"],
-            warnings: ["Tabellen berücksichtigen nur die erfassten Ergebnisse bis einschließlich der angefragten Spieltagsnummer.", "Nicht eingetragene Ereignisse und frühere Datenbankversionen sind unbekannt."])
+        try weeklySummary(data: data, gameday: gameday, allowPartial: allowPartial, now: now)
     }
 }
