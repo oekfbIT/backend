@@ -41,7 +41,7 @@ COPY . .
 
 # Install necessary libraries for building
 RUN apt-get update \
-    && apt-get install -y openssl libssl-dev
+    && apt-get install -y openssl libssl-dev zlib1g-dev
 
 # Build everything, with optimizations
 RUN swift build -c release --static-swift-stdlib

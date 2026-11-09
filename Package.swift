@@ -21,9 +21,11 @@ let package = Package(
         .package(url: "https://github.com/vapor-community/queues-mongo-driver.git", from: "1.0.0"),
     ],
     targets: [
+        .systemLibrary(name: "CZlib", pkgConfig: "zlib", providers: [.apt(["zlib1g-dev"]), .brew(["zlib"])]),
         .executableTarget(
             name: "App",
             dependencies: [
+                "CZlib",
                 .product(name: "Fluent", package: "fluent"),
                 .product(name: "FluentMongoDriver", package: "fluent-mongo-driver"),
                 .product(name: "Leaf", package: "leaf"),
@@ -35,7 +37,8 @@ let package = Package(
                 .product(name: "DotEnv", package: "DotEnv"),
                 // Add Queues MongoDB Driver product
                 .product(name: "QueuesMongoDriver", package: "queues-mongo-driver"),
-            ]
+            ],
+            resources: [.copy("Resources/jersey-kit-layout.png")]
         ),
         .testTarget(
             name: "AppTests",

@@ -32,6 +32,7 @@ final class AdminController: RouteCollection {
         setupLeagueRoutes(on: competitions)
         setupTeamRoutes(on: teams)
         setupTeamAccountRoutes(on: teams)
+        setupJerseyKitRoutes(on: admin.grouped(PermissionMiddleware(.teamsUpdate)))
         setupSeasonRoutes(on: competitions)
         setupMatchRoutes(on: competitions)
         setupPlayerRoutes(on: admin)
