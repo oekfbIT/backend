@@ -305,6 +305,36 @@ final class CommentaryTests: XCTestCase {
         }
     }
 
+    func testDeletePreviewRemovesPublicSnapshotAndAllowsRegeneration() async throws {
+        try await withMongo { _, store in
+            let context = try self.context()
+            let service = CommentaryJobService(store: store, inference: CommentaryMockInference(), configuration: self.settings())
+            let job = try await service.enqueue(context: context, options: .init())
+            try await service.process(job.id, slot: 0)
+            let stored = try await store.article(job.articleID)
+            let article = try XCTUnwrap(stored)
+            XCTAssertNotNil(article.publishedPreview)
+            do {
+                try await store.deletePreview(article.id, expectedRevision: article.revision + 1)
+                XCTFail("Stale deletion must fail")
+            } catch let error as Abort { XCTAssertEqual(error.status, .conflict) }
+            let regeneration = try await service.enqueue(context: context, options: .init(overwrite: true, idempotencyKey: "busy"))
+            do {
+                try await store.deletePreview(article.id, expectedRevision: article.revision)
+                XCTFail("Active generation must block deletion")
+            } catch let error as Abort { XCTAssertEqual(error.status, .conflict) }
+            try await service.process(regeneration.id, slot: 0)
+            let updated = try await store.article(article.id)
+            try await store.deletePreview(article.id, expectedRevision: try XCTUnwrap(updated).revision)
+            let absent = try await store.article(article.id)
+            XCTAssertNil(absent)
+            let next = try await service.enqueue(context: context, options: .init(idempotencyKey: "after-delete"))
+            try await service.process(next.id, slot: 0)
+            let recreated = try await store.article(article.id)
+            XCTAssertNotNil(recreated?.publishedPreview)
+        }
+    }
+
     func testSavedArticleCrashWindowRecoversWithoutAnotherModelRequest() async throws {
         try await withMongo { _, store in
             let context = try self.context(), mock = CommentaryMockInference()

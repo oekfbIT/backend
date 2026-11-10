@@ -100,6 +100,7 @@ Job/article documents currently expose their stable identifier as `_id`.
 | GET | `/commenter/v1/articles/:articleId` | Current article and metadata |
 | GET | `/commenter/v1/seasons/:seasonId/news` | Compact news and latest real report job per game day, scoped to this season |
 | PATCH | `/commenter/v1/articles/:articleId` | Editorial edit with `expected_revision`, `title`, `text`; published edits update the public copy directly |
+| DELETE | `/commenter/v1/articles/:articleId` | Delete a match preview and its public snapshot with `expected_revision`; requires editorial access, rejects active generation and stale revisions. Job history remains. |
 | GET | `/commenter/v1/context/match/:matchId` | Traceable pre-match snapshot, no inference |
 | GET | `/commenter/v1/context/gameday/:seasonId/:number` | Round snapshot; `?allowPartial=true` for incomplete rounds |
 | GET | `/webClient/match/:matchId/preview` | Public published preview only; otherwise 404 |

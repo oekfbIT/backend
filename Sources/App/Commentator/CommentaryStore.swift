@@ -90,6 +90,20 @@ struct MongoCommentaryStore: CommentaryStore {
     func article(_ id: String) async throws -> CommentaryArticle? {
         try await collection(CommentaryArticle.schema).findOne(["_id": id], as: CommentaryArticle.self).get()
     }
+    func deletePreview(_ id: String, expectedRevision: Int) async throws {
+        guard let article = try await article(id) else { throw Abort(.notFound) }
+        guard article.context.kind == .matchPreview else { throw Abort(.badRequest, reason: "Only match previews can be deleted here.") }
+        guard article.revision == expectedRevision else { throw Abort(.conflict, reason: "The preview changed. Refresh before deleting.") }
+        guard try await collection(CommentaryJob.schema).findOne([
+            "articleID": id, "state": ["$in": ["pending", "running"]] as Document
+        ]).get() == nil else { throw Abort(.conflict, reason: "Wait for preview generation to finish before deleting.") }
+        // Remove the entire document, including the separate public snapshot. Job history is retained.
+        let reply = try await collection(CommentaryArticle.schema).deleteOne(where: ["_id": id, "revision": expectedRevision]).get()
+        guard reply.ok == 1, reply.writeConcernError == nil, (reply.writeErrors ?? []).isEmpty else {
+            throw Abort(.serviceUnavailable, reason: "Preview deletion could not be confirmed.")
+        }
+        guard reply.deletes == 1 else { throw Abort(.conflict, reason: "The preview changed. Refresh before deleting.") }
+    }
     func saveArticle(_ article: CommentaryArticle, expectedRevision: Int) async throws {
         if expectedRevision == 0 {
             do { try await update(CommentaryArticle.schema, query: ["_id": article.id], changes: ["$setOnInsert": try BSONEncoder().encode(article)], upsert: true) }

@@ -49,6 +49,7 @@ struct CommentaryEditRequest: Content {
     let text: String
     var publish: Bool? = nil
 }
+struct CommentaryDeleteRequest: Content { let expectedRevision: Int }
 
 struct MatchPreviewGenerationService {
     let runtime: CommentaryRuntime
@@ -165,6 +166,13 @@ struct CommentatorController: RouteCollection {
         root.get("articles", ":articleId") { req async throws -> CommentaryArticle in
             guard let article = try await self.runtime(req).store.article(req.parameters.require("articleId")) else { throw Abort(.notFound) }
             return article
+        }
+        root.on(.DELETE, "articles", ":articleId", body: .collect(maxSize: "2kb")) { req async throws -> HTTPStatus in
+            try self.mayPublish(req, requested: true)
+            let body = try req.content.decode(CommentaryDeleteRequest.self)
+            try await MongoCommentaryStore(database: req.db).deletePreview(
+                req.parameters.require("articleId"), expectedRevision: body.expectedRevision)
+            return .noContent
         }
         root.on(.PATCH, "articles", ":articleId", body: .collect(maxSize: "64kb")) { req async throws -> CommentaryArticle in
             try self.mayPublish(req, requested: true) // editing is an editorial capability, not ordinary automation
