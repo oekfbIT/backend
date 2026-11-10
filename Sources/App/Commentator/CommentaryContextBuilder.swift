@@ -118,10 +118,12 @@ struct CommentaryContextBuilder: CommentaryContextProviding {
         data.teams.first { $0.id == id }?.teamName ?? fallback ?? "Team \(id.uuidString.prefix(8))"
     }
 
-    static func dateText(_ date: Date, time: Bool = false) -> String {
+    static func dateText(_ date: Date, time: Bool = false, matchClock: Bool = false) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "de_AT")
-        formatter.timeZone = TimeZone(identifier: "Europe/Vienna")!
+        // Match dates contain the admin's wall-clock fields under a UTC suffix.
+        // Actual timestamps (for example suspension expiry) still use Vienna time.
+        formatter.timeZone = matchClock ? TimeZone(secondsFromGMT: 0)! : TimeZone(identifier: "Europe/Vienna")!
         formatter.dateFormat = time ? "dd.MM.yyyy 'um' HH:mm 'Uhr'" : "dd.MM.yyyy"
         return formatter.string(from: date)
     }
@@ -142,8 +144,8 @@ struct CommentaryContextBuilder: CommentaryContextProviding {
             ? "Die Ausgangslage vor dem Duell zwischen \(home) und \(away) am \(match.details.gameday). Spieltag der \(data.league.name) steht im Mittelpunkt dieses historischen Vorberichts."
             : "\(home) gegen \(away): Am \(match.details.gameday). Spieltag der \(data.league.name) treffen die beiden Teams aufeinander.", [id.uuidString, seasonID.uuidString])
         add("schedule", "opening", historical
-            ? "Als Spieltermin ist der \(dateText(kickoff, time: true)) verzeichnet."
-            : "Anpfiff ist am \(dateText(kickoff, time: true)).", [id.uuidString])
+            ? "Als Spieltermin ist der \(dateText(kickoff, time: true, matchClock: true)) verzeichnet."
+            : "Anpfiff ist am \(dateText(kickoff, time: true, matchClock: true)).", [id.uuidString])
         if let location = match.details.location?.trimmingCharacters(in: .whitespacesAndNewlines), !location.isEmpty {
             add("venue", "opening", "Spielort: \(location).", [id.uuidString])
         }
@@ -279,7 +281,7 @@ struct CommentaryContextBuilder: CommentaryContextProviding {
     }
 
     static func resultSentence(_ match: Match, home: String, away: String) -> String {
-        let date = match.details.date.map { "Am \(dateText($0)) " } ?? ""
+        let date = match.details.date.map { "Am \(dateText($0, matchClock: true)) " } ?? ""
         if match.status == .cancelled {
             return "\(date)wurde die Begegnung \(home) gegen \(away) mit \(match.score.home):\(match.score.away) gewertet; dieses Ergebnis wird nicht als auf dem Platz erzielter Spielverlauf beschrieben."
         }

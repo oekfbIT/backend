@@ -48,6 +48,24 @@ final class CommentaryTests: XCTestCase {
         return try CommentaryContextBuilder.preview(match: match, data: data, meetings: data.matches, now: now)
     }
 
+    func testPreviewSchedulePreservesEnteredMatchClock() throws {
+        let (data, target, _) = fixture()
+        let parser = ISO8601DateFormatter()
+        for (value, expected) in [
+            ("2026-06-06T15:00:00Z", "06.06.2026 um 15:00 Uhr"),
+            ("2026-12-06T23:30:00Z", "06.12.2026 um 23:30 Uhr")
+        ] {
+            target.details.date = try XCTUnwrap(parser.date(from: value))
+            for offset: TimeInterval in [-86400, 86400] {
+                let context = try CommentaryContextBuilder.preview(match: target, data: data, meetings: data.matches,
+                    now: target.details.date!.addingTimeInterval(offset))
+                let schedule = try XCTUnwrap(context.facts.first { $0.id == "schedule" })
+                XCTAssertTrue(schedule.text.contains(expected), schedule.text)
+            }
+        }
+        XCTAssertEqual(CommentaryContextBuilder.dateText(try XCTUnwrap(parser.date(from: "2026-06-06T15:00:00Z")), time: true), "06.06.2026 um 17:00 Uhr")
+    }
+
     func testHistoricalPreviewExcludesTargetLaterAndOverlappingResults() throws {
         let (data, target, _) = fixture()
         target.status = .completed; target.score = .init(home: 777, away: 776)

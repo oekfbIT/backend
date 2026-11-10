@@ -163,7 +163,7 @@ extension CommentaryContextBuilder {
         guard let firstDate = reportDates.first, let lastDate = reportDates.last else {
             throw Abort(.unprocessableEntity, reason: "A weekly report requires a reliable game-day date.")
         }
-        let firstDay = dateText(firstDate), lastDay = dateText(lastDate)
+        let firstDay = dateText(firstDate, matchClock: true), lastDay = dateText(lastDate, matchClock: true)
         let reportDate = firstDay == lastDay ? firstDay : "\(firstDay)–\(lastDay)"
         let reportTitle = "ÖKFB Spielbericht \(reportDate) - \(data.league.name)\(partial ? " (Zwischenstand)" : "")"
         return .init(kind: .gameDaySummary, targetKey: "season:\(seasonID):gameday:\(gameday)", seasonID: seasonID,
