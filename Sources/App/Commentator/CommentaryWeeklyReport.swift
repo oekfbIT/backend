@@ -70,25 +70,51 @@ extension CommentaryContextBuilder {
             let b = $1.status == .cancelled ? -1 : $1.score.home + $1.score.away
             return a != b ? a > b : $0.id!.uuidString < $1.id!.uuidString
         }
-        for match in sorted {
+        for (matchIndex, match) in sorted.enumerated() {
             let id = match.id!, group = "match.\(id)", home = name(match.$homeTeam.id, in: data), away = name(match.$awayTeam.id, in: data)
             headings[group] = "\(home) – \(away) \(match.score.home):\(match.score.away)"
-            add("result.\(id)", group, resultSentence(match, home: home, away: away), [id.uuidString]); required.append("result.\(id)")
-            if match.status == .cancelled { continue }
+            if match.status == .cancelled {
+                add("result.\(id)", group, resultSentence(match, home: home, away: away), [id.uuidString])
+                required.append("result.\(id)")
+                continue
+            }
             let total = match.score.home + match.score.away, margin = abs(match.score.home - match.score.away)
             let winner = match.score.home > match.score.away ? home : away
+            let loser = match.score.home > match.score.away ? away : home
+            let score = "\(match.score.home):\(match.score.away)"
+            let winningScore = "\(max(match.score.home, match.score.away)):\(min(match.score.home, match.score.away))"
+            // Rotate grounded leads: emotion comes from the score, never an invented match narrative.
+            let leads: [String]
             if margin == 0 {
-                add("outcome.\(id)", group, "Beide Teams nehmen einen Punkt mit.\(total >= 8 ? " Mit \(total) Treffern gehörte dieses Remis zu den torreichen Begegnungen der Runde." : "")", [id.uuidString])
+                leads = total == 0
+                    ? ["Keine Tore, je ein Punkt: \(home) und \(away) trennten sich 0:0.",
+                       "Die Tore blieben aus: Beim 0:0 teilen sich \(home) und \(away) die Punkte."]
+                    : ["\(total) Tore und kein Sieger: \(home) und \(away) teilten beim \(score) die Punkte.",
+                       "Je ein Punkt nach \(total) Toren: \(home) und \(away) trennten sich \(score)."]
             } else if margin == 1 {
-                add("outcome.\(id)", group, "Nur ein Tor gab am Ende den Ausschlag: Die drei Punkte gingen an \(winner), während \(match.score.home > match.score.away ? away : home) ohne Zähler blieb.", [id.uuidString])
+                leads = ["Ein Tor machte den Unterschied! \(winner) holte gegen \(loser) beim \(winningScore) die drei Punkte.",
+                         "Knapper hätte der Vorsprung kaum sein können: \(winner) setzte sich gegen \(loser) durch – \(winningScore)."]
             } else if margin >= 4 {
-                add("outcome.\(id)", group, "\(winner) holte die drei Punkte mit einem deutlichen Vorsprung von \(margin) Toren.\(total >= 10 ? " Insgesamt \(total) Treffer machten die Begegnung zugleich zu einer besonders torreichen Partie." : "")", [id.uuidString])
+                leads = ["Ein deutliches Ausrufezeichen von \(winner)! Gegen \(loser) stand ein \(winningScore) – \(margin) Tore Unterschied.",
+                         "\(loser) musste eine deutliche Niederlage hinnehmen: \(winner) gewann mit \(margin) Toren Vorsprung, \(winningScore).",
+                         "Drei Punkte, klarer Abstand: \(winner) ließ mit dem \(winningScore) gegen \(loser) aufhorchen."]
             } else {
-                add("outcome.\(id)", group, "\(winner) verbuchte drei Punkte.\(total >= 8 ? " Mit insgesamt \(total) Toren hatte die Partie auch offensiv einiges zu bieten." : "")", [id.uuidString])
+                leads = ["Drei Punkte für \(winner): Gegen \(loser) reichte es zu einem \(winningScore).",
+                         "\(winner) durfte sich über den Sieg freuen: \(winningScore) lautete das Ergebnis gegen \(loser)."]
+            }
+            add("result.\(id)", group, leads[matchIndex % leads.count], [id.uuidString])
+            required.append("result.\(id)")
+            if total >= 10 && margin != 0 {
+                add("outcome.\(id)", group, "\(total) Tore in einer Partie – an Treffern mangelte es hier wahrlich nicht.", [id.uuidString])
             }
             let scorer = scorerRace([match])
-            for row in scorer.rows.prefix(3) where row.goals >= 2 {
-                add("scorer.\(id).\(row.id)", group, "\(row.name.trimmingCharacters(in: .whitespacesAndNewlines)) steuerte \(scorer.complete ? "" : "mindestens ")\(row.goals) Treffer bei\(row.goals >= 3 ? " und gehörte damit zu den auffälligen Torschützen dieser Begegnung" : "").", Array(row.sources))
+            let standout = Array(scorer.rows.prefix(3).filter { $0.goals >= 2 })
+            if !standout.isEmpty {
+                let contributions = standout.map { row in
+                    "\(row.name.trimmingCharacters(in: .whitespacesAndNewlines)) (\(scorer.complete ? "" : "mindestens ")\(row.goals) Tore)"
+                }.joined(separator: "; ")
+                let lead = matchIndex % 2 == 0 ? "Besonders treffsicher:" : "Im Blickpunkt der Torjäger:"
+                add("scorer.\(id).highlights", group, "\(lead) \(contributions).", standout.flatMap { Array($0.sources) })
             }
             var seen = Set<UUID>()
             let cards = (match.$events.value ?? []).filter {
@@ -96,7 +122,7 @@ extension CommentaryContextBuilder {
                 return $0.$match.id == id && seen.insert(eventID).inserted && [.yellowCard, .redCard, .yellowRedCard].contains($0.type)
             }
             let yellow = cards.filter { $0.type == .yellowCard }.count
-            if yellow > 0 { add("yellow.\(id)", group, "Im Spielbericht stehen außerdem \(yellow) \(yellow == 1 ? "Gelbe Karte" : "Gelbe Karten").", [id.uuidString] + cards.compactMap { $0.id?.uuidString }) }
+            if yellow >= 4 { add("yellow.\(id)", group, "Im Spielbericht stehen außerdem \(yellow) \(yellow == 1 ? "Gelbe Karte" : "Gelbe Karten").", [id.uuidString] + cards.compactMap { $0.id?.uuidString }) }
             for event in cards where event.type != .yellowCard {
                 guard let side = TeamStatisticsService.assignment(for: event, in: match) else { continue }
                 let who = event.name?.trimmingCharacters(in: .whitespacesAndNewlines)
