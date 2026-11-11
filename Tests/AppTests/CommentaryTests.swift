@@ -103,7 +103,7 @@ final class CommentaryTests: XCTestCase {
 
     func testIncompleteRoundRequiresExplicitPartialAndLabelsIt() throws {
         let (base, _, now) = fixture()
-        base.matches[1].status = .pending
+        base.matches[1].status = .first
         XCTAssertThrowsError(try CommentaryContextBuilder.summary(data: base, gameday: 2, allowPartial: false, now: now))
         let context = try CommentaryContextBuilder.summary(data: base, gameday: 2, allowPartial: true, now: now)
         XCTAssertTrue(context.partial)
@@ -113,12 +113,29 @@ final class CommentaryTests: XCTestCase {
         XCTAssertThrowsError(try CommentaryContextBuilder.summary(data: base, gameday: 99, allowPartial: true, now: now))
     }
 
+    func testWeeklyReportSkipsPendingAndExplainsAbandonedGames() throws {
+        let (data, _, now) = fixture()
+        let target = data.matches[1]
+        target.status = .pending
+        let skipped = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now)
+        XCTAssertFalse(skipped.partial)
+        XCTAssertFalse(skipped.requiredFactIDs.contains("result.\(target.id!)"))
+        for status: GameStatus in [.abbgebrochen, .cancelled] {
+            target.status = status
+            let report = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now)
+            XCTAssertFalse(report.partial)
+            let fact = try XCTUnwrap(report.facts.first { $0.id == "result.\(target.id!)" })
+            XCTAssertTrue(fact.text.contains(status == .abbgebrochen ? "Weitere Informationen" : "abgesagt oder verschoben"))
+            XCTAssertFalse(report.sectionHeadings?["match.\(target.id!)"]?.contains(":") == true)
+        }
+    }
+
     func testAwardedMatchIsNotDescribedAsPlayedGoals() throws {
         let (data, _, now) = fixture()
         data.matches[1].status = .cancelled; data.matches[1].score = .init(home: 6, away: 0)
         let context = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now)
         let fact = try XCTUnwrap(context.facts.first { $0.id == "result.\(data.matches[1].id!)" })
-        XCTAssertTrue(fact.text.contains("gewertet"))
+        XCTAssertTrue(fact.text.contains("abgesagt oder verschoben"))
         XCTAssertTrue(context.facts.first { $0.id == "totals" }!.text.contains("10 Tore"))
     }
 
@@ -540,7 +557,7 @@ final class CommentaryTests: XCTestCase {
         XCTAssertFalse(CommentaryGenerationOptions(publish: false).shouldPublish)
         XCTAssertFalse(CommentaryGenerationOptions(dryRun: true).shouldPublish)
         let (data, _, now) = fixture()
-        data.matches.first { $0.details.gameday == 2 }?.status = .pending
+        data.matches.first { $0.details.gameday == 2 }?.status = .first
         let context = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: true, now: now)
         XCTAssertTrue(context.partial)
         let service = CommentaryJobService(store: UnavailableCommentaryStore(), inference: CommentaryMockInference(), configuration: settings())

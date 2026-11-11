@@ -177,7 +177,8 @@ target do not roll back other jobs. Batch context preparation reuses season read
 - Awarded 6–0 results remain distinguishable from goals scored on the pitch.
 - Round tables use recorded results through the requested round number and cutoff,
   including earlier rounds. They do not silently include later rounds.
-- Incomplete rounds fail with 409 unless `allow_partial:true`; partial status is a
+- Pending fixtures are omitted from weekly reports. Cancelled fixtures are reported as cancelled/postponed; abandoned fixtures explicitly await further information and a ruling. Neither contributes played-goal totals or a final-score heading. A round containing only pending fixtures cannot generate a report.
+- Rounds with games still in progress or unconfirmed final results fail with 409 unless `allow_partial:true`; partial status is a
   mandatory sentence/title attribute. Publication remains independently restricted.
 - The source snapshot, selected fact IDs, context hash, model, prompt version, provider
   and token usage are stored. Edited articles are marked manual and lose automatic

@@ -44,25 +44,26 @@ extension CommentaryContextBuilder {
         let scoped = data.matches.filter { $0.$season.id == seasonID }
         let fixtures = scoped.filter { $0.details.gameday == gameday }
         guard !fixtures.isEmpty else { throw Abort(.notFound, reason: "No fixtures exist for this season/game day.") }
-        let results = ordered(fixtures.filter { resultKnown($0, before: now) })
-        let partial = results.count != fixtures.count
+        let reportable = fixtures.filter { $0.status != .pending }
+        let results = ordered(reportable.filter { $0.status == .cancelled || $0.status == .abbgebrochen || resultKnown($0, before: now) })
+        let partial = results.count != reportable.count
         guard !partial || allowPartial else { throw Abort(.conflict, reason: "Game day is incomplete. Explicitly allow_partial to create a labelled partial summary.") }
         guard !results.isEmpty else { throw Abort(.conflict, reason: "No confirmed, reliably dated results are available.") }
         let through = scoped.filter { $0.details.gameday <= gameday && resultKnown($0, before: now) }
         let earlier = through.filter { $0.details.gameday < gameday }
         let after = TeamStatisticsService.table(teams: data.teams, matches: through)
         let before = TeamStatisticsService.table(teams: data.teams, matches: earlier)
-        let played = results.filter { $0.status != .cancelled }
+        let played = results.filter { $0.status != .cancelled && $0.status != .abbgebrochen }
         var facts = [CommentaryFact](), headings = [String: String](), required = ["round", "totals"]
         func add(_ id: String, _ group: String, _ text: String, _ sources: [String]) {
             facts.append(.init(id: id, group: group, text: text, sourceIDs: Array(Set(sources)).sorted()))
         }
         let sourceIDs = results.compactMap { $0.id?.uuidString }
-        add("round", "opening", "Am \(gameday). Spieltag der \(data.league.name) sind \(results.count) von \(fixtures.count) Partien der Saison \(data.season.name) abgeschlossen.", [seasonID.uuidString] + sourceIDs)
+        add("round", "opening", "Am \(gameday). Spieltag der \(data.league.name) werden \(results.count) Begegnungen der Saison \(data.season.name) zusammengefasst.", [seasonID.uuidString] + sourceIDs)
         let goals = played.reduce(0) { $0 + $1.score.home + $1.score.away }
-        add("totals", "opening", "Die \(played.count) gespielten Partien brachten zusammen \(goals) Tore.\(played.count != results.count ? " Wertungsergebnisse sind in dieser Torzahl nicht enthalten." : "")", sourceIDs)
+        add("totals", "opening", "Die \(played.count) gespielten Partien brachten zusammen \(goals) Tore.\(played.count != results.count ? " Abgesagte und abgebrochene Begegnungen sind in dieser Torzahl nicht enthalten." : "")", sourceIDs)
         if partial {
-            add("partial", "opening", "Dieser Zwischenbericht ist noch unvollständig: Für \(fixtures.count - results.count) Begegnungen steht ein bestätigtes Ergebnis aus.", fixtures.compactMap { $0.id?.uuidString })
+            add("partial", "opening", "Dieser Zwischenbericht ist noch unvollständig: Für \(reportable.count - results.count) Begegnungen steht ein bestätigtes Ergebnis aus.", fixtures.compactMap { $0.id?.uuidString })
             required.append("partial")
         }
         let sorted = results.sorted {
@@ -73,8 +74,12 @@ extension CommentaryContextBuilder {
         for (matchIndex, match) in sorted.enumerated() {
             let id = match.id!, group = "match.\(id)", home = name(match.$homeTeam.id, in: data), away = name(match.$awayTeam.id, in: data)
             headings[group] = "\(home) – \(away) \(match.score.home):\(match.score.away)"
-            if match.status == .cancelled {
-                add("result.\(id)", group, resultSentence(match, home: home, away: away), [id.uuidString])
+            if match.status == .cancelled || match.status == .abbgebrochen {
+                headings[group] = "\(home) – \(away)"
+                let note = match.status == .abbgebrochen
+                    ? "Die Begegnung zwischen \(home) und \(away) wurde abgebrochen. Weitere Informationen zum Spiel und zur Wertung folgen."
+                    : "Die Begegnung zwischen \(home) und \(away) wurde abgesagt oder verschoben."
+                add("result.\(id)", group, note, [id.uuidString])
                 required.append("result.\(id)")
                 continue
             }
@@ -160,11 +165,13 @@ extension CommentaryContextBuilder {
             }
         }
         let reportDates = results.compactMap { $0.details.date }.sorted()
-        guard let firstDate = reportDates.first, let lastDate = reportDates.last else {
-            throw Abort(.unprocessableEntity, reason: "A weekly report requires a reliable game-day date.")
+        let reportDate: String
+        if let firstDate = reportDates.first, let lastDate = reportDates.last {
+            let firstDay = dateText(firstDate, matchClock: true), lastDay = dateText(lastDate, matchClock: true)
+            reportDate = firstDay == lastDay ? firstDay : "\(firstDay)–\(lastDay)"
+        } else {
+            reportDate = "Spieltag \(gameday)"
         }
-        let firstDay = dateText(firstDate, matchClock: true), lastDay = dateText(lastDate, matchClock: true)
-        let reportDate = firstDay == lastDay ? firstDay : "\(firstDay)–\(lastDay)"
         let reportTitle = "ÖKFB Spielbericht \(reportDate) - \(data.league.name)\(partial ? " (Zwischenstand)" : "")"
         return .init(kind: .gameDaySummary, targetKey: "season:\(seasonID):gameday:\(gameday)", seasonID: seasonID,
                      matchID: nil, gameday: gameday, cutoff: now, historical: false, partial: partial, leagueCode: data.league.code ?? "",
