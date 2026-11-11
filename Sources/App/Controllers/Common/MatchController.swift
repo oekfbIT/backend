@@ -660,6 +660,12 @@ final class MatchController: RouteCollection {
         return Match.find(matchId, on: req.db)
             .unwrap(or: Abort(.notFound, reason: "Match with ID \(matchId) not found."))
             .flatMap { match in
+                guard match.status == .pending else {
+                    return req.eventLoop.makeFailedFuture(
+                        Abort(.conflict, reason: "Players can only be added to the lineup while the match is pending.")
+                    )
+                }
+
                 // Initialize homeBlanket if it's nil
                 if match.homeBlanket == nil {
                     match.homeBlanket = Blankett(
@@ -726,6 +732,12 @@ final class MatchController: RouteCollection {
         return Match.find(matchId, on: req.db)
             .unwrap(or: Abort(.notFound, reason: "Match with ID \(matchId) not found."))
             .flatMap { match in
+                guard match.status == .pending else {
+                    return req.eventLoop.makeFailedFuture(
+                        Abort(.conflict, reason: "Players can only be added to the lineup while the match is pending.")
+                    )
+                }
+
                 // Initialize awayBlanket if it's nil
                 if match.awayBlanket == nil {
                     match.awayBlanket = Blankett(

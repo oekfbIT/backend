@@ -445,6 +445,10 @@ extension AppController {
             throw Abort(.notFound, reason: "Match with ID \(matchId) not found.")
         }
 
+        guard match.status == .pending else {
+            throw Abort(.conflict, reason: "Players can only be added to the lineup while the match is pending.")
+        }
+
         if match.homeBlanket == nil {
             let homeTeam = try await match.$homeTeam.get(on: req.db)
             match.homeBlanket = Blankett(
@@ -506,6 +510,10 @@ extension AppController {
 
         guard let match = try await Match.find(matchId, on: req.db) else {
             throw Abort(.notFound, reason: "Match with ID \(matchId) not found.")
+        }
+
+        guard match.status == .pending else {
+            throw Abort(.conflict, reason: "Players can only be added to the lineup while the match is pending.")
         }
 
         if match.awayBlanket == nil {

@@ -395,6 +395,10 @@ extension AdminController {
             .first()
         else { throw Abort(.notFound, reason: "Match not found") }
 
+        guard match.status == .pending else {
+            throw Abort(.conflict, reason: "Players can only be added to the lineup while the match is pending.")
+        }
+
         guard let player = try await Player.find(body.playerId, on: req.db) else {
             throw Abort(.notFound, reason: "Player not found")
         }
@@ -449,6 +453,10 @@ extension AdminController {
             .with(\.$awayTeam)
             .first()
         else { throw Abort(.notFound, reason: "Match not found") }
+
+        guard match.status == .pending else {
+            throw Abort(.conflict, reason: "Players can only be added to the lineup while the match is pending.")
+        }
 
         guard let player = try await Player.find(body.playerId, on: req.db) else {
             throw Abort(.notFound, reason: "Player not found")
