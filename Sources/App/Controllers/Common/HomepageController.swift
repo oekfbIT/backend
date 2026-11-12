@@ -649,6 +649,7 @@ extension Blankett {
     func asPublic() -> Blankett {
         var copy = self
         copy.coach = coach.map { Trainer(name: $0.name, email: nil, image: $0.image) }
+        copy.altCoach = altCoach.map { Trainer(name: $0.name, email: nil, image: $0.image) }
         return copy
     }
 }

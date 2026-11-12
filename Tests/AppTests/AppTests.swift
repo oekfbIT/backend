@@ -2,6 +2,25 @@
 import XCTVapor
 
 final class AppTests: XCTestCase {
+    func testBlankettSupportsOptionalSecondTrainerAndPublicPhotos() throws {
+        let legacy = Data(#"{"name":"Team","players":[]}"#.utf8)
+        let decoded = try JSONDecoder().decode(Blankett.self, from: legacy)
+        XCTAssertNil(decoded.altCoach)
+
+        let blanket = Blankett(
+            name: "Team", dress: nil, logo: nil, players: [],
+            coach: Trainer(name: "Trainer", email: "private@example.com", image: "trainer.jpg"),
+            altCoach: Trainer(name: "Second Trainer", email: "private2@example.com", image: "second.jpg")
+        ).asPublic()
+        let encoded = try JSONEncoder().encode(blanket)
+        let roundTrip = try JSONDecoder().decode(Blankett.self, from: encoded)
+        XCTAssertEqual(roundTrip.coach?.image, "trainer.jpg")
+        XCTAssertEqual(roundTrip.altCoach?.name, "Second Trainer")
+        XCTAssertEqual(roundTrip.altCoach?.image, "second.jpg")
+        XCTAssertNil(roundTrip.coach?.email)
+        XCTAssertNil(roundTrip.altCoach?.email)
+    }
+
     func testNewRefereesAreActiveByDefault() {
         let referee = Referee(
             name: "Test Referee",

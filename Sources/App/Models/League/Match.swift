@@ -48,13 +48,15 @@ struct Blankett: Codable {
     var logo: String?
     var players: [PlayerOverview]
     var coach: Trainer?
+    var altCoach: Trainer?
     
-    init(name: String?, dress: String?, logo: String?, players: [PlayerOverview]?, coach: Trainer? = nil) {
+    init(name: String?, dress: String?, logo: String?, players: [PlayerOverview]?, coach: Trainer? = nil, altCoach: Trainer? = nil) {
         self.name = name
         self.dress = dress
         self.logo = logo
         self.players = players ?? []
         self.coach = coach
+        self.altCoach = altCoach
     }
     
     func toMini() -> MiniBlankett {

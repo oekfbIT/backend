@@ -72,6 +72,18 @@ extension AppController {
 
         let appEvents = try await MatchEvent.toAppMatchEvents(match.events, on: req)
 
+        var homeBlanket = match.homeBlanket ?? Blankett(
+            name: home.teamName, dress: home.trikot.home, logo: home.logo, players: []
+        )
+        var awayBlanket = match.awayBlanket ?? Blankett(
+            name: away.teamName, dress: away.trikot.away, logo: away.logo, players: []
+        )
+        homeBlanket.coach = home.coach ?? homeBlanket.coach
+        homeBlanket.altCoach = home.altCoach
+        awayBlanket.coach = away.coach ?? awayBlanket.coach
+        awayBlanket.altCoach = away.altCoach
+
+
         return AppModels.AppMatch(
             id: try match.requireID(),
             details: match.details,
@@ -79,18 +91,8 @@ extension AppController {
             season: appSeason,
             away: awayOverview,
             home: homeOverview,
-            homeBlanket: (match.homeBlanket ?? Blankett(
-                name: home.teamName,
-                dress: home.trikot.home,
-                logo: home.logo,
-                players: []
-            )).asPublic(),
-            awayBlanket: (match.awayBlanket ?? Blankett(
-                name: away.teamName,
-                dress: away.trikot.away,
-                logo: away.logo,
-                players: []
-            )).asPublic(),
+            homeBlanket: homeBlanket.asPublic(),
+            awayBlanket: awayBlanket.asPublic(),
             events: appEvents,
             status: match.status,
             firstHalfStartDate: match.firstHalfStartDate,
