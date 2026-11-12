@@ -854,7 +854,7 @@ final class MatchController: RouteCollection {
             .unwrap(or: Abort(.notFound))
             .flatMap { match in
                 match.status = .first
-                match.firstHalfStartDate = Date.viennaNow
+                match.firstHalfStartDate = Date()
                 return match.save(on: req.db)
                     .flatMap { StatsCacheManager.invalidateStats(for: match, on: req.db) }
                     .map {
@@ -874,7 +874,7 @@ final class MatchController: RouteCollection {
             .unwrap(or: Abort(.notFound))
             .flatMap { match in
                 match.status = .halftime
-                match.firstHalfEndDate = Date.viennaNow
+                match.firstHalfEndDate = Date()
                 return match.save(on: req.db)
                     .flatMap { StatsCacheManager.invalidateStats(for: match, on: req.db) }
                     .map {
@@ -894,7 +894,7 @@ final class MatchController: RouteCollection {
             .unwrap(or: Abort(.notFound))
             .flatMap { match in
                 match.status = .second
-                match.secondHalfStartDate = Date.viennaNow
+                match.secondHalfStartDate = Date()
                 return match.save(on: req.db)
                     .flatMap { StatsCacheManager.invalidateStats(for: match, on: req.db) }
                     .map {
@@ -914,7 +914,7 @@ final class MatchController: RouteCollection {
             .unwrap(or: Abort(.notFound))
             .flatMap { match in
                 match.status = .completed
-                match.secondHalfEndDate = Date.viennaNow
+                match.secondHalfEndDate = Date()
                 return match.save(on: req.db)
                     .flatMap { StatsCacheManager.invalidateStats(for: match, on: req.db) }
                     .map {
@@ -1042,141 +1042,11 @@ final class MatchController: RouteCollection {
         }
     }
     
-    func teamCancelGame(req: Request) throws -> EventLoopFuture<HTTPStatus> {
-        let matchId = try req.parameters.require("id", as: UUID.self)
-
-        struct NoShowRequest: Content {
-            let winningTeam: String // "home" or "away"
-        }
-
-        let noShowRequest = try req.content.decode(NoShowRequest.self)
-
-        return FeeService.load(req).flatMap { fees in
-            return Match.query(on: req.db)
-                .with(\.$homeTeam) { $0.with(\.$user) }
-                .with(\.$awayTeam) { $0.with(\.$user) }
-                .with(\.$referee) { $0.with(\.$user) }
-                .filter(\.$id == matchId)
-                .first()
-                .unwrap(or: Abort(.notFound))
-                .flatMap { match in
-                    let winningTeamId: UUID
-                    let losingTeamId: UUID
-                    var opponentEmail: String? = nil
-
-                    switch noShowRequest.winningTeam.lowercased() {
-                    case "home":
-                        match.score = Score(home: 6, away: 0)
-                        winningTeamId = match.$homeTeam.id
-                        losingTeamId = match.$awayTeam.id
-                        opponentEmail = match.homeTeam.user?.email.trimmingCharacters(in: .whitespacesAndNewlines)
-
-                    case "away":
-                        match.score = Score(home: 0, away: 6)
-                        winningTeamId = match.$awayTeam.id
-                        losingTeamId = match.$homeTeam.id
-                        opponentEmail = match.awayTeam.user?.email.trimmingCharacters(in: .whitespacesAndNewlines)
-
-                    default:
-                        return req.eventLoop.future(error: Abort(.badRequest, reason: "Invalid winning team specified"))
-                    }
-
-                    match.status = .cancelled
-
-                    return match.save(on: req.db)
-                        // Cache invalidation is best-effort. Do not report a failed
-                        // cancellation after the match has already been persisted.
-                        .flatMap {
-                            StatsCacheManager.invalidateStats(for: match, on: req.db)
-                                .flatMapError { error in
-                                    req.logger.warning("Unable to invalidate stats after team cancellation: \(error)")
-                                    return req.eventLoop.makeSucceededFuture(())
-                                }
-                        }
-                        .flatMap {
-                        Team.find(winningTeamId, on: req.db)
-                            .unwrap(or: Abort(.notFound, reason: "Winning team not found"))
-                            .and(Team.find(losingTeamId, on: req.db)
-                                .unwrap(or: Abort(.notFound, reason: "Losing team not found")))
-                            .flatMap { winningTeam, losingTeam in
-                                winningTeam.points += 3
-
-                                let cancelled = losingTeam.cancelled ?? 0
-                                guard cancelled >= 0, cancelled < 3 else {
-                                    return req.eventLoop.makeFailedFuture(
-                                        Abort(.badRequest, reason: "Schon 3 Absagen gemacht diese Saison.")
-                                    )
-                                }
-
-                                let newCancelled = cancelled + 1
-                                losingTeam.cancelled = newCancelled
-
-                                let cancellationKey = FeeKey.cancellationTiers[newCancelled - 1]
-
-                                let rechnungAmount = fees.fee(cancellationKey).euros
-
-                                let invoiceNumber = UUID().uuidString
-                                let balance = losingTeam.balance ?? 0
-
-                                let rechnung = Rechnung(
-                                    team: losingTeam.id,
-                                    teamName: losingTeam.teamName,
-                                    number: invoiceNumber,
-                                    summ: Double(rechnungAmount),
-                                    topay: nil,
-                                    previousBalance: losingTeam.balance,
-                                    kennzeichen: "Spiel Absage: \(newCancelled)"
-                                )
-
-                                rechnung.appliedFee = fees.fee(cancellationKey)
-                                return rechnung.save(on: req.db).flatMap {
-                                    losingTeam.balance = balance - Double(rechnungAmount)
-
-                                    let emailFuture: EventLoopFuture<Void>
-                                    if let opponentEmail, !opponentEmail.isEmpty {
-                                        do {
-                                            var futures = [EventLoopFuture<HTTPStatus>]()
-                                            futures.append(try emailController.sendCancellationNotification(
-                                                req: req,
-                                                recipient: opponentEmail,
-                                                match: match
-                                            ))
-
-                                            if let ref = match.referee,
-                                               let refUser = ref.user {
-                                                futures.append(try emailController.informRefereeCancellation(
-                                                    req: req,
-                                                    email: refUser.email,
-                                                    name: ref.name ?? "Referee",
-                                                    match: match
-                                                ))
-                                            }
-
-                                            emailFuture = EventLoopFuture.andAllSucceed(futures, on: req.eventLoop)
-                                                .map { _ in () }
-                                                .flatMapError { error in
-                                                    req.logger.warning("Unable to send cancellation emails: \(error)")
-                                                    return req.eventLoop.makeSucceededFuture(())
-                                                }
-                                        } catch {
-                                            req.logger.warning("Unable to prepare cancellation emails: \(error)")
-                                            emailFuture = req.eventLoop.makeSucceededFuture(())
-                                        }
-                                    } else {
-                                        req.logger.warning("Unable to send cancellation email: winning team owner has no email address")
-                                        emailFuture = req.eventLoop.makeSucceededFuture(())
-                                    }
-
-                                    return emailFuture.flatMap {
-                                        losingTeam.save(on: req.db)
-                                    }.flatMap {
-                                        winningTeam.save(on: req.db).transform(to: .ok)
-                                    }
-                                }
-                            }
-                    }
-                }
-        }
+    func teamCancelGame(req: Request) async throws -> HTTPStatus {
+        struct CancellationRequest: Content { let winningTeam: String }
+        let body = try req.content.decode(CancellationRequest.self)
+        let id = try req.parameters.require("id", as: UUID.self)
+        return try await MatchCancellationService.cancel(req: req, matchID: id, winningSide: body.winningTeam)
     }
 
     func spielabbruch(req: Request) throws -> EventLoopFuture<HTTPStatus> {

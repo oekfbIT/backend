@@ -32,28 +32,17 @@ final class RechnungsController: RouteCollection {
         try setupRoutes(on: routes)
     }
         
-    func refund(req: Request) throws -> EventLoopFuture<HTTPStatus> {
+    func refund(req: Request) async throws -> HTTPStatus {
         let id = try req.parameters.require("id", as: UUID.self)
-
-        return Rechnung.find(id, on: req.db)
-            .unwrap(or: Abort(.notFound, reason: "Rechnung not found"))
-            .flatMap { rechnung in
-                do { try rechnung.requireManualEntry() }
-                catch { return req.eventLoop.makeFailedFuture(error) }
-                return Team.find(rechnung.$team.id, on: req.db)
-                    .unwrap(or: Abort(.notFound, reason: "Team not found"))
-                    .flatMap { team in
-                        guard let currentBalance = team.balance else {
-                            return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "Team balance is undefined"))
-                        }
-
-                        team.balance = currentBalance - rechnung.summ
-
-                        return team.save(on: req.db).flatMap {
-                            return rechnung.delete(on: req.db).transform(to: .ok)
-                        }
-                    }
+        guard let invoice = try await Rechnung.find(id, on: req.db) else { return .ok }
+        try invoice.requireManualEntry()
+        guard let teamID = invoice.$team.id else { throw Abort(.badRequest) }
+        _ = try await TeamBookingStore(database: req.db).apply(
+            teamID: teamID, key: "refund-\(id.uuidString.lowercased())") { stored in
+                ["balance": try TeamBookingStore.balance(stored) + invoice.refundDelta]
             }
+        try await invoice.delete(on: req.db)
+        return .ok
     }
 
     func create(req: Request) throws -> EventLoopFuture<Rechnung> {

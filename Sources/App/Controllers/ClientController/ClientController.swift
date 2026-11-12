@@ -757,7 +757,14 @@ extension ClientController {
             snapshot.stats(for: playerID, activeLeagueID: league?.id)
         }
 
-        return playerF.and(seasonsF).and(statsF).map { (playerAndSeasons, stats) in
+        let eventsF = snapshotF.flatMap { snapshot in
+            req.eventLoop.makeFutureWithTask {
+                try await MatchEvent.toAppMatchEvents(snapshot.events, on: req)
+            }
+        }
+
+        return playerF.and(seasonsF).and(statsF).and(eventsF).map { combined, events in
+            let (playerAndSeasons, stats) = combined
             let (player, seasons) = playerAndSeasons
 
             let publicPlayer = PublicPlayer(
@@ -779,7 +786,8 @@ extension ClientController {
             return PlayerDetailResponse(
                 player: publicPlayer,
                 upcoming: seasons,
-                news: nil
+                news: nil,
+                events: events
             )
         }
     }

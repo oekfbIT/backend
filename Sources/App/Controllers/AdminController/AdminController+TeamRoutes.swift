@@ -664,7 +664,11 @@ extension AdminController {
         }
 
         guard let original = try await Rechnung.find(rechnungId, on: req.db) else {
-            throw Abort(.notFound, reason: "Rechnung not found.")
+            let refundID = TeamBookingStore.identifier(rechnungId, namespace: "refund")
+            guard let refunded = try await Rechnung.find(refundID, on: req.db), refunded.$team.id == teamId else {
+                throw Abort(.notFound, reason: "Rechnung not found.")
+            }
+            return RefundRechnungResponse(teamId: teamId, newBalance: team.balance ?? 0, refundRechnung: refunded)
         }
 
         guard original.$team.id == teamId else {
@@ -673,8 +677,12 @@ extension AdminController {
 
         try original.requireManualEntry()
 
-        let refundDelta = -original.summ
-        team.balance = (team.balance ?? 0) + refundDelta
+        let refundDelta = original.refundDelta
+        let receipt = try await TeamBookingStore(database: req.db).apply(
+            teamID: teamId, key: "refund-\(rechnungId.uuidString.lowercased())") { stored in
+                ["balance": try TeamBookingStore.balance(stored) + refundDelta]
+            }
+        let newBalance = try TeamBookingStore.balance(receipt)
 
         let currentYear = Calendar.current.component(.year, from: Date.viennaNow)
         let randomNumber = String.randomNum(length: 5)
@@ -685,25 +693,28 @@ extension AdminController {
         let currentDate = df.string(from: Date.viennaNow)
 
         let refund = Rechnung(
+            id: original.refundInvoiceID,
             team: teamId,
             teamName: team.teamName,
             status: .bezahlt,
             number: number,
             summ: refundDelta,
             topay: 0,
-            previousBalance: team.balance,
+            previousBalance: newBalance - refundDelta,
             kennzeichen: "\(currentDate) Refund für Rechnung \(original.number) - \(original.kennzeichen)",
             created: Date.viennaNow
         )
 
         // Mongo standalone friendly: sequential writes
-        try await team.save(on: req.db)
-        try await refund.create(on: req.db)
+        do { try await refund.create(on: req.db) }
+        catch {
+            guard try await Rechnung.find(original.refundInvoiceID, on: req.db) != nil else { throw error }
+        }
         try await original.delete(on: req.db)   // ✅ delete original
 
         return RefundRechnungResponse(
             teamId: teamId,
-            newBalance: team.balance ?? 0,
+            newBalance: newBalance,
             refundRechnung: refund
         )
     }

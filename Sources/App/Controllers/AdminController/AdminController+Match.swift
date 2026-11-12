@@ -542,7 +542,7 @@ extension AdminController {
     func startGame(req: Request) async throws -> HTTPStatus {
         let match = try await requireMatchWithTeams(req)
         match.status = .first
-        match.firstHalfStartDate = Date.viennaNow
+        match.firstHalfStartDate = Date()
         try await match.save(on: req.db)
         _ = MatchPushNotifier.fire(.gameStarted, match: match, req: req)
         return .ok
@@ -552,7 +552,7 @@ extension AdminController {
     func endFirstHalf(req: Request) async throws -> HTTPStatus {
         let match = try await requireMatchWithTeams(req)
         match.status = .halftime
-        match.firstHalfEndDate = Date.viennaNow
+        match.firstHalfEndDate = Date()
         try await match.save(on: req.db)
         _ = MatchPushNotifier.fire(.halftime, match: match, req: req)
         return .ok
@@ -562,7 +562,7 @@ extension AdminController {
     func startSecondHalf(req: Request) async throws -> HTTPStatus {
         let match = try await requireMatchWithTeams(req)
         match.status = .second
-        match.secondHalfStartDate = Date.viennaNow
+        match.secondHalfStartDate = Date()
         try await match.save(on: req.db)
         _ = MatchPushNotifier.fire(.secondHalfStarted, match: match, req: req)
         return .ok
@@ -572,7 +572,7 @@ extension AdminController {
     func endGame(req: Request) async throws -> HTTPStatus {
         let match = try await requireMatchWithTeams(req)
         match.status = .completed
-        match.secondHalfEndDate = Date.viennaNow
+        match.secondHalfEndDate = Date()
         try await match.save(on: req.db)
         _ = MatchPushNotifier.fire(.gameEnded, match: match, req: req)
         return .ok
@@ -631,101 +631,12 @@ extension AdminController {
 
     // MARK: PATCH /admin/matches/:id/teamcancel
     func teamCancelGame(req: Request) async throws -> HTTPStatus {
-        let fees = try await FeeService.forRequest(req)
-        let matchID = try requireUUIDParam(req, "id")
-        let body = try req.content.decode(NoShowRequest.self)
-
-        let match = try await Match.query(on: req.db)
-            .with(\.$homeTeam) { $0.with(\.$user) }
-            .with(\.$awayTeam) { $0.with(\.$user) }
-            .with(\.$referee) { $0.with(\.$user) }
-            .filter(\.$id == matchID)
-            .first()
-        guard let match else {
-            throw Abort(.notFound, reason: "Match not found")
-        }
-
-        let winningTeamID: UUID
-        let losingTeamID: UUID
-        let recipientEmail: String?
-        switch body.winningTeam.lowercased() {
-        case "home":
-            match.score = Score(home: 6, away: 0)
-            winningTeamID = match.$homeTeam.id
-            losingTeamID = match.$awayTeam.id
-            recipientEmail = match.homeTeam.user?.email.trimmingCharacters(in: .whitespacesAndNewlines)
-        case "away":
-            match.score = Score(home: 0, away: 6)
-            winningTeamID = match.$awayTeam.id
-            losingTeamID = match.$homeTeam.id
-            recipientEmail = match.awayTeam.user?.email.trimmingCharacters(in: .whitespacesAndNewlines)
-        default:
-            throw Abort(.badRequest, reason: "Invalid winning team specified")
-        }
-
-        guard let winningTeam = try await Team.find(winningTeamID, on: req.db) else {
-            throw Abort(.notFound, reason: "Winning team not found")
-        }
-        guard let losingTeam = try await Team.find(losingTeamID, on: req.db) else {
-            throw Abort(.notFound, reason: "Losing team not found")
-        }
-
-        let cancelled = losingTeam.cancelled ?? 0
-        guard cancelled >= 0, cancelled < 3 else {
-            throw Abort(.badRequest, reason: "Schon 3 Absagen gemacht diese Saison.")
-        }
-
-        let newCancelled = cancelled + 1
-        let cancellationKey = FeeKey.cancellationTiers[newCancelled - 1]
-        let invoiceAmount = fees.fee(cancellationKey).euros
-
-        match.status = .cancelled
-        winningTeam.points += 3
-        losingTeam.cancelled = newCancelled
-        let previousBalance = losingTeam.balance
-        let balance = previousBalance ?? 0
-        losingTeam.balance = balance - Double(invoiceAmount)
-
-        let invoice = Rechnung(
-            team: losingTeam.id,
-            teamName: losingTeam.teamName,
-            number: UUID().uuidString,
-            summ: Double(invoiceAmount),
-            topay: nil,
-            previousBalance: previousBalance,
-            kennzeichen: "Spiel Absage: \(newCancelled)"
-        )
-
-        try await match.save(on: req.db)
-        invoice.appliedFee = fees.fee(cancellationKey)
-        try await invoice.save(on: req.db)
-        try await losingTeam.save(on: req.db)
-        try await winningTeam.save(on: req.db)
-
-        do {
-            try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
-        } catch {
-            req.logger.warning("Unable to invalidate stats after team cancellation: \(error)")
-        }
-
-        do {
-            if let recipientEmail, !recipientEmail.isEmpty {
-                let emailController = EmailController()
-                _ = try await emailController.sendCancellationNotification(req: req, recipient: recipientEmail, match: match).get()
-                if let referee = match.referee, let user = referee.user {
-                    _ = try await emailController.informRefereeCancellation(req: req, email: user.email, name: referee.name ?? "Referee", match: match).get()
-                }
-            } else {
-                req.logger.warning("Unable to send cancellation email: winning team owner has no email address")
-            }
-        } catch {
-            req.logger.warning("Unable to send cancellation emails: \(error)")
-        }
-
-        return .ok
+        struct CancellationRequest: Content { let winningTeam: String }
+        let body = try req.content.decode(CancellationRequest.self)
+        let id = try req.parameters.require("id", as: UUID.self)
+        return try await MatchCancellationService.cancel(req: req, matchID: id, winningSide: body.winningTeam)
     }
 
-    // MARK: PATCH /admin/matches/:id/spielabbruch
     func spielabbruch(req: Request) async throws -> HTTPStatus {
         let match = try await requireMatch(req: req, param: "id")
         match.status = .abbgebrochen

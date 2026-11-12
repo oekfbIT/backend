@@ -26,6 +26,20 @@ final class Rechnung: Model, Content, Codable {
     // Internal capability; Fluent does not encode ordinary stored properties.
     var allowsStripeCreation = false
 
+    var refundInvoiceID: UUID {
+        TeamBookingStore.identifier(id!, namespace: "refund")
+    }
+
+    /// Automatic fee invoices may store a positive amount but debit the account.
+    /// Manual entries use their signed amount as the actual account movement.
+    var refundDelta: Double {
+        if appliedFee != nil || kennzeichen.hasPrefix("Spiel Absage:") ||
+            kennzeichen == "Spielverlegung" || kennzeichen == "Overdraft" {
+            return abs(summ)
+        }
+        return -summ
+    }
+
     func requireManualEntry() throws {
         guard paymentSource != "stripe", stripeDeposit == nil else {
             throw Abort(.conflict, reason: "Stripe deposits are immutable and already credited.")

@@ -620,7 +620,7 @@ extension AppController {
         let matchId = try req.parameters.require("matchID", as: UUID.self)
         guard let match = try await Match.find(matchId, on: req.db) else { throw Abort(.notFound) }
         match.status = .first
-        match.firstHalfStartDate = Date.viennaNow
+        match.firstHalfStartDate = Date()
         try await match.save(on: req.db)
         try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
         return .ok
@@ -631,7 +631,7 @@ extension AppController {
         let matchId = try req.parameters.require("matchID", as: UUID.self)
         guard let match = try await Match.find(matchId, on: req.db) else { throw Abort(.notFound) }
         match.status = .halftime
-        match.firstHalfEndDate = Date.viennaNow
+        match.firstHalfEndDate = Date()
         try await match.save(on: req.db)
         try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
         return .ok
@@ -642,7 +642,7 @@ extension AppController {
         let matchId = try req.parameters.require("matchID", as: UUID.self)
         guard let match = try await Match.find(matchId, on: req.db) else { throw Abort(.notFound) }
         match.status = .second
-        match.secondHalfStartDate = Date.viennaNow
+        match.secondHalfStartDate = Date()
         try await match.save(on: req.db)
         try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
         return .ok
@@ -653,7 +653,7 @@ extension AppController {
         let matchId = try req.parameters.require("matchID", as: UUID.self)
         guard let match = try await Match.find(matchId, on: req.db) else { throw Abort(.notFound) }
         match.status = .completed
-        match.secondHalfEndDate = Date.viennaNow
+        match.secondHalfEndDate = Date()
         try await match.save(on: req.db)
         try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
         return .ok
@@ -735,114 +735,12 @@ extension AppController {
 
     // PATCH /app/match/:matchID/teamcancel
     func teamCancelGame(req: Request) async throws -> HTTPStatus {
-        let fees = try await FeeService.forRequest(req)
-        let matchId = try req.parameters.require("matchID", as: UUID.self)
-
-        struct NoShowRequest: Content { let winningTeam: String }
-        let noShowRequest = try req.content.decode(NoShowRequest.self)
-
-        let matchDB = try await Match.query(on: req.db)
-            .with(\.$homeTeam) { $0.with(\.$user) }
-            .with(\.$awayTeam) { $0.with(\.$user) }
-            .with(\.$referee) { $0.with(\.$user) }
-            .filter(\.$id == matchId)
-            .first()
-
-        guard let match = matchDB else { throw Abort(.notFound) }
-
-        let winningTeamId: UUID
-        let losingTeamId: UUID
-        var opponentEmail: String? = nil
-
-        switch noShowRequest.winningTeam.lowercased() {
-        case "home":
-            match.score = Score(home: 6, away: 0)
-            winningTeamId = match.$homeTeam.id
-            losingTeamId = match.$awayTeam.id
-            opponentEmail = match.homeTeam.user?.email.trimmingCharacters(in: .whitespacesAndNewlines)
-        case "away":
-            match.score = Score(home: 0, away: 6)
-            winningTeamId = match.$awayTeam.id
-            losingTeamId = match.$homeTeam.id
-            opponentEmail = match.awayTeam.user?.email.trimmingCharacters(in: .whitespacesAndNewlines)
-        default:
-            throw Abort(.badRequest, reason: "Invalid winning team specified")
-        }
-
-        match.status = .cancelled
-        try await match.save(on: req.db)
-        // Statistics are a cache. A cache outage must not make a completed
-        // cancellation appear to have failed to the team.
-        do {
-            try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
-        } catch {
-            req.logger.warning("Unable to invalidate stats after team cancellation: \(error)")
-        }
-
-        guard let winningTeam = try await Team.find(winningTeamId, on: req.db) else {
-            throw Abort(.notFound, reason: "Winning team not found")
-        }
-        guard let losingTeam = try await Team.find(losingTeamId, on: req.db) else {
-            throw Abort(.notFound, reason: "Losing team not found")
-        }
-
-        winningTeam.points += 3
-
-        let cancelled = losingTeam.cancelled ?? 0
-        guard cancelled >= 0, cancelled < 3 else {
-            throw Abort(.badRequest, reason: "Schon 3 Absagen gemacht diese Saison.")
-        }
-
-        let newCancelled = cancelled + 1
-        losingTeam.cancelled = newCancelled
-
-        let cancellationKey = FeeKey.cancellationTiers[newCancelled - 1]
-        let rechnungAmount = fees.fee(cancellationKey).euros
-
-        let invoiceNumber = UUID().uuidString
-        let balance = losingTeam.balance ?? 0
-
-        let rechnung = Rechnung(
-            team: losingTeam.id,
-            teamName: losingTeam.teamName,
-            number: invoiceNumber,
-            summ: Double(rechnungAmount),
-            topay: nil,
-            previousBalance: losingTeam.balance,
-            kennzeichen: "Spiel Absage: \(newCancelled)"
-        )
-
-        rechnung.appliedFee = fees.fee(cancellationKey)
-        try await rechnung.save(on: req.db)
-        losingTeam.balance = balance - Double(rechnungAmount)
-
-        do {
-            if let mail = opponentEmail, !mail.isEmpty {
-                let emailController = EmailController()
-                _ = try await emailController.sendCancellationNotification(req: req, recipient: mail, match: match).get()
-
-                if let ref = match.referee, let refUser = ref.user {
-                    _ = try await emailController.informRefereeCancellation(
-                        req: req,
-                        email: refUser.email,
-                        name: ref.name ?? "Referee",
-                        match: match
-                    ).get()
-                }
-            } else {
-                req.logger.warning("Unable to send cancellation email: winning team owner has no email address")
-            }
-        } catch {
-            req.logger.warning("Unable to send cancellation emails: \(error)")
-        }
-
-        try await losingTeam.save(on: req.db)
-        try await winningTeam.save(on: req.db)
-
-        return .ok
+        struct CancellationRequest: Content { let winningTeam: String }
+        let body = try req.content.decode(CancellationRequest.self)
+        let id = try req.parameters.require("matchID", as: UUID.self)
+        return try await MatchCancellationService.cancel(req: req, matchID: id, winningSide: body.winningTeam)
     }
 
-    // PATCH /app/match/:matchID/spielabbruch
     func spielabbruch(req: Request) async throws -> HTTPStatus {
         let matchId = try req.parameters.require("matchID", as: UUID.self)
         guard let match = try await Match.find(matchId, on: req.db) else { throw Abort(.notFound) }

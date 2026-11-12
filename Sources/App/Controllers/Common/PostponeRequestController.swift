@@ -7,6 +7,8 @@
 
 import Vapor
 import Fluent
+import FluentMongoDriver
+import MongoKitten
 
 final class PostponeRequestController: RouteCollection {
     let repository: StandardControllerRepository<PostponeRequest>
@@ -170,8 +172,24 @@ final class PostponeRequestController: RouteCollection {
             throw Abort(.forbidden, reason: "The selected teams are not the participants in this match.")
         }
 
+        // Reuse an active request; concurrent retries reserve the same database key.
+        let previous = try await PostponeRequest.query(on: req.db)
+            .filter(\.$match.$id == newRequest.$match.id).all()
+        if let existing = previous.first(where: { $0.status || $0.response == true }) { return existing }
+        guard match.status == .pending else {
+            throw Abort(.conflict, reason: "Dieses Spiel kann nicht verschoben werden.")
+        }
         // Do not trust client-supplied team names, logos, state or identifiers.
-        newRequest.id = nil
+        guard let mongo = req.db as? MongoDatabaseRepresentable else { throw Abort(.serviceUnavailable) }
+        let matchKey = try BSONEncoder().encodePrimitive(match.requireID())!
+        let candidate = UUID()
+        let candidateKey = try BSONEncoder().encodePrimitive(candidate)!
+        _ = try await mongo.raw[Match.schema].findOneAndUpdate(
+            where: ["_id": matchKey, "openPostponementID": Null()],
+            to: ["$set": ["openPostponementID": candidateKey] as Document]).stripeExecute().get()
+        guard let stored = try await mongo.raw[Match.schema].findOne(["_id": matchKey]).get() else { throw Abort(.notFound) }
+        struct Slot: Decodable { let openPostponementID: UUID }
+        newRequest.id = try BSONDecoder().decode(Slot.self, from: stored).openPostponementID
         newRequest.requester = PublicTeamShort(
             id: requester.id,
             sid: requester.sid,
@@ -191,7 +209,11 @@ final class PostponeRequestController: RouteCollection {
         newRequest.status = true
         newRequest.response = nil
         newRequest.responseDate = nil
-        try await newRequest.save(on: req.db)
+        do { try await newRequest.create(on: req.db) }
+        catch {
+            if let existing = try await PostponeRequest.find(newRequest.requireID(), on: req.db) { return existing }
+            throw error
+        }
 
         match.postponerequest = true
         try await match.save(on: req.db)
@@ -296,6 +318,13 @@ final class PostponeRequestController: RouteCollection {
         request.responseDate = Date.viennaNow
         request.status = false
         try await request.update(on: req.db)
+        if let mongo = req.db as? MongoDatabaseRepresentable {
+            let matchKey = try BSONEncoder().encodePrimitive(request.$match.id)!
+            let requestKey = try BSONEncoder().encodePrimitive(id)!
+            _ = try await mongo.raw[Match.schema].stripeUpdate(
+                where: ["_id": matchKey, "openPostponementID": requestKey],
+                to: ["$unset": ["openPostponementID": 1], "$set": ["postponerequest": false]]).get()
+        }
 
         do {
             if let email = try await ownerEmail(for: requester, req: req, action: "Postpone denial") {

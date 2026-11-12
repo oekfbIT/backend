@@ -5,6 +5,120 @@ import MongoKitten
 @testable import App
 
 final class FeeSettingsTests: XCTestCase {
+    func testRefundSignsForFeesAndManualEntries() throws {
+        let invoice = Rechnung(id: UUID(), team: UUID(), teamName: "Refund", number: "TEST",
+            summ: 300, topay: nil, kennzeichen: "Spiel Absage: 1")
+        XCTAssertEqual(invoice.refundDelta, 300)
+        XCTAssertEqual(-300 + invoice.refundDelta, 0)
+        invoice.kennzeichen = "Guthaben Einzahlung"
+        XCTAssertEqual(invoice.refundDelta, -300)
+        invoice.summ = -300
+        XCTAssertEqual(invoice.refundDelta, 300)
+        invoice.summ = 300
+        invoice.kennzeichen = "Overdraft"
+        XCTAssertEqual(invoice.refundDelta, 300)
+        XCTAssertNotEqual(invoice.refundInvoiceID, invoice.id)
+        XCTAssertEqual(invoice.refundInvoiceID, invoice.refundInvoiceID)
+    }
+
+    func testConcurrentCancellationAndRefundBookOnlyOnce() async throws {
+        try await withMongo { app, _ in
+            try await FeeService(database: app.db).seed()
+            func team(_ name: String) -> Team {
+                Team(id: UUID(), sid: name, userId: nil, leagueId: nil, leagueCode: nil, points: 0,
+                    coverimg: "", logo: "", teamName: name, foundationYear: nil, membershipSince: nil,
+                    averageAge: "0", coach: nil, captain: nil, trikot: Trikot(home: "", away: ""), balance: 0,
+                    usremail: "test@example.com", usrpass: nil, usrtel: nil)
+            }
+            let home = team("Home"), away = team("Away")
+            try await home.create(on: app.db)
+            try await away.create(on: app.db)
+            let match = Match(id: UUID(), details: MatchDetails(gameday: 1),
+                homeTeamId: try home.requireID(), awayTeamId: try away.requireID(),
+                homeBlanket: nil, awayBlanket: nil, score: Score(home: 0, away: 0), status: .pending)
+            try await match.create(on: app.db)
+            let matchID = try match.requireID()
+            let admin = User(id: UUID(), userID: "refund-test", type: .admin, firstName: "Test", lastName: "Admin",
+                email: "test@example.com", passwordHash: "hash")
+            func postpone() async throws -> PostponeRequest {
+                let req = Request(application: app, on: app.eventLoopGroup.next())
+                req.auth.login(admin)
+                let body = PostponeRequest(match: matchID,
+                    requester: PublicTeamShort(id: home.id, logo: "", teamName: "Home"),
+                    requestee: PublicTeamShort(id: away.id, logo: "", teamName: "Away"),
+                    status: true, responseDate: nil)
+                try req.content.encode(body)
+                return try await PostponeRequestController(path: "postpone").createNewRequest(req: req)
+            }
+            async let first = postpone()
+            async let second = postpone()
+            let requests = try await (first, second)
+            XCTAssertEqual(requests.0.id, requests.1.id)
+            let requestCount = try await PostponeRequest.query(on: app.db).count()
+            XCTAssertEqual(requestCount, 1)
+            // A denied request can be replaced; a rapid retry still reuses the new one.
+            let deny = Request(application: app, on: app.eventLoopGroup.next())
+            deny.auth.login(admin)
+            deny.parameters.set("id", to: try requests.0.requireID().uuidString)
+            _ = try await PostponeRequestController(path: "postpone").denyRequest(req: deny)
+            let replacement = try await postpone()
+            XCTAssertNotEqual(replacement.id, requests.0.id)
+            let repeated = try await postpone()
+            XCTAssertEqual(replacement.id, repeated.id)
+            func cancel() async throws {
+                let req = Request(application: app, on: app.eventLoopGroup.next())
+                _ = try await MatchCancellationService.cancel(req: req, matchID: matchID, winningSide: "home")
+            }
+            async let a: Void = cancel()
+            async let b: Void = cancel()
+            _ = try await (a, b)
+            try await cancel()
+            let winner = try await Team.find(home.requireID(), on: app.db)
+            let loser = try await Team.find(away.requireID(), on: app.db)
+            XCTAssertEqual(winner?.points, 3)
+            XCTAssertEqual(loser?.cancelled, 1)
+            XCTAssertEqual(loser?.balance, -170)
+            let invoices = try await Rechnung.query(on: app.db).all()
+            XCTAssertEqual(invoices.count, 1)
+            let invoice = try XCTUnwrap(invoices.first)
+            func refund() async throws {
+                let req = Request(application: app, on: app.eventLoopGroup.next())
+                req.parameters.set("id", to: try invoice.requireID().uuidString)
+                _ = try await RechnungsController(path: "finanzen").refund(req: req)
+            }
+            async let c: Void = refund()
+            async let d: Void = refund()
+            _ = try await (c, d)
+            let refunded = try await Team.find(away.requireID(), on: app.db)
+            XCTAssertEqual(refunded?.balance, 0)
+            try await cancel()
+            let afterRetry = try await Rechnung.query(on: app.db).count()
+            XCTAssertEqual(afterRetry, 0, "Cancellation retries must not recreate a refunded invoice")
+            // The newer admin endpoint must use the same refund sign and receipt.
+            let charge = Rechnung(id: UUID(), team: away.id, teamName: away.teamName, number: "LEGACY",
+                summ: 300, topay: nil, kennzeichen: "Spiel Absage: 2")
+            try await charge.create(on: app.db)
+            _ = try await TeamBookingStore(database: app.db).apply(teamID: away.requireID(), key: "test-debit") {
+                ["balance": try TeamBookingStore.balance($0) - 300]
+            }
+            func adminRefund() async throws {
+                let req = Request(application: app, on: app.eventLoopGroup.next())
+                req.parameters.set("id", to: try away.requireID().uuidString)
+                req.parameters.set("rechnungId", to: try charge.requireID().uuidString)
+                _ = try await AdminController(path: "admin").refundRechnung(req: req)
+            }
+            async let e: Void = adminRefund()
+            async let f: Void = adminRefund()
+            _ = try await (e, f)
+            try await adminRefund()
+            let adminRefunded = try await Team.find(away.requireID(), on: app.db)
+            XCTAssertEqual(adminRefunded?.balance, 0)
+            let refunds = try await Rechnung.query(on: app.db).all()
+            XCTAssertEqual(refunds.count, 1)
+            XCTAssertEqual(refunds.first?.summ, 300)
+        }
+    }
+
     func testValidationAndCancellationTiers() throws {
         var amounts = FeeSettings.defaults
         XCTAssertNoThrow(try FeeSettings.validate(amounts))
