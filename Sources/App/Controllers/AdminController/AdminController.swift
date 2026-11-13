@@ -44,6 +44,7 @@ final class AdminController: RouteCollection {
         setupLegalReadRoutes(on: content)
         setupLegalWriteRoutes(on: content)
         setupSponsorRoutes(on: content)
+        setupOfferRoutes(on: content)
         setupAchievementRoutes(on: content)
         setupSearchRoutes(on: admin)
         setupAnalyticsRoutes(on: admin.grouped(PermissionMiddleware(.analyticsRead)))

@@ -49,7 +49,8 @@ let app_migrations: [Migration] = [
     RefereeActiveMigration(),
     AchievementMigration(),
     TeamStripeTopUpMigration(),
-    FeeSettingsMigration()
+    FeeSettingsMigration(),
+    CreateOffers()
 ]
 
 struct UserMigration { }

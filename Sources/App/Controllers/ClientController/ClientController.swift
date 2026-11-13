@@ -40,6 +40,12 @@ final class ClientController: RouteCollection {
         route.get("leaderboard", ":id", "redCard", use: getRedCardLeaderBoardSeason)
         route.get("leaderboard",":id", "yellowCard", use: getYellowCardLeaderBoardSeason)
         route.get("leaderboard",":id", "yellowRedCard", use: getYellowRedCardLeaderBoardSeason)
+        // Explicit public history endpoints; existing routes retain current-season behavior.
+        route.get("leaderboard", ":id", "goal", "alltime", use: getGoalLeaderBoard)
+        route.get("leaderboard", ":id", "yellowCard", "alltime", use: getYellowCardLeaderBoard)
+        route.get("leaderboard", ":id", "redCard", "alltime", use: getRedCardLeaderBoard)
+        route.get("leaderboard", ":id", "yellowRedCard", "alltime", use: getYellowRedCardLeaderBoard)
+
         route.get("blocked", "league", ":code", use: blockedPlayers)
         route.get("livescore",use: getLivescoreShort)
         route.get("team", ":id", "nextmatch", use: getTeamNextmatch)

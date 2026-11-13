@@ -31,6 +31,7 @@ final class AppController: RouteCollection {
         try setupAuthRoutes(on: route)
         setupPublicTeamRegistrationRoutes(on: route)
         setupNewsRoutes(on: route)
+        setupOfferRoutes(on: route)
         setupPublicSponsorSettingsRoute(on: route)
         setupPublicStadiumDetailRoute(on: route)
 
