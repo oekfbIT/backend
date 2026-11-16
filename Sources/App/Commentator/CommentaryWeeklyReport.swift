@@ -39,17 +39,23 @@ extension CommentaryValidationService {
 }
 
 extension CommentaryContextBuilder {
+    static func weeklyResultReady(_ match: Match) -> Bool {
+        switch match.status {
+        case .pending, .first, .halftime, .second: return false
+        case .completed, .submitted, .done, .cancelled, .abbgebrochen: return true
+        }
+    }
+
     static func weeklySummary(data: CommentarySeasonData, gameday: Int, allowPartial: Bool, now: Date) throws -> CommentaryContext {
         guard gameday >= 0, let seasonID = data.season.id else { throw Abort(.badRequest, reason: "Invalid game day.") }
         let scoped = data.matches.filter { $0.$season.id == seasonID }
         let fixtures = scoped.filter { $0.details.gameday == gameday }
         guard !fixtures.isEmpty else { throw Abort(.notFound, reason: "No fixtures exist for this season/game day.") }
-        let reportable = fixtures.filter { $0.status != .pending }
-        let results = ordered(reportable.filter { $0.status == .cancelled || $0.status == .abbgebrochen || resultKnown($0, before: now) })
-        let partial = results.count != reportable.count
+        let results = ordered(fixtures.filter(weeklyResultReady))
+        let partial = results.count != fixtures.count
         guard !partial || allowPartial else { throw Abort(.conflict, reason: "Game day is incomplete. Explicitly allow_partial to create a labelled partial summary.") }
-        guard !results.isEmpty else { throw Abort(.conflict, reason: "No confirmed, reliably dated results are available.") }
-        let through = scoped.filter { $0.details.gameday <= gameday && resultKnown($0, before: now) }
+        guard !results.isEmpty else { throw Abort(.conflict, reason: "No completed matches are available.") }
+        let through = scoped.filter { $0.details.gameday <= gameday && weeklyResultReady($0) && $0.status != .abbgebrochen && TeamStatisticsService.countsAsResult($0) }
         let earlier = through.filter { $0.details.gameday < gameday }
         let after = TeamStatisticsService.table(teams: data.teams, matches: through)
         let before = TeamStatisticsService.table(teams: data.teams, matches: earlier)
@@ -61,9 +67,9 @@ extension CommentaryContextBuilder {
         let sourceIDs = results.compactMap { $0.id?.uuidString }
         add("round", "opening", "Am \(gameday). Spieltag der \(data.league.name) werden \(results.count) Begegnungen der Saison \(data.season.name) zusammengefasst.", [seasonID.uuidString] + sourceIDs)
         let goals = played.reduce(0) { $0 + $1.score.home + $1.score.away }
-        add("totals", "opening", "Die \(played.count) gespielten Partien brachten zusammen \(goals) Tore.\(played.count != results.count ? " Abgesagte und abgebrochene Begegnungen sind in dieser Torzahl nicht enthalten." : "")", sourceIDs)
+        add("totals", "opening", "Die \(played.count) gespielten Partien brachten zusammen \(goals) Tore.\(played.count != results.count ? " Strafverifizierte und abgebrochene Begegnungen sind in dieser Torzahl nicht enthalten." : "")", sourceIDs)
         if partial {
-            add("partial", "opening", "Dieser Zwischenbericht ist noch unvollständig: Für \(reportable.count - results.count) Begegnungen steht ein bestätigtes Ergebnis aus.", fixtures.compactMap { $0.id?.uuidString })
+            add("partial", "opening", "Dieser Zwischenbericht ist noch unvollständig: Für \(fixtures.count - results.count) Begegnungen steht ein bestätigtes Ergebnis aus.", fixtures.compactMap { $0.id?.uuidString })
             required.append("partial")
         }
         let sorted = results.sorted {
@@ -76,9 +82,16 @@ extension CommentaryContextBuilder {
             headings[group] = "\(home) – \(away) \(match.score.home):\(match.score.away)"
             if match.status == .cancelled || match.status == .abbgebrochen {
                 headings[group] = "\(home) – \(away)"
-                let note = match.status == .abbgebrochen
-                    ? "Die Begegnung zwischen \(home) und \(away) wurde abgebrochen. Weitere Informationen zum Spiel und zur Wertung folgen."
-                    : "Die Begegnung zwischen \(home) und \(away) wurde abgesagt oder verschoben."
+                let note: String
+                if match.status == .abbgebrochen {
+                    note = "Die Begegnung zwischen \(home) und \(away) wurde während des Spiels abgebrochen."
+                } else if (match.score.home == 6 && match.score.away == 0) || (match.score.home == 0 && match.score.away == 6) {
+                    let forfeiting = match.score.home == 0 ? home : away
+                    let winner = match.score.home == 6 ? home : away
+                    note = "\(forfeiting) hat die Begegnung gegen \(winner) aufgegeben; das Spiel wurde mit 6:0 für \(winner) strafverifiziert."
+                } else {
+                    note = "Die Begegnung zwischen \(home) und \(away) wurde mit \(match.score.home):\(match.score.away) strafverifiziert."
+                }
                 add("result.\(id)", group, note, [id.uuidString])
                 required.append("result.\(id)")
                 continue

@@ -296,9 +296,15 @@ open round, then the configured current/last round. Number buttons and previous/
 controls select other rounds without discarding unsaved match edits. Existing admin
 styling and match editing remain; wide tables scroll within their card.
 
-The header's weekly-report action uses the existing season/round generator. Completed,
-reliably dated rounds can be generated manually and publish automatically. Incomplete
-rounds explain why generation is unavailable. Existing news opens its current editor;
+The header's weekly-report action uses the existing season/round generator. Rounds
+can be generated manually once no fixtures are pending, in the first half, at halftime,
+or in the second half. Final statuses require no kickoff/end timestamp or six-hour delay.
+Forfeits (`cancelled`) identify the forfeiting side from a 0:6 or 6:0 award; other awarded
+scores do not infer a forfeiting team. Abandoned games are described only as ended during
+play, without speculation about penalties. Neither contributes to played-goal totals;
+awarded results count in standings while abandoned games do not. Historical preview
+cutoffs retain their existing date checks. Reports publish after manual generation.
+Incomplete rounds explain why generation is unavailable. Existing news opens its current editor;
 an existing unpublished/deleted-news article can be published without another AI call.
 Network retries reuse the generation key, and pending jobs are polled until completion.
 

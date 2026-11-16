@@ -113,19 +113,43 @@ final class CommentaryTests: XCTestCase {
         XCTAssertThrowsError(try CommentaryContextBuilder.summary(data: base, gameday: 99, allowPartial: true, now: now))
     }
 
-    func testWeeklyReportSkipsPendingAndExplainsAbandonedGames() throws {
+    func testWeeklyReportUsesFinalStatusWithoutTimestampDelay() throws {
+        let (data, _, now) = fixture()
+        let match = data.matches[1]
+        for status: GameStatus in [.done, .completed, .submitted] {
+            match.status = status
+            for date: Date? in [nil, now.addingTimeInterval(-60), now.addingTimeInterval(3600)] {
+                match.details.date = date
+                match.secondHalfEndDate = nil
+                let report = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now)
+                XCTAssertFalse(report.partial)
+                XCTAssertTrue(report.requiredFactIDs.contains("result.\(match.id!)"))
+            }
+            match.secondHalfEndDate = now.addingTimeInterval(-3600)
+            XCTAssertNoThrow(try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now))
+        }
+        for status: GameStatus in [.pending, .first, .halftime, .second] {
+            match.status = status
+            XCTAssertThrowsError(try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now))
+        }
+    }
+
+    func testWeeklyReportBlocksPendingAndExplainsAbandonedGames() throws {
         let (data, _, now) = fixture()
         let target = data.matches[1]
         target.status = .pending
-        let skipped = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now)
-        XCTAssertFalse(skipped.partial)
+        XCTAssertThrowsError(try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now))
+        let skipped = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: true, now: now)
+        XCTAssertTrue(skipped.partial)
         XCTAssertFalse(skipped.requiredFactIDs.contains("result.\(target.id!)"))
         for status: GameStatus in [.abbgebrochen, .cancelled] {
             target.status = status
             let report = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now)
             XCTAssertFalse(report.partial)
             let fact = try XCTUnwrap(report.facts.first { $0.id == "result.\(target.id!)" })
-            XCTAssertTrue(fact.text.contains(status == .abbgebrochen ? "Weitere Informationen" : "abgesagt oder verschoben"))
+            XCTAssertTrue(fact.text.contains(status == .abbgebrochen ? "während des Spiels abgebrochen" : "strafverifiziert"))
+            XCTAssertFalse(fact.text.contains("Weitere Informationen"))
+            XCTAssertFalse(fact.text.contains("Wertung folgen"))
             XCTAssertFalse(report.sectionHeadings?["match.\(target.id!)"]?.contains(":") == true)
         }
     }
@@ -135,7 +159,13 @@ final class CommentaryTests: XCTestCase {
         data.matches[1].status = .cancelled; data.matches[1].score = .init(home: 6, away: 0)
         let context = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now)
         let fact = try XCTUnwrap(context.facts.first { $0.id == "result.\(data.matches[1].id!)" })
-        XCTAssertTrue(fact.text.contains("abgesagt oder verschoben"))
+        XCTAssertTrue(fact.text.contains("FC Heim hat die Begegnung gegen FC Gast aufgegeben"))
+        XCTAssertTrue(fact.text.contains("6:0 für FC Gast"))
+        data.matches[1].score = .init(home: 0, away: 6)
+        let reverse = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now)
+        let reversedFact = try XCTUnwrap(reverse.facts.first { $0.id == "result.\(data.matches[1].id!)" })
+        XCTAssertTrue(reversedFact.text.contains("FC Gast hat die Begegnung gegen FC Heim aufgegeben"))
+        XCTAssertTrue(reversedFact.text.contains("6:0 für FC Heim"))
         XCTAssertTrue(context.facts.first { $0.id == "totals" }!.text.contains("10 Tore"))
     }
 
