@@ -34,7 +34,10 @@ struct VeoSyncController: RouteCollection {
         var events: [VeoEvent]
         var stats: [String: [Int]]?
         var raw: [String: String]?
+        /// Set when the run was started for a specific match from the admin.
+        var matchId: UUID?
     }
+    struct MatchInfo: Content { let matchId: UUID; let date: Date?; let homeName: String; let awayName: String }
     struct VideoUpdate: Content { var videoUrl: String }
     struct ClipUpsert: Content {
         var veoEventId: String?
@@ -50,6 +53,7 @@ struct VeoSyncController: RouteCollection {
     func boot(routes: RoutesBuilder) throws {
         let sync = routes.grouped("veo-sync").grouped(ServiceKeyMiddleware())
         sync.get("known", use: known)
+        sync.get("match", ":id", use: matchInfo)
         sync.on(.POST, "recordings", body: .collect(maxSize: "10mb"), use: upsertRecording)
         sync.post("recordings", ":slug", "video", use: setVideo)
         sync.post("recordings", ":slug", "clips", use: addClips)
@@ -58,6 +62,17 @@ struct VeoSyncController: RouteCollection {
     func known(req: Request) async throws -> [KnownRecording] {
         try await VeoRecording.query(on: req.db).all()
             .map { KnownRecording(veoSlug: $0.veoSlug, status: $0.status, hasVideo: $0.videoURL != nil) }
+    }
+
+    /// Date and team names of one ÖKFB match, so the worker can find it in the Veo library.
+    func matchInfo(req: Request) async throws -> MatchInfo {
+        let id = try req.parameters.require("id", as: UUID.self)
+        guard let match = try await Match.query(on: req.db).filter(\.$id == id).with(\.$homeTeam).with(\.$awayTeam).first() else {
+            throw Abort(.notFound, reason: "Spiel nicht gefunden.")
+        }
+        return MatchInfo(matchId: id, date: match.details.date,
+                         homeName: match.homeBlanket?.name ?? match.homeTeam.teamName,
+                         awayName: match.awayBlanket?.name ?? match.awayTeam.teamName)
     }
 
     func upsertRecording(req: Request) async throws -> VeoRecordingSummary {
@@ -72,7 +87,7 @@ struct VeoSyncController: RouteCollection {
         recording.stats = body.stats
         recording.raw = body.raw
         recording.events = body.events.sorted { $0.videoSecond < $1.videoSecond }
-        try await Self.assign(recording, to: nil, on: req.db)
+        try await Self.assign(recording, to: body.matchId, on: req.db)
         return VeoRecordingSummary(recording)
     }
 

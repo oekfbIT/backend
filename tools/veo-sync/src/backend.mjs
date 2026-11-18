@@ -13,6 +13,7 @@ async function call(method, endpoint, body) {
 
 export const backend = {
   known: () => call("GET", "known"),
+  matchInfo: (id) => call("GET", `match/${id}`),
   upsertRecording: (payload) => call("POST", "recordings", payload),
   setVideo: (slug, videoUrl) => call("POST", `recordings/${encodeURIComponent(slug)}/video`, { video_url: videoUrl }),
   addClips: (slug, clips) => call("POST", `recordings/${encodeURIComponent(slug)}/clips`, clips),
