@@ -18,6 +18,7 @@ import { backend } from "./backend.mjs";
 const [mode = "sync", ...args] = process.argv.slice(2);
 const only = args.includes("--only") ? args[args.indexOf("--only") + 1] : (mode === "discover" ? args[0] : null);
 const withVideo = !args.includes("--no-video");
+if (args.includes("--types")) config.clipTypes = args[args.indexOf("--types") + 1].split(",").map((t) => t.trim());
 const forcedSlug = args.includes("--slug") ? args[args.indexOf("--slug") + 1] : null;
 let forcedMatchId = null;
 
@@ -150,7 +151,7 @@ async function importRecording(recording, known, info) {
   console.log(`  ${clips.length}/${wanted.length} Clips auf CDN`);
 
   // Remove clips of earlier runs that are no longer wanted (e.g. shots), only after a successful upload.
-  if (clips.length === wanted.length) {
+  if (config.pruneCdn && clips.length === wanted.length) {
     const prefix = `matches/${summary.match_id}/clips/`;
     const keep = new Set(clips.flatMap((c) => [c.video_url, c.thumbnail_url]).filter(Boolean).map((u) => prefix + u.split(prefix)[1]));
     const removed = await pruneFolder(prefix, keep).catch((e) => { console.log(`  Aufräumen fehlgeschlagen: ${e.message}`); return 0; });

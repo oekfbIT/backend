@@ -26,6 +26,8 @@ export const config = {
   clipTypes: (process.env.VEO_CLIP_TYPES || "goal").split(",").map((t) => t.trim()),
   // Full match recording (several GB) – off by default.
   fullVideo: process.env.VEO_SYNC_FULL_VIDEO === "true",
+  // Delete leftover clips of earlier runs from Spaces – off by default.
+  pruneCdn: process.env.VEO_SYNC_PRUNE_CDN === "true",
   spaces: {
     endpoint: process.env.SPACES_ENDPOINT,          // e.g. https://fra1.digitaloceanspaces.com
     region: process.env.SPACES_REGION || "fra1",
