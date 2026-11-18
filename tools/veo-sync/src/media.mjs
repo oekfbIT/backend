@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { S3Client } from "@aws-sdk/client-s3";
+import { S3Client, ListObjectsV2Command, DeleteObjectsCommand } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 import { config } from "./config.mjs";
 
@@ -47,4 +47,21 @@ export async function cutClip(input, { start, end, event }, outDir, name) {
 /** Fails early with a clear message if ffmpeg is not installed (brew install ffmpeg). */
 export async function checkFfmpeg() {
   try { await run("ffmpeg", ["-version"]); } catch { throw new Error("ffmpeg nicht gefunden – bitte 'brew install ffmpeg' ausführen"); }
+}
+
+/** Deletes every object under `prefix` whose key is not in `keep` (removes leftovers of earlier runs). */
+export async function pruneFolder(prefix, keep) {
+  const { bucket } = config.spaces;
+  const client = s3();
+  const stale = [];
+  let token;
+  do {
+    const page = await client.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, ContinuationToken: token }));
+    for (const o of page.Contents || []) if (!keep.has(o.Key)) stale.push({ Key: o.Key });
+    token = page.IsTruncated ? page.NextContinuationToken : undefined;
+  } while (token);
+  for (let i = 0; i < stale.length; i += 1000) {
+    await client.send(new DeleteObjectsCommand({ Bucket: bucket, Delete: { Objects: stale.slice(i, i + 1000), Quiet: true } }));
+  }
+  return stale.length;
 }

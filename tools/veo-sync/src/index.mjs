@@ -3,7 +3,7 @@ import path from "node:path";
 import { config } from "./config.mjs";
 import { openVeo, ensureLoggedIn, listRecordings, captureMatch, downloadRecording } from "./veo.mjs";
 import { findEvents, findStats, normaliseTeams, parseDate, durationSeconds } from "./parse.mjs";
-import { upload, faststart, checkFfmpeg } from "./media.mjs";
+import { upload, faststart, checkFfmpeg, pruneFolder } from "./media.mjs";
 import { parseVeo } from "./veoData.mjs";
 import { buildAnalytics, fetchTracking } from "./analytics.mjs";
 import { downloadFile, cookieHeader } from "./download.mjs";
@@ -148,6 +148,14 @@ async function importRecording(recording, known, info) {
   for (let i = 0; i < wanted.length; i += 3) await Promise.all(wanted.slice(i, i + 3).map((h, k) => uploadClip(h, i + k)));
   if (clips.length) await backend.addClips(recording.slug, clips);
   console.log(`  ${clips.length}/${wanted.length} Clips auf CDN`);
+
+  // Remove clips of earlier runs that are no longer wanted (e.g. shots), only after a successful upload.
+  if (clips.length === wanted.length) {
+    const prefix = `matches/${summary.match_id}/clips/`;
+    const keep = new Set(clips.flatMap((c) => [c.video_url, c.thumbnail_url]).filter(Boolean).map((u) => prefix + u.split(prefix)[1]));
+    const removed = await pruneFolder(prefix, keep).catch((e) => { console.log(`  Aufräumen fehlgeschlagen: ${e.message}`); return 0; });
+    if (removed) console.log(`  ${removed} alte Dateien aus dem CDN entfernt`);
+  }
 
   if (!config.fullVideo) { console.log("  Ganzes Spiel übersprungen (VEO_SYNC_FULL_VIDEO=true zum Aktivieren)"); return; }
   // 3) Full match (large): direct link with retries + resume; Download button only as fallback.
