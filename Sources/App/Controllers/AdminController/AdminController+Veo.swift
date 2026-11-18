@@ -73,13 +73,14 @@ extension AdminController {
         }
         let body = (try? req.content.decode(StartVeoSyncRequest.self)) ?? StartVeoSyncRequest()
         // Accept a full link (…/matches/<slug>/) or the bare slug.
-        let slug = body.veoUrl?.trimmingCharacters(in: .whitespacesAndNewlines)
-            .flatMap { text -> String? in
-                if let range = text.range(of: #"/matches/([^/?#]+)"#, options: .regularExpression) {
-                    return String(text[range].dropFirst("/matches/".count))
-                }
-                return text.isEmpty ? nil : text
+        var slug: String? = nil
+        if let text = body.veoUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
+            if let range = text.range(of: #"/matches/[^/?#]+"#, options: .regularExpression) {
+                slug = String(text[range].dropFirst("/matches/".count))
+            } else {
+                slug = text
             }
+        }
         let job = VeoSyncJob(matchID: matchID, veoSlug: slug, withVideo: body.withVideo ?? true)
         try await job.save(on: req.db)
         do {
