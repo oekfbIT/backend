@@ -94,6 +94,19 @@ export function parseVeo(captured, score) {
     }
   }
 
+  // No stats block loaded → count the basic ones from the events (same keys, [home, away], per half).
+  if (!Object.keys(stats).length && rawEvents.length) {
+    const count = { goal: "FootballGoal", shots: "FootballShot", corner: "FootballCornerKick", free_kick: "FootballFreeKick",
+                    foul: "FootballFoul", throw_in: "FootballThrowIn", goal_kick: "FootballGoalKick", save: "save" };
+    for (const [key, type] of Object.entries(count)) {
+      for (const suffix of ["", "_h1", "_h2"]) {
+        const list = rawEvents.filter((e) => e.eventType === type && (!suffix || e.periodId === Number(suffix.slice(2))));
+        stats[key + suffix] = [list.filter((e) => mapping[e.team] === "home").length, list.filter((e) => mapping[e.team] === "away").length];
+      }
+    }
+    for (const suffix of ["", "_h1", "_h2"]) stats["attempts" + suffix] = [0, 1].map((i) => stats["goal" + suffix][i] + stats["shots" + suffix][i]);
+  }
+
   return {
     matchId: match?.id ?? null,
     sides: mapping,

@@ -126,8 +126,8 @@ async function importRecordingInner(recording, known, info) {
     analytics: analytics ?? undefined,
     veo_slug: recording.slug,
     title: data.title || recording.title,
-    recorded_at: data.recordedAt || parseDate(recording.dateText),
-    duration_seconds: data.durationSeconds ?? durationSeconds(recording.durationText),
+    recorded_at: isoDate(data.recordedAt || recording.recordedAt || parseDate(recording.dateText)),
+    duration_seconds: data.durationSeconds ?? recording.durationSeconds ?? durationSeconds(recording.durationText),
     events: data.events,
     match_id: forcedMatchId ?? undefined,
     stats: data.stats,
@@ -200,11 +200,18 @@ function overlap(a, b) {
 function bestCandidate(library, info) {
   const target = info.date ? new Date(info.date) : null;
   const scored = library.map((r) => {
-    const d = parseDate(r.dateText);
+    const d = r.recordedAt || parseDate(r.dateText);
     const days = target && d ? Math.abs(new Date(d) - target) / 86400000 : 99;
     const score = overlap(r.title, info.home_name) + overlap(r.title, info.away_name) + (days <= 1.5 ? 1 : days <= 3 ? 0.3 : 0);
     return { r, score, days };
   }).sort((a, b) => b.score - a.score);
   for (const c of scored.slice(0, 5)) console.log(`  Kandidat ${c.score.toFixed(2)} | ${c.r.title} | ${c.r.dateText ?? "?"}`);
   return scored[0] && scored[0].score >= 1.2 ? scored[0].r : null;
+}
+
+/** ISO-8601 without fractional seconds (what the backend's date decoder accepts), or null. */
+function isoDate(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString().replace(/\.\d{3}Z$/, "Z");
 }

@@ -1,3 +1,4 @@
+import { veoGet } from "./veo.mjs";
 /**
  * Veo "Analytics" panel → one object stored with the recording (all sides oriented to home/away):
  *   shots       shot map: every shot/goal with pitch position (x 0..1 along the pitch as filmed, y 0..1 across)
@@ -93,9 +94,9 @@ export async function fetchTracking(veo, matchId, periods, captured) {
     await Promise.all(starts.slice(i, i + 4).map(async (start) => {
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
-          const r = await veo.context.request.get(`https://app.veo.co/api/mes/v2/${matchId}/player-tracking?start=${start}`, { timeout: 30000 });
-          if (!r.ok()) throw new Error(`HTTP ${r.status()}`);
-          Object.assign(frames, await r.json()); ok++; return;
+          const r = await veoGet(veo, `https://app.veo.co/api/mes/v2/${matchId}/player-tracking?start=${start}`, 1);
+          if (!r?.body) throw new Error(`HTTP ${r?.status}`);
+          Object.assign(frames, r.body); ok++; return;
         } catch { await new Promise((res) => setTimeout(res, 1500 * attempt)); }
       }
       failed++;

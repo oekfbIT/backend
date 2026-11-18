@@ -13,12 +13,21 @@ export async function openVeo() {
   const context = await browser.newContext({ acceptDownloads: true, viewport: { width: 1600, height: 1000 }, ...(hasState ? { storageState: config.paths.auth } : {}) });
   const page = await context.newPage();
   const captured = [];
+  const auth = { headers: null };
+  page.on("request", (request) => {
+    const url = request.url();
+    if (/^https:\/\/app\.veo\.co\/api\//.test(url) && request.method() === "GET") {
+      const h = { ...request.headers() };
+      for (const k of ["host", "content-length", "cookie", "accept-encoding", ":authority", ":method", ":path", ":scheme"]) delete h[k];
+      auth.headers = h;
+    }
+  });
   page.on("response", async (response) => {
     const type = response.headers()["content-type"] || "";
     if (!type.includes("application/json")) return;
     try { captured.push({ url: response.url(), status: response.status(), body: await response.json() }); } catch { /* ignore */ }
   });
-  return { browser, context, page, captured };
+  return { browser, context, page, captured, auth };
 }
 
 /**
@@ -32,6 +41,55 @@ export async function open(page, url, settleMs = 6000) {
 
 async function settle(page, ms) {
   await page.waitForLoadState("networkidle", { timeout: ms }).catch(() => {});
+}
+
+/** GET a Veo URL the way the web app does (same headers + cookies). Returns { status, body } or null. */
+export async function veoGet(veo, url, attempts = 3) {
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      const r = await veo.context.request.get(url, { headers: veo.auth.headers || {}, timeout: 30000 });
+      if (r.ok()) return { url, status: r.status(), body: await r.json() };
+      if (r.status() === 404) return { url, status: 404, body: null };
+      if (i === attempts) return { url, status: r.status(), body: null };
+    } catch (e) {
+      if (i === attempts) return { url, status: 0, body: null, error: e.message };
+    }
+    await new Promise((res) => setTimeout(res, 1500 * i));
+  }
+  return null;
+}
+
+/**
+ * Makes sure every response the parser needs is present. The page loads them lazily (slow servers often
+ * miss some), so anything missing is fetched directly from Veo's API with the app's own headers.
+ */
+export async function ensureMatchData(veo, slug, captured) {
+  const has = (re) => captured.some((c) => re.test(c.url) && c.status < 300 && c.body);
+  const add = async (url, label) => {
+    const res = await veoGet(veo, url);
+    if (res?.body) { captured.push(res); return true; }
+    console.log(`  ${label}: nicht geladen (HTTP ${res?.status ?? "?"})`);
+    return false;
+  };
+  const base = `https://app.veo.co/api/app/matches/${slug}`;
+  if (!has(/\/api\/app\/matches\/[^/]+\/$/)) await add(`${base}/`, "Spieldaten");
+  const match = captured.find((c) => /\/api\/app\/matches\/[^/]+\/$/.test(c.url) && c.body?.slug === slug)?.body
+    || captured.find((c) => /\/api\/app\/matches\/[^/]+\/$/.test(c.url) && c.body?.id)?.body;
+  const id = match?.id;
+  if (!has(/\/periods\/$/)) await add(`${base}/periods/`, "Halbzeiten");
+  if (!has(/\/videos\/$/)) await add(`${base}/videos/`, "Videos");
+  if (!has(/\/highlights\//)) await add(`${base}/highlights/?include_ai=true`, "Clips");
+  if (id && !has(/\/match-events/)) await add(`https://app.veo.co/api/mes/v2/${id}/match-events?aggregatedDuels=true`, "Ereignisse");
+  if (id && !has(/\/physical-metrics/)) await add(`https://app.veo.co/api/mes/v2/${id}/physical-metrics`, "Laufdaten");
+  if (id && !has(/\/match-details/)) {
+    const periods = captured.find((c) => /\/periods\/$/.test(c.url) && Array.isArray(c.body))?.body || [];
+    const host = captured.map((c) => c.url.match(/^(https:\/\/[^/]+cloudfront\.net)\/recordings\//)?.[1]).find(Boolean) || "https://dt3kfuz4eo879.cloudfront.net";
+    if (periods.length) {
+      const filters = periods.map((p) => `filters=${p.timeframe[0]}%2C${p.timeframe[1]}`).join("&");
+      await add(`${host}/recordings/${id}/match-details?${filters}`, "Pässe/Ballbesitz");
+    }
+  }
+  return captured;
 }
 
 export async function ensureLoggedIn({ page, context }) {
@@ -48,8 +106,19 @@ export async function ensureLoggedIn({ page, context }) {
 }
 
 /** All recordings of the club library: slug, title, date text, duration text. Scrolls until all are loaded. */
-export async function listRecordings({ page }) {
+export async function listRecordings(veo) {
+  const { page } = veo;
   await open(page, config.clubUrl);
+  // Fast path: Veo's own match list API (needs the headers seen while the library page loaded).
+  const club = config.clubUrl.match(/\/clubs\/([^/]+)/)?.[1];
+  if (club) {
+    const res = await veoGet(veo, `https://app.veo.co/api/app/matches/?ordering=-created&club=${club}&page_size=200`);
+    const list = Array.isArray(res?.body) ? res.body : res?.body?.results;
+    if (list?.length) {
+      return list.filter((m) => m.slug).map((m) => ({ slug: m.slug, title: m.title || m.slug, recordedAt: m.start || null, durationSeconds: m.duration ?? null, dateText: null, durationText: null }));
+    }
+    console.log(`  Bibliothek über API nicht lesbar (HTTP ${res?.status ?? "?"}) – lese die Seite`);
+  }
   let previous = -1;
   for (let i = 0; i < 60; i++) {
     const count = await page.locator('a[href*="/matches/"]').count();
