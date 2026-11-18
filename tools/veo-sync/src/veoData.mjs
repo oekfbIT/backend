@@ -75,7 +75,27 @@ export function parseVeo(captured, score) {
     })
     .sort((a, b) => a.start_second - b.start_second);
 
+  // Team stats ("Stats" panel): analysis/stats has one block per side (own/opponent) for this match.
+  // Stored as { key: [home, away] } using the same side mapping as the events. Includes per-half values.
+  const stats = {};
+  const assocToSide = { own: mapping.Own, opponent: mapping.Opponent };
+  const blocks = captured.filter((c) => /\/analysis\/stats\//.test(c.url) && c.status < 300)
+    .flatMap((c) => c.body?.items || []).filter((it) => it.match_id === match?.id && assocToSide[it.team_association]);
+  const seen = new Set();
+  for (const block of blocks) {
+    if (seen.has(block.team_association)) continue; // the panel loads the same block several times
+    seen.add(block.team_association);
+    const idx = assocToSide[block.team_association] === "home" ? 0 : 1;
+    for (const stat of block.stats || []) {
+      const key = String(stat.type).replace(/^football_/, "").replace(/_total$/, "");
+      const put = (k, v) => { stats[k] = stats[k] || [0, 0]; stats[k][idx] = Math.round(Number(v) || 0); };
+      put(key, stat.value);
+      for (const p of stat.periods || []) put(`${key}_h${p.period}`, p.value);
+    }
+  }
+
   return {
+    stats,
     title: match?.title, recordedAt: match?.start ?? null, durationSeconds: match?.duration ?? null,
     periods, videoUrl: standard?.url ?? null, reelUrl: match?.reel_url ?? null,
     events, highlights, orientationNote,

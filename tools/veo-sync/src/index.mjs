@@ -87,6 +87,7 @@ async function importRecording(recording, known, info) {
   const count = (t) => data.events.filter((e) => e.type === t).length;
   console.log(`  Veo: ${count("goal")} Tore, ${count("shot")} Schüsse, ${data.events.length} Ereignisse, ${data.highlights.length} Veo-Clips`);
   console.log(`  ${data.orientationNote}`);
+  if (data.stats.goal) console.log(`  Statistik (Heim:Gast): Tore ${data.stats.goal.join(":")}, Schüsse ${data.stats.attempts?.join(":")}, Ecken ${data.stats.corner?.join(":")}, Ballbesitz ${data.stats.possession_percentage?.join(":")} %`);
   console.log(`  Video-Link: ${data.videoUrl ? "gefunden" : "FEHLT"}`);
 
   const summary = await backend.upsertRecording({
@@ -96,7 +97,7 @@ async function importRecording(recording, known, info) {
     duration_seconds: data.durationSeconds ?? durationSeconds(recording.durationText),
     events: data.events,
     match_id: forcedMatchId ?? undefined,
-    stats: findStats(captured),
+    stats: data.stats,
     raw: { periods: JSON.stringify(data.periods), video_url: data.videoUrl ?? "", reel_url: data.reelUrl ?? "", orientation: data.orientationNote },
   });
   console.log(`  Status ${summary.status}${summary.review_notes?.length ? ` – ${summary.review_notes.join("; ")}` : ""}`);
