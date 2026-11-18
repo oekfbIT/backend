@@ -105,6 +105,7 @@ export async function captureMatch(veo, slug, debugDir) {
     const button = page.locator(`[data-veo-sync-rail="${i}"]`);
     const label = (await button.getAttribute("aria-label").catch(() => null)) || (await button.getAttribute("title").catch(() => null)) || `rail-${i}`;
     if (/help|hilfe|\+|add|new|lightning/i.test(label)) continue;
+    await page.keyboard.press("Escape").catch(() => {});
     await button.click({ timeout: 5000 }).catch(() => {});
     await settle(page, 4000);
     // Lists are virtualised: scroll the open panel to the bottom so every item loads.
@@ -134,7 +135,7 @@ export async function downloadRecording({ page }, slug) {
   await fs.mkdir(config.paths.downloads, { recursive: true });
   await open(page, `https://app.veo.co/matches/${slug}/`, 8000);
   const [download] = await Promise.all([
-    page.waitForEvent("download", { timeout: 15 * 60 * 1000 }),
+    page.waitForEvent("download", { timeout: 2 * 60 * 1000 }),
     (async () => {
       await page.getByRole("button", { name: /download/i }).first().click();
       // If a dialog with options opens, choose the full recording (follow-cam) and confirm.
@@ -144,7 +145,9 @@ export async function downloadRecording({ page }, slug) {
       if (await confirm.count() > 1) await confirm.last().click().catch(() => {});
     })(),
   ]);
+  console.log(`  Download gestartet: ${download.suggestedFilename()}`);
   const file = path.join(config.paths.downloads, `${slug}.mp4`);
   await download.saveAs(file);
+  console.log("  Download fertig");
   return file;
 }

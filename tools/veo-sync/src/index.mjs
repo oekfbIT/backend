@@ -3,7 +3,7 @@ import path from "node:path";
 import { config } from "./config.mjs";
 import { openVeo, ensureLoggedIn, listRecordings, captureMatch, downloadRecording } from "./veo.mjs";
 import { findEvents, findStats, normaliseTeams, parseDate, durationSeconds } from "./parse.mjs";
-import { upload, faststart, cutClip } from "./media.mjs";
+import { upload, faststart, cutClip, checkFfmpeg } from "./media.mjs";
 import { backend } from "./backend.mjs";
 
 /**
@@ -18,6 +18,11 @@ const withVideo = !args.includes("--no-video");
 const forcedSlug = args.includes("--slug") ? args[args.indexOf("--slug") + 1] : null;
 let forcedMatchId = null;
 
+// Never hang forever: stop the whole run after 60 minutes (a full download + clips takes far less).
+setTimeout(() => { console.error("✗ Abbruch nach 60 Minuten (Zeitlimit)"); process.exit(2); }, 60 * 60 * 1000).unref();
+process.on("unhandledRejection", (e) => { console.error(`✗ ${e?.message ?? e}`); process.exit(1); });
+
+if (withVideo && mode !== "discover") await checkFfmpeg();
 const veo = await openVeo();
 try {
   await ensureLoggedIn(veo);
@@ -91,11 +96,13 @@ async function importRecording(recording, known) {
   console.log(`  ${events.length} events, status ${summary.status}${summary.review_notes ? ` – ${summary.review_notes.join("; ")}` : ""}`);
   if (!withVideo || !summary.match_id) return;
 
+  console.log(withVideo ? "  Schritt 2: Video herunterladen…" : "  Ohne Video (Häkchen aus)");
   // 2) Full recording → Spaces CDN.
   let videoFile;
   if (!known?.has_video) {
     videoFile = await faststart(await downloadRecording(veo, recording.slug));
     const url = await upload(videoFile, `matches/${summary.match_id}/recording.mp4`, "video/mp4");
+    console.log("  Video auf CDN hochgeladen");
     await backend.setVideo(recording.slug, url);
     console.log(`  video → ${url}`);
   } else {

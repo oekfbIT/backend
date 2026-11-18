@@ -43,3 +43,8 @@ export async function cutClip(input, { start, end, event }, outDir, name) {
   await run("ffmpeg", ["-y", "-ss", String(event), "-i", input, "-frames:v", "1", "-q:v", "3", thumb], { maxBuffer: 1 << 26 });
   return { clip, thumb };
 }
+
+/** Fails early with a clear message if ffmpeg is not installed (brew install ffmpeg). */
+export async function checkFfmpeg() {
+  try { await run("ffmpeg", ["-version"]); } catch { throw new Error("ffmpeg nicht gefunden – bitte 'brew install ffmpeg' ausführen"); }
+}
