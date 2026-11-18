@@ -37,7 +37,7 @@ struct VeoSyncController: RouteCollection {
         /// Set when the run was started for a specific match from the admin.
         var matchId: UUID?
     }
-    struct MatchInfo: Content { let matchId: UUID; let date: Date?; let homeName: String; let awayName: String }
+    struct MatchInfo: Content { let matchId: UUID; let date: Date?; let homeName: String; let awayName: String; let score: Score }
     struct VideoUpdate: Content { var videoUrl: String }
     struct ClipUpsert: Content {
         var veoEventId: String?
@@ -72,7 +72,8 @@ struct VeoSyncController: RouteCollection {
         }
         return MatchInfo(matchId: id, date: match.details.date,
                          homeName: match.homeBlanket?.name ?? match.homeTeam.teamName,
-                         awayName: match.awayBlanket?.name ?? match.awayTeam.teamName)
+                         awayName: match.awayBlanket?.name ?? match.awayTeam.teamName,
+                         score: match.score)
     }
 
     func upsertRecording(req: Request) async throws -> VeoRecordingSummary {

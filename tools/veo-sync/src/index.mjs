@@ -3,7 +3,9 @@ import path from "node:path";
 import { config } from "./config.mjs";
 import { openVeo, ensureLoggedIn, listRecordings, captureMatch, downloadRecording } from "./veo.mjs";
 import { findEvents, findStats, normaliseTeams, parseDate, durationSeconds } from "./parse.mjs";
-import { upload, faststart, cutClip, checkFfmpeg } from "./media.mjs";
+import { upload, faststart, checkFfmpeg } from "./media.mjs";
+import { parseVeo } from "./veoData.mjs";
+import { downloadFile, cookieHeader } from "./download.mjs";
 import { backend } from "./backend.mjs";
 
 /**
@@ -22,7 +24,8 @@ let forcedMatchId = null;
 setTimeout(() => { console.error("✗ Abbruch nach 60 Minuten (Zeitlimit)"); process.exit(2); }, 60 * 60 * 1000).unref();
 process.on("unhandledRejection", (e) => { console.error(`✗ ${e?.message ?? e}`); process.exit(1); });
 
-if (withVideo && mode !== "discover") await checkFfmpeg();
+// ffmpeg is optional now (Veo delivers clips ready-made); only used to optimise the full video for streaming.
+const hasFfmpeg = await checkFfmpeg().then(() => true, () => false);
 const veo = await openVeo();
 try {
   await ensureLoggedIn(veo);
@@ -49,7 +52,7 @@ try {
     let pick = forcedSlug ? (library.find((r) => r.slug === forcedSlug) ?? { slug: forcedSlug, title: forcedSlug }) : bestCandidate(library, info);
     if (!pick) throw new Error("Keine passende Veo-Aufnahme gefunden – bitte Veo-Link einfügen.");
     console.log(`Gewählt: ${pick.title} (${pick.slug})`);
-    await importRecording(pick, (await backend.known()).find((k) => k.veo_slug === pick.slug));
+    await importRecording(pick, (await backend.known()).find((k) => k.veo_slug === pick.slug), info);
   } else {
     const library = await listRecordings(veo);
     const known = new Map((await backend.known()).map((k) => [k.veo_slug, k]));
@@ -70,60 +73,74 @@ try {
   await veo.browser.close();
 }
 
-async function importRecording(recording, known) {
+async function importRecording(recording, known, info) {
   console.log(`→ ${recording.slug} (${recording.title})`);
 
-  // 1) Data from all tabs.
-  // Keep every capture on disk so the parsers can be written against Veo's real data.
+  // 1) Read every panel; keep the raw data on disk for debugging.
   const dir = path.join(config.paths.captures, recording.slug);
   await fs.mkdir(dir, { recursive: true });
   const { captured, panels } = await captureMatch(veo, recording.slug, dir);
   for (const [i, entry] of captured.entries()) await fs.writeFile(path.join(dir, `${String(i).padStart(3, "0")}.json`), JSON.stringify(entry, null, 2));
   await fs.writeFile(path.join(dir, "panels.json"), JSON.stringify(panels, null, 2));
-  console.log(`  Rohdaten gespeichert: tools/veo-sync/captures/${recording.slug}/`);
-  const events = normaliseTeams(findEvents(captured));
+
+  const data = parseVeo(captured, info?.score);
+  const count = (t) => data.events.filter((e) => e.type === t).length;
+  console.log(`  Veo: ${count("goal")} Tore, ${count("shot")} Schüsse, ${data.events.length} Ereignisse, ${data.highlights.length} Veo-Clips`);
+  console.log(`  ${data.orientationNote}`);
+  console.log(`  Video-Link: ${data.videoUrl ? "gefunden" : "FEHLT"}`);
+
   const summary = await backend.upsertRecording({
     veo_slug: recording.slug,
-    title: recording.title,
-    recorded_at: parseDate(recording.dateText),
-    duration_seconds: durationSeconds(recording.durationText),
-    events,
+    title: data.title || recording.title,
+    recorded_at: data.recordedAt || parseDate(recording.dateText),
+    duration_seconds: data.durationSeconds ?? durationSeconds(recording.durationText),
+    events: data.events,
     match_id: forcedMatchId ?? undefined,
     stats: findStats(captured),
-    // Keep the raw responses (truncated) for debugging and future parsers.
-    raw: Object.fromEntries(captured.slice(0, 40).map((c, i) => [String(i), JSON.stringify(c).slice(0, 20000)])),
+    raw: { periods: JSON.stringify(data.periods), video_url: data.videoUrl ?? "", reel_url: data.reelUrl ?? "", orientation: data.orientationNote },
   });
-  console.log(`  ${events.length} events, status ${summary.status}${summary.review_notes ? ` – ${summary.review_notes.join("; ")}` : ""}`);
-  if (!withVideo || !summary.match_id) return;
+  console.log(`  Status ${summary.status}${summary.review_notes?.length ? ` – ${summary.review_notes.join("; ")}` : ""}`);
+  if (!withVideo) { console.log("  Ohne Video (Häkchen aus)"); return; }
+  if (!summary.match_id) { console.log("  Kein Spiel zugeordnet – Video übersprungen"); return; }
 
-  console.log(withVideo ? "  Schritt 2: Video herunterladen…" : "  Ohne Video (Häkchen aus)");
-  // 2) Full recording → Spaces CDN.
-  let videoFile;
-  if (!known?.has_video) {
-    videoFile = await faststart(await downloadRecording(veo, recording.slug));
-    const url = await upload(videoFile, `matches/${summary.match_id}/recording.mp4`, "video/mp4");
-    console.log("  Video auf CDN hochgeladen");
-    await backend.setVideo(recording.slug, url);
-    console.log(`  video → ${url}`);
-  } else {
-    videoFile = path.join(config.paths.downloads, `${recording.slug}.web.mp4`);
-    if (!(await fs.access(videoFile).then(() => true, () => false))) return; // clips need the local file
-  }
+  const cookies = await cookieHeader(veo.context);
+  const work = path.join(config.paths.downloads, recording.slug);
+  await fs.mkdir(work, { recursive: true });
 
-  // 3) Highlights cut from the full recording (10 s before, 6 s after), uploaded with thumbnails.
+  // 2) Veo's highlight clips first (small, fast): download → CDN.
   const clips = [];
-  for (const event of events.filter((e) => config.clipTypes.includes(e.type))) {
-    const start = Math.max(0, event.video_second - config.clipBefore), end = event.video_second + config.clipAfter;
-    const name = `${event.type}-${Math.round(event.video_second)}`;
-    const files = await cutClip(videoFile, { start, end, event: event.video_second }, path.join(config.paths.downloads, recording.slug), name);
-    clips.push({
-      veo_event_id: event.veo_id, type: event.type, event_second: event.video_second, start_second: start, end_second: end,
-      video_url: await upload(files.clip, `matches/${summary.match_id}/clips/${name}.mp4`, "video/mp4"),
-      thumbnail_url: await upload(files.thumb, `matches/${summary.match_id}/clips/${name}.jpg`, "image/jpeg"),
-    });
+  for (const [i, h] of data.highlights.entries()) {
+    const name = `${h.type}-${Math.round(h.event_second)}`;
+    try {
+      const file = await downloadFile(h.video_url, path.join(work, `${name}.mp4`), { cookies, label: `Clip ${i + 1}/${data.highlights.length}` });
+      const videoUrl = await upload(file, `matches/${summary.match_id}/clips/${name}.mp4`, "video/mp4");
+      let thumbnailUrl = null;
+      if (h.thumbnail_url) {
+        const thumb = await downloadFile(h.thumbnail_url, path.join(work, `${name}.jpg`), { cookies, attempts: 3, label: "Vorschaubild" }).catch(() => null);
+        if (thumb) thumbnailUrl = await upload(thumb, `matches/${summary.match_id}/clips/${name}.jpg`, "image/jpeg");
+      }
+      clips.push({ veo_event_id: h.veo_event_id, type: h.type, event_second: h.event_second, start_second: h.start_second,
+                   end_second: h.end_second, video_url: videoUrl, thumbnail_url: thumbnailUrl });
+    } catch (error) {
+      console.log(`  ✗ Clip ${name} übersprungen: ${error.message}`);
+    }
   }
   if (clips.length) await backend.addClips(recording.slug, clips);
-  console.log(`  ${clips.length} clips uploaded`);
+  console.log(`  ${clips.length}/${data.highlights.length} Clips auf CDN`);
+
+  // 3) Full match (large): direct link with retries + resume; Download button only as fallback.
+  if (known?.has_video) { console.log("  Ganzes Spiel ist schon auf dem CDN"); return; }
+  let videoFile;
+  if (data.videoUrl) {
+    videoFile = await downloadFile(data.videoUrl, path.join(work, "recording.mp4"), { cookies, label: "Ganzes Spiel" });
+  } else {
+    console.log("  Kein Direktlink – versuche Download-Button");
+    videoFile = await downloadRecording(veo, recording.slug);
+  }
+  if (hasFfmpeg) videoFile = await faststart(videoFile).catch(() => videoFile);
+  const url = await upload(videoFile, `matches/${summary.match_id}/recording.mp4`, "video/mp4");
+  await backend.setVideo(recording.slug, url);
+  console.log("  Ganzes Spiel auf CDN hochgeladen");
 }
 
 function norm(s) { return (s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim(); }
