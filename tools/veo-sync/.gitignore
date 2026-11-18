@@ -2,3 +2,4 @@ node_modules/
 captures/
 downloads/
 .auth/
+worker.env

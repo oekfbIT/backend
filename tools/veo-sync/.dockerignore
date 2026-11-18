@@ -3,3 +3,4 @@ captures
 downloads
 .auth
 *.log
+worker.env

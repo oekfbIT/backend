@@ -5,3 +5,5 @@ tools/veo-sync/node_modules/
 tools/veo-sync/captures/
 tools/veo-sync/downloads/
 tools/veo-sync/.auth/
+dgocean-worker.env
+dgocean-api.env

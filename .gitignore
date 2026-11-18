@@ -72,3 +72,5 @@ coverage
 # Swift Package Manager/Xcode local workspace state
 .swiftpm/xcode/package.xcworkspace/xcuserdata/
 *.xcuserstate
+dgocean-worker.env
+dgocean-api.env
