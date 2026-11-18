@@ -6,6 +6,7 @@ ENV NODE_ENV=production \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     VEO_SYNC_HEADLESS=true \
     VEO_SYNC_CLEANUP=true \
+    VEO_SYNC_PANELS=false \
     TZ=Europe/Vienna
 
 WORKDIR /app

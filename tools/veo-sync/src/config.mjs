@@ -19,6 +19,12 @@ export const config = {
   backendUrl: (process.env.VEO_SYNC_BACKEND_URL || "http://localhost:8080").replace(/\/+$/, ""),
   serviceKey: () => need("VEO_SYNC_SERVICE_KEY"),
   headless: process.env.VEO_SYNC_HEADLESS !== "false",
+  // Click through Veo's side panels (slow on small servers; data is fetched directly anyway). Off in Docker.
+  panels: process.env.VEO_SYNC_PANELS !== "false",
+  // Screenshots of each panel into captures/ (debugging only).
+  screenshots: process.env.VEO_SYNC_SCREENSHOTS === "true",
+  // Max. seconds for clicking through the panels.
+  panelBudget: Number(process.env.VEO_SYNC_PANEL_SECONDS || 180),
   maxPerRun: Number(process.env.VEO_SYNC_MAX_PER_RUN || 5),
   clipBefore: Number(process.env.VEO_CLIP_SECONDS_BEFORE || 10),
   clipAfter: Number(process.env.VEO_CLIP_SECONDS_AFTER || 6),

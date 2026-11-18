@@ -11,6 +11,14 @@ export async function openVeo() {
   const browser = await chromium.launch({ headless: config.headless });
   const hasState = await fs.access(config.paths.auth).then(() => true, () => false);
   const context = await browser.newContext({ acceptDownloads: true, viewport: { width: 1600, height: 1000 }, ...(hasState ? { storageState: config.paths.auth } : {}) });
+  // The worker only needs Veo's JSON: don't load video, images or fonts (huge CPU saving on small servers).
+  await context.route("**/*", (route) => {
+    const type = route.request().resourceType();
+    if (type === "media" || type === "image" || type === "font") return route.abort();
+    const url = route.request().url();
+    if (/\.(mp4|m3u8|ts|m4s|webm)(\?|$)/.test(url)) return route.abort();
+    return route.continue();
+  });
   const page = await context.newPage();
   const captured = [];
   const auth = { headers: null };
@@ -156,7 +164,14 @@ export async function captureMatch(veo, slug, debugDir) {
   veo.captured.length = 0;
   await open(page, `https://app.veo.co/matches/${slug}/`, 60000);
   const panels = [];
-  if (debugDir) await page.screenshot({ path: `${debugDir}/panel-00-start.png` }).catch(() => {});
+  if (debugDir && config.screenshots) await page.screenshot({ path: `${debugDir}/panel-00-start.png`, timeout: 15000 }).catch(() => {});
+  if (!config.panels) {
+    console.log("  Seitenleiste übersprungen – Daten werden direkt geladen");
+    const captured = await ensureMatchData(veo, slug, [...veo.captured]);
+    console.log(`  ${captured.length} JSON-Antworten gelesen`);
+    return { captured, panels };
+  }
+  const startedAt = Date.now();
 
   // The rail = small icon buttons in the right-most 120 px of the window. Click each one in turn.
   const railCount = await page.evaluate(() => {
@@ -171,6 +186,8 @@ export async function captureMatch(veo, slug, debugDir) {
   console.log(`  ${railCount} Seitenleisten-Buttons gefunden`);
 
   for (let i = 0; i < railCount; i++) {
+    if ((Date.now() - startedAt) / 1000 > config.panelBudget) { console.log(`  Zeitlimit für die Seitenleiste erreicht – Rest wird direkt geladen`); break; }
+    console.log(`  Panel ${i + 1}/${railCount}…`);
     const button = page.locator(`[data-veo-sync-rail="${i}"]`);
     const label = (await button.getAttribute("aria-label").catch(() => null)) || (await button.getAttribute("title").catch(() => null)) || `rail-${i}`;
     if (/help|hilfe|\+|add|new|lightning/i.test(label)) continue;
@@ -198,7 +215,7 @@ export async function captureMatch(veo, slug, debugDir) {
       return panel ? panel.innerText : "";
     });
     panels.push({ index: i, label, text });
-    if (debugDir) await page.screenshot({ path: `${debugDir}/panel-${String(i + 1).padStart(2, "0")}.png` }).catch(() => {});
+    if (debugDir && config.screenshots) await page.screenshot({ path: `${debugDir}/panel-${String(i + 1).padStart(2, "0")}.png`, timeout: 15000 }).catch(() => {});
   }
   console.log(`  ${veo.captured.length} JSON-Antworten, ${panels.length} Panels gelesen`);
   return { captured: [...veo.captured], panels };
