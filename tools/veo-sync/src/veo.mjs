@@ -21,22 +21,35 @@ export async function openVeo() {
   return { browser, context, page, captured };
 }
 
+/**
+ * Opens a page without waiting for "networkidle": Veo pages stream video and poll, so the network
+ * never goes quiet. Wait for the DOM, then give the app a few seconds to load its data.
+ */
+export async function open(page, url, settleMs = 6000) {
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
+  await settle(page, settleMs);
+}
+
+async function settle(page, ms) {
+  await page.waitForLoadState("networkidle", { timeout: ms }).catch(() => {});
+}
+
 export async function ensureLoggedIn({ page, context }) {
-  await page.goto(config.clubUrl, { waitUntil: "networkidle" });
+  await open(page, config.clubUrl);
   if (!/login|signin|auth/i.test(page.url())) return;
   // DRAFT: selectors to verify on the real login page (run with VEO_SYNC_HEADLESS=false once).
   await page.fill('input[type="email"], input[name="email"]', config.veoEmail());
   await page.fill('input[type="password"], input[name="password"]', config.veoPassword());
-  await Promise.all([page.waitForNavigation({ waitUntil: "networkidle" }), page.click('button[type="submit"]')]);
+  await Promise.all([page.waitForURL((u) => !/login|signin|auth/i.test(u.toString()), { timeout: 60000 }).catch(() => {}), page.click('button[type="submit"]')]);
   if (/login|signin|auth/i.test(page.url())) throw new Error("Veo login failed (check credentials / 2FA)");
   await fs.mkdir(path.dirname(config.paths.auth), { recursive: true });
   await context.storageState({ path: config.paths.auth });
-  await page.goto(config.clubUrl, { waitUntil: "networkidle" });
+  await open(page, config.clubUrl);
 }
 
 /** All recordings of the club library: slug, title, date text, duration text. Scrolls until all are loaded. */
 export async function listRecordings({ page }) {
-  await page.goto(config.clubUrl, { waitUntil: "networkidle" });
+  await open(page, config.clubUrl);
   let previous = -1;
   for (let i = 0; i < 60; i++) {
     const count = await page.locator('a[href*="/matches/"]').count();
@@ -67,20 +80,27 @@ export async function listRecordings({ page }) {
 /** Opens a match and every side-panel tab so the web app loads all its data; returns the captured JSON. */
 export async function captureMatch(veo, slug) {
   veo.captured.length = 0;
-  await veo.page.goto(`https://app.veo.co/matches/${slug}/`, { waitUntil: "networkidle" });
-  // DRAFT: tab buttons on the right side (Analytics, Player Moments, Clips, Events, Lineup, Report).
-  for (const name of [/events|ereignisse/i, /clips/i, /analytics|stats/i, /lineup|aufstellung/i, /player moments/i]) {
-    const tab = veo.page.getByRole("button", { name });
-    if (await tab.count()) { await tab.first().click().catch(() => {}); await veo.page.waitForTimeout(1500); }
+  await open(veo.page, `https://app.veo.co/matches/${slug}/`, 10000);
+  // Tabs on the right side (Analytics, Player Moments, Clips, Events, Lineup, Report). They may be buttons, tabs or links.
+  for (const name of [/events|ereignisse|highlights/i, /clips/i, /analytics|stats|statistik/i, /lineup|aufstellung|players/i, /player moments/i, /report|bericht/i]) {
+    for (const role of ["tab", "button", "link"]) {
+      const tab = veo.page.getByRole(role, { name });
+      if (await tab.count()) {
+        await tab.first().click({ timeout: 5000 }).catch(() => {});
+        await settle(veo.page, 4000);
+        break;
+      }
+    }
   }
-  await veo.page.waitForLoadState("networkidle");
+  await settle(veo.page, 5000);
+  console.log(`  ${veo.captured.length} JSON-Antworten von Veo gelesen`);
   return [...veo.captured];
 }
 
 /** Downloads the full recording via the "Download" button. DRAFT: the dialog may offer several versions. */
 export async function downloadRecording({ page }, slug) {
   await fs.mkdir(config.paths.downloads, { recursive: true });
-  await page.goto(`https://app.veo.co/matches/${slug}/`, { waitUntil: "networkidle" });
+  await open(page, `https://app.veo.co/matches/${slug}/`, 8000);
   const [download] = await Promise.all([
     page.waitForEvent("download", { timeout: 15 * 60 * 1000 }),
     (async () => {

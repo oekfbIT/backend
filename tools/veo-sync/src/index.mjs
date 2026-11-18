@@ -69,6 +69,11 @@ async function importRecording(recording, known) {
 
   // 1) Data from all tabs.
   const captured = await captureMatch(veo, recording.slug);
+  // Keep every capture on disk so the parsers can be written against Veo's real data.
+  const dir = path.join(config.paths.captures, recording.slug);
+  await fs.mkdir(dir, { recursive: true });
+  for (const [i, entry] of captured.entries()) await fs.writeFile(path.join(dir, `${String(i).padStart(3, "0")}.json`), JSON.stringify(entry, null, 2));
+  console.log(`  Rohdaten gespeichert: tools/veo-sync/captures/${recording.slug}/`);
   const events = normaliseTeams(findEvents(captured));
   const summary = await backend.upsertRecording({
     veo_slug: recording.slug,
