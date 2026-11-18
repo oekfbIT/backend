@@ -89,6 +89,7 @@ export async function fetchTracking(veo, matchId, periods, captured) {
   for (const p of periods) for (let s = p.start; s < p.end; s += 24) starts.push(Math.round(s));
   let ok = 0, failed = 0;
   for (let i = 0; i < starts.length; i += 4) {
+    if (failed >= 8 && ok === 0) { console.log("  Tracking nicht erreichbar – Heatmap nur aus geladenen Daten"); break; }
     await Promise.all(starts.slice(i, i + 4).map(async (start) => {
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {

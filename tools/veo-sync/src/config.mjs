@@ -22,7 +22,10 @@ export const config = {
   maxPerRun: Number(process.env.VEO_SYNC_MAX_PER_RUN || 5),
   clipBefore: Number(process.env.VEO_CLIP_SECONDS_BEFORE || 10),
   clipAfter: Number(process.env.VEO_CLIP_SECONDS_AFTER || 6),
-  clipTypes: (process.env.VEO_CLIP_TYPES || "goal,shot,penalty").split(",").map((t) => t.trim()),
+  // Which Veo clips go to the CDN (goal, shot, penalty, save). Default: goals only.
+  clipTypes: (process.env.VEO_CLIP_TYPES || "goal").split(",").map((t) => t.trim()),
+  // Full match recording (several GB) – off by default.
+  fullVideo: process.env.VEO_SYNC_FULL_VIDEO === "true",
   spaces: {
     endpoint: process.env.SPACES_ENDPOINT,          // e.g. https://fra1.digitaloceanspaces.com
     region: process.env.SPACES_REGION || "fra1",

@@ -124,12 +124,14 @@ async function importRecording(recording, known, info) {
   const work = path.join(config.paths.downloads, recording.slug);
   await fs.mkdir(work, { recursive: true });
 
-  // 2) Veo's highlight clips first (small, fast): download → CDN.
+  // 2) Veo's own clips (default: goals only) → CDN, 3 at a time.
+  const wanted = data.highlights.filter((h) => config.clipTypes.includes(h.type));
+  console.log(`  Clips: ${wanted.length} (${config.clipTypes.join(", ")}) von ${data.highlights.length}`);
   const clips = [];
-  for (const [i, h] of data.highlights.entries()) {
+  const uploadClip = async (h, i) => {
     const name = `${h.type}-${Math.round(h.event_second)}`;
     try {
-      const file = await downloadFile(h.video_url, path.join(work, `${name}.mp4`), { cookies, label: `Clip ${i + 1}/${data.highlights.length}` });
+      const file = await downloadFile(h.video_url, path.join(work, `${name}.mp4`), { cookies, label: `Clip ${i + 1}/${wanted.length}` });
       const videoUrl = await upload(file, `matches/${summary.match_id}/clips/${name}.mp4`, "video/mp4");
       let thumbnailUrl = null;
       if (h.thumbnail_url) {
@@ -138,13 +140,16 @@ async function importRecording(recording, known, info) {
       }
       clips.push({ veo_event_id: h.veo_event_id, type: h.type, event_second: h.event_second, start_second: h.start_second,
                    end_second: h.end_second, video_url: videoUrl, thumbnail_url: thumbnailUrl });
+      console.log(`  ✓ Clip ${i + 1}/${wanted.length} (${name})`);
     } catch (error) {
       console.log(`  ✗ Clip ${name} übersprungen: ${error.message}`);
     }
-  }
+  };
+  for (let i = 0; i < wanted.length; i += 3) await Promise.all(wanted.slice(i, i + 3).map((h, k) => uploadClip(h, i + k)));
   if (clips.length) await backend.addClips(recording.slug, clips);
-  console.log(`  ${clips.length}/${data.highlights.length} Clips auf CDN`);
+  console.log(`  ${clips.length}/${wanted.length} Clips auf CDN`);
 
+  if (!config.fullVideo) { console.log("  Ganzes Spiel übersprungen (VEO_SYNC_FULL_VIDEO=true zum Aktivieren)"); return; }
   // 3) Full match (large): direct link with retries + resume; Download button only as fallback.
   if (known?.has_video) { console.log("  Ganzes Spiel ist schon auf dem CDN"); return; }
   let videoFile;
