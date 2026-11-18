@@ -85,7 +85,7 @@ export async function listRecordings({ page }) {
 export async function captureMatch(veo, slug, debugDir) {
   const { page } = veo;
   veo.captured.length = 0;
-  await open(page, `https://app.veo.co/matches/${slug}/`, 10000);
+  await open(page, `https://app.veo.co/matches/${slug}/`, 60000);
   const panels = [];
   if (debugDir) await page.screenshot({ path: `${debugDir}/panel-00-start.png` }).catch(() => {});
 
