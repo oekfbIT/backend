@@ -52,6 +52,7 @@ final class VeoRecording: Model {
     /// Raw JSON blobs the worker captured (for parsers and debugging). Not exposed publicly.
     @OptionalField(key: "raw") var raw: [String: String]?
     @OptionalField(key: "video_url") var videoURL: String?
+    @OptionalField(key: "analytics") var analytics: VeoAnalytics?
     @OptionalField(key: "review_notes") var reviewNotes: [String]?
     @OptionalField(key: "error") var error: String?
     @Timestamp(key: "created_at", on: .create) var createdAt: Date?

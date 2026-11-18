@@ -114,6 +114,11 @@ export async function captureMatch(veo, slug, debugDir) {
       await page.mouse.wheel(0, 4000);
       await page.waitForTimeout(400);
     }
+    // Expand the analytics sections (Stats, Shot map, Pass location, Possession location, Heat map).
+    for (const section of [/^stats$/i, /shot map/i, /pass location/i, /possession location/i, /heat ?map/i]) {
+      const header = page.getByText(section).first();
+      if (await header.count().catch(() => 0)) { await header.click({ timeout: 3000 }).catch(() => {}); await settle(page, 2500); }
+    }
     await settle(page, 2000);
     const text = await page.evaluate(() => {
       const w = window.innerWidth;

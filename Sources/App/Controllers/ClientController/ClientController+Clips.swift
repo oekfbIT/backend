@@ -48,6 +48,10 @@ struct MatchVideoCard: Content {
 struct MatchVideosResponse: Content {
     let recordingUrl: String?
     let clips: [MatchClipResponse]
+    /// Veo team stats as [home, away], e.g. "goal": [8, 4], "possession_percentage": [59, 41].
+    let stats: [String: [Int]]?
+    /// Shot map, pass/possession locations, heat maps, physical data.
+    let analytics: VeoAnalytics?
 }
 
 struct LeagueVideosResponse: Content {
@@ -66,7 +70,8 @@ extension ClientController {
         let matchID = try req.parameters.require("matchId", as: UUID.self)
         let recording = try await VeoRecording.query(on: req.db).filter(\.$matchID == matchID).first()
         let clips = try await MatchClip.query(on: req.db).filter(\.$matchID == matchID).sort(\.$eventSecond).all()
-        return MatchVideosResponse(recordingUrl: recording?.videoURL, clips: clips.map { MatchClipResponse($0) })
+        return MatchVideosResponse(recordingUrl: recording?.videoURL, clips: clips.map { MatchClipResponse($0) },
+                                   stats: recording?.stats, analytics: recording?.analytics)
     }
 
     func fetchPlayerClips(req: Request) async throws -> [VideoClipCard] {

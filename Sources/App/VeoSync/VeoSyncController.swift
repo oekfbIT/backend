@@ -34,6 +34,7 @@ struct VeoSyncController: RouteCollection {
         var events: [VeoEvent]
         var stats: [String: [Int]]?
         var raw: [String: String]?
+        var analytics: VeoAnalytics?
         /// Set when the run was started for a specific match from the admin.
         var matchId: UUID?
     }
@@ -87,6 +88,7 @@ struct VeoSyncController: RouteCollection {
         recording.veoTeam = body.veoTeam
         recording.stats = body.stats
         recording.raw = body.raw
+        if let analytics = body.analytics { recording.analytics = analytics }
         recording.events = body.events.sorted { $0.videoSecond < $1.videoSecond }
         try await Self.assign(recording, to: body.matchId, on: req.db)
         return VeoRecordingSummary(recording)

@@ -95,6 +95,8 @@ export function parseVeo(captured, score) {
   }
 
   return {
+    matchId: match?.id ?? null,
+    sides: mapping,
     stats,
     title: match?.title, recordedAt: match?.start ?? null, durationSeconds: match?.duration ?? null,
     periods, videoUrl: standard?.url ?? null, reelUrl: match?.reel_url ?? null,
