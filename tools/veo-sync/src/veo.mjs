@@ -10,7 +10,7 @@ import { config } from "./config.mjs";
 export async function openVeo() {
   const browser = await chromium.launch({ headless: config.headless });
   const hasState = await fs.access(config.paths.auth).then(() => true, () => false);
-  const context = await browser.newContext({ acceptDownloads: true, ...(hasState ? { storageState: config.paths.auth } : {}) });
+  const context = await browser.newContext({ acceptDownloads: true, viewport: { width: 1600, height: 1000 }, ...(hasState ? { storageState: config.paths.auth } : {}) });
   const page = await context.newPage();
   const captured = [];
   page.on("response", async (response) => {
@@ -77,24 +77,56 @@ export async function listRecordings({ page }) {
   });
 }
 
-/** Opens a match and every side-panel tab so the web app loads all its data; returns the captured JSON. */
-export async function captureMatch(veo, slug) {
+/**
+ * Opens a match and every panel of the icon rail on the right (stats, lineup, clips, events, …) so the
+ * web app loads all its data. Returns the captured JSON plus, per panel, its visible text and a screenshot
+ * (used to write exact parsers and as a fallback when a panel has no JSON of its own).
+ */
+export async function captureMatch(veo, slug, debugDir) {
+  const { page } = veo;
   veo.captured.length = 0;
-  await open(veo.page, `https://app.veo.co/matches/${slug}/`, 10000);
-  // Tabs on the right side (Analytics, Player Moments, Clips, Events, Lineup, Report). They may be buttons, tabs or links.
-  for (const name of [/events|ereignisse|highlights/i, /clips/i, /analytics|stats|statistik/i, /lineup|aufstellung|players/i, /player moments/i, /report|bericht/i]) {
-    for (const role of ["tab", "button", "link"]) {
-      const tab = veo.page.getByRole(role, { name });
-      if (await tab.count()) {
-        await tab.first().click({ timeout: 5000 }).catch(() => {});
-        await settle(veo.page, 4000);
-        break;
-      }
+  await open(page, `https://app.veo.co/matches/${slug}/`, 10000);
+  const panels = [];
+  if (debugDir) await page.screenshot({ path: `${debugDir}/panel-00-start.png` }).catch(() => {});
+
+  // The rail = small icon buttons in the right-most 120 px of the window. Click each one in turn.
+  const railCount = await page.evaluate(() => {
+    const w = window.innerWidth;
+    const buttons = [...document.querySelectorAll("button, a, [role=button], [role=tab]")].filter((el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.width < 90 && r.height < 90 && r.left > w - 120 && r.top > 100;
+    });
+    buttons.forEach((el, i) => el.setAttribute("data-veo-sync-rail", String(i)));
+    return buttons.length;
+  });
+  console.log(`  ${railCount} Seitenleisten-Buttons gefunden`);
+
+  for (let i = 0; i < railCount; i++) {
+    const button = page.locator(`[data-veo-sync-rail="${i}"]`);
+    const label = (await button.getAttribute("aria-label").catch(() => null)) || (await button.getAttribute("title").catch(() => null)) || `rail-${i}`;
+    if (/help|hilfe|\+|add|new|lightning/i.test(label)) continue;
+    await button.click({ timeout: 5000 }).catch(() => {});
+    await settle(page, 4000);
+    // Lists are virtualised: scroll the open panel to the bottom so every item loads.
+    for (let k = 0; k < 15; k++) {
+      await page.mouse.move(1350, 600);
+      await page.mouse.wheel(0, 4000);
+      await page.waitForTimeout(400);
     }
+    await settle(page, 2000);
+    const text = await page.evaluate(() => {
+      const w = window.innerWidth;
+      const panel = [...document.querySelectorAll("aside, section, div")].find((el) => {
+        const r = el.getBoundingClientRect();
+        return r.left > w * 0.6 && r.left < w - 120 && r.height > 400 && r.width > 250 && r.width < 700;
+      });
+      return panel ? panel.innerText : "";
+    });
+    panels.push({ index: i, label, text });
+    if (debugDir) await page.screenshot({ path: `${debugDir}/panel-${String(i + 1).padStart(2, "0")}.png` }).catch(() => {});
   }
-  await settle(veo.page, 5000);
-  console.log(`  ${veo.captured.length} JSON-Antworten von Veo gelesen`);
-  return [...veo.captured];
+  console.log(`  ${veo.captured.length} JSON-Antworten, ${panels.length} Panels gelesen`);
+  return { captured: [...veo.captured], panels };
 }
 
 /** Downloads the full recording via the "Download" button. DRAFT: the dialog may offer several versions. */

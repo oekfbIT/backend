@@ -24,9 +24,10 @@ try {
 
   if (mode === "discover") {
     if (!only) throw new Error("Usage: npm run discover -- <veo-slug>");
-    const captured = await captureMatch(veo, only);
     const dir = path.join(config.paths.captures, only);
     await fs.mkdir(dir, { recursive: true });
+    const { captured, panels } = await captureMatch(veo, only, dir);
+    await fs.writeFile(path.join(dir, "panels.json"), JSON.stringify(panels, null, 2));
     for (const [i, entry] of captured.entries()) {
       await fs.writeFile(path.join(dir, `${String(i).padStart(3, "0")}.json`), JSON.stringify(entry, null, 2));
     }
@@ -68,11 +69,12 @@ async function importRecording(recording, known) {
   console.log(`→ ${recording.slug} (${recording.title})`);
 
   // 1) Data from all tabs.
-  const captured = await captureMatch(veo, recording.slug);
   // Keep every capture on disk so the parsers can be written against Veo's real data.
   const dir = path.join(config.paths.captures, recording.slug);
   await fs.mkdir(dir, { recursive: true });
+  const { captured, panels } = await captureMatch(veo, recording.slug, dir);
   for (const [i, entry] of captured.entries()) await fs.writeFile(path.join(dir, `${String(i).padStart(3, "0")}.json`), JSON.stringify(entry, null, 2));
+  await fs.writeFile(path.join(dir, "panels.json"), JSON.stringify(panels, null, 2));
   console.log(`  Rohdaten gespeichert: tools/veo-sync/captures/${recording.slug}/`);
   const events = normaliseTeams(findEvents(captured));
   const summary = await backend.upsertRecording({
