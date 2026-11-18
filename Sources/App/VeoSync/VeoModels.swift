@@ -53,6 +53,8 @@ final class VeoRecording: Model {
     @OptionalField(key: "raw") var raw: [String: String]?
     @OptionalField(key: "video_url") var videoURL: String?
     @OptionalField(key: "analytics") var analytics: VeoAnalytics?
+    /// true when stats/analytics were flipped relative to the worker's sides (keeps re-assigning idempotent).
+    @OptionalField(key: "sides_flipped") var sidesFlipped: Bool?
     @OptionalField(key: "review_notes") var reviewNotes: [String]?
     @OptionalField(key: "error") var error: String?
     @Timestamp(key: "created_at", on: .create) var createdAt: Date?

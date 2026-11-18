@@ -71,27 +71,61 @@ enum VeoMatcher {
         return MatchResult(match: best.match, swapped: best.swapped, notes: notes)
     }
 
-    /// Team + player for every event (jersey number → lineup). Returns mapped events and review notes.
-    static func mapEvents(_ input: [VeoEvent], match: Match, swapped: Bool) -> (events: [VeoEvent], notes: [String]) {
+    /// Team + player for every event. Veo's team labels are unreliable; only the jersey numbers are trusted.
+    /// 1. Pick the orientation (Veo side → home/away) that best fits the lineups (jersey numbers) and the result.
+    /// 2. Per event: a jersey that exists only in the other team's lineup moves the event to that team.
+    /// 3. Player = the lineup player with that jersey number.
+    /// Returns the mapped events, whether the worker's sides were flipped, and review notes.
+    static func mapEvents(_ input: [VeoEvent], match: Match) -> (events: [VeoEvent], flipped: Bool, notes: [String]) {
         var notes: [String] = []
+        let home = Set((match.homeBlanket?.players ?? []).map(\.number))
+        let away = Set((match.awayBlanket?.players ?? []).map(\.number))
+        func side(_ e: VeoEvent, flipped: Bool) -> MatchAssignment? {
+            guard let t = e.veoTeam.flatMap({ MatchAssignment(rawValue: $0.lowercased()) }) else { return nil }
+            return flipped ? (t == .home ? .away : .home) : t
+        }
+        func fit(flipped: Bool) -> Int {
+            var score = 0
+            for e in input {
+                guard let number = e.jerseyNumber, let team = side(e, flipped: flipped) else { continue }
+                let own = team == .home ? home : away, other = team == .home ? away : home
+                if own.contains(number) && !other.contains(number) { score += 1 }
+                if other.contains(number) && !own.contains(number) { score -= 1 }
+            }
+            let goals = input.filter { $0.type == "goal" }
+            let h = goals.filter { side($0, flipped: flipped) == .home }.count, a = goals.count - h
+            if h == match.score.home && a == match.score.away && !goals.isEmpty { score += 25 }
+            return score
+        }
+        let direct = fit(flipped: false), swapped = fit(flipped: true)
+        let flipped = swapped > direct
+        notes.append("ℹ︎ Teams über Kader/Ergebnis bestimmt (Passung \(flipped ? swapped : direct) vs. \(flipped ? direct : swapped))")
+        if home.isEmpty || away.isEmpty { notes.append("Kader unvollständig – Teams nur über das Ergebnis bestimmt") }
+
+        var moved = 0
         let events = input.map { event -> VeoEvent in
             var e = event
-            var team = event.veoTeam.flatMap { MatchAssignment(rawValue: $0.lowercased()) }
-            if swapped { team = team.map { $0 == .home ? .away : .home } }
+            var team = side(event, flipped: flipped)
+            if let number = event.jerseyNumber, let t = team {
+                let own = t == .home ? home : away, other = t == .home ? away : home
+                if !own.contains(number) && other.contains(number) { team = t == .home ? .away : .home; moved += 1 }
+            }
             e.team = team
+            e.playerId = nil; e.playerName = nil
             if let team, let number = event.jerseyNumber {
                 let lineup = (team == .home ? match.homeBlanket : match.awayBlanket)?.players ?? []
                 let hits = lineup.filter { $0.number == number }
                 if hits.count == 1 {
                     e.playerId = hits[0].id
                     e.playerName = hits[0].name
-                } else if ["goal", "shot", "yellow_card", "red_card"].contains(event.type) {
-                    notes.append("\(event.type) bei \(Int(event.videoSecond))s: Rückennummer \(number) nicht eindeutig im Kader")
+                } else if hits.count > 1 {
+                    notes.append("\(event.type) bei \(Int(event.videoSecond))s: Rückennummer \(number) doppelt im Kader")
                 }
             }
             return e
         }
-        return (events, notes)
+        if moved > 0 { notes.append("ℹ︎ \(moved) Ereignisse über die Rückennummer dem anderen Team zugeordnet") }
+        return (events, flipped, notes)
     }
 
     /// Links Veo goals/cards to the referee's MatchEvents in order (same type and team).

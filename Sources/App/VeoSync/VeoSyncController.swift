@@ -89,6 +89,7 @@ struct VeoSyncController: RouteCollection {
         recording.stats = body.stats
         recording.raw = body.raw
         if let analytics = body.analytics { recording.analytics = analytics }
+        recording.sidesFlipped = false // fresh data from the worker, in the worker's orientation
         recording.events = body.events.sorted { $0.videoSecond < $1.videoSecond }
         try await Self.assign(recording, to: body.matchId, on: req.db)
         return VeoRecordingSummary(recording)
@@ -160,23 +161,29 @@ struct VeoSyncController: RouteCollection {
     static func assign(_ recording: VeoRecording, to forcedMatchID: UUID?, on db: Database) async throws {
         var notes: [String] = []
         var match: Match?
-        var swapped = false
         if let forcedMatchID {
             match = try await Match.find(forcedMatchID, on: db)
-            if let names = VeoMatcher.teams(fromTitle: recording.title), let m = match {
-                let homeName = m.homeBlanket?.name ?? ""
-                swapped = VeoMatcher.similarity(homeName, names.away) > VeoMatcher.similarity(homeName, names.home)
-            }
         } else {
             let result = try await VeoMatcher.findMatch(title: recording.title, recordedAt: recording.recordedAt, on: db)
-            match = result.match; swapped = result.swapped; notes += result.notes
+            match = result.match; notes += result.notes
         }
         if let match, let matchID = match.id {
-            let mapped = VeoMatcher.mapEvents(recording.events, match: match, swapped: swapped)
+            let mapped = VeoMatcher.mapEvents(recording.events, match: match)
             recording.events = try await VeoMatcher.linkRefereeEvents(mapped.events, matchID: matchID, on: db)
             notes += mapped.notes
+            // Analytics follow the final teams: shots take the team of their event, the rest flips with the sides.
+            let flipNow = mapped.flipped != (recording.sidesFlipped ?? false)
+            if flipNow, let stats = recording.stats { recording.stats = stats.mapValues { $0.count == 2 ? [$0[1], $0[0]] : $0 } }
+            recording.sidesFlipped = mapped.flipped
+            if var analytics = recording.analytics {
+                let teamByEvent = Dictionary(recording.events.compactMap { e in e.veoId.map { ($0, e.team?.rawValue) } }, uniquingKeysWith: { a, _ in a })
+                if flipNow { analytics.flipSides() }
+                for i in analytics.shots.indices { if let id = analytics.shots[i].veoId, let t = teamByEvent[id] { analytics.shots[i].team = t } }
+                recording.analytics = analytics
+            }
             recording.matchID = matchID
-            recording.status = notes.isEmpty ? (recording.videoURL == nil ? .matched : .videoUploaded) : .needsReview
+            let needsReview = notes.contains { !$0.hasPrefix("ℹ︎") }
+            recording.status = !needsReview ? (recording.videoURL == nil ? .matched : .videoUploaded) : .needsReview
         } else {
             recording.matchID = nil
             recording.status = .needsReview

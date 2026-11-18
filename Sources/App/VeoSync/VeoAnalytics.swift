@@ -15,7 +15,10 @@ struct VeoAnalytics: Codable {
         var jerseyNumber: Int?
         var outcome: Int?
     }
-    struct Pair<T: Codable>: Codable { var home: T?; var away: T? }
+    struct Pair<T: Codable>: Codable {
+        var home: T?; var away: T?
+        mutating func swap() { (home, away) = (away, home) }
+    }
     struct Thirds: Codable { var attacking: Int?; var middle: Int?; var defensive: Int? }
     struct Period: Codable {
         var period: Int
@@ -41,6 +44,22 @@ struct VeoAnalytics: Codable {
         var averageSpeed: Double?
         var sprints: Int?
         var hsr: Double?
+    }
+
+    /// Swap home/away everywhere (used when the backend decides Veo's sides the other way round).
+    mutating func flipSides() {
+        let flip: (String?) -> String? = { $0 == "home" ? "away" : ($0 == "away" ? "home" : $0) }
+        for i in shots.indices { shots[i].team = flip(shots[i].team) }
+        for i in players.indices { players[i].team = flip(players[i].team) }
+        if heatmap != nil {
+            for i in heatmap!.teams.indices { heatmap!.teams[i].team = flip(heatmap!.teams[i].team) ?? heatmap!.teams[i].team }
+            for i in heatmap!.players.indices { heatmap!.players[i].team = flip(heatmap!.players[i].team) ?? heatmap!.players[i].team }
+        }
+        for i in periods.indices {
+            periods[i].possessionSeconds?.swap(); periods[i].passesCompleted?.swap(); periods[i].possessionWon?.swap()
+            periods[i].passLocations?.swap(); periods[i].passGrid?.swap(); periods[i].possessionThirds?.swap()
+            periods[i].possessionGrid?.swap(); periods[i].passStrings?.swap()
+        }
     }
 
     var shots: [Shot]

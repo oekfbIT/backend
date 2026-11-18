@@ -91,14 +91,22 @@ async function importRecording(recording, known, info) {
   if (data.stats.goal) console.log(`  Statistik (Heim:Gast): Tore ${data.stats.goal.join(":")}, Schüsse ${data.stats.attempts?.join(":")}, Ecken ${data.stats.corner?.join(":")}, Ballbesitz ${data.stats.possession_percentage?.join(":")} %`);
   console.log(`  Video-Link: ${data.videoUrl ? "gefunden" : "FEHLT"}`);
 
-  // Analytics panel (shot map, pass/possession locations, heat map, physical data).
-  const tracking = data.matchId && data.periods.length ? await fetchTracking(veo, data.matchId, data.periods, captured) : {};
-  const analytics = buildAnalytics(captured, data, tracking);
-  await fs.writeFile(path.join(dir, "analytics.json"), JSON.stringify(analytics));
-  console.log(`  Analytics: ${analytics.shots.length} Schüsse auf der Karte, ${analytics.periods.length} Halbzeiten, Heatmaps für ${analytics.heatmap.players.length} Spieler, Laufdaten für ${analytics.players.length} Spieler`);
+  // Analytics panel (shot map, pass/possession locations, heat map, physical data). Never fails the import:
+  // without tracking there is simply no heat map; without analytics the rest is imported anyway.
+  let analytics = null;
+  try {
+    const tracking = data.matchId && data.periods.length
+      ? await fetchTracking(veo, data.matchId, data.periods, captured).catch((e) => { console.log(`  Heatmap übersprungen: ${e.message}`); return {}; })
+      : {};
+    analytics = buildAnalytics(captured, data, tracking);
+    await fs.writeFile(path.join(dir, "analytics.json"), JSON.stringify(analytics));
+    console.log(`  Analytics: ${analytics.shots.length} Schüsse auf der Karte, ${analytics.periods.length} Halbzeiten, Heatmaps für ${analytics.heatmap.players.length} Spieler, Laufdaten für ${analytics.players.length} Spieler`);
+  } catch (error) {
+    console.log(`  Analytics übersprungen: ${error.message}`);
+  }
 
   const summary = await backend.upsertRecording({
-    analytics,
+    analytics: analytics ?? undefined,
     veo_slug: recording.slug,
     title: data.title || recording.title,
     recorded_at: data.recordedAt || parseDate(recording.dateText),
