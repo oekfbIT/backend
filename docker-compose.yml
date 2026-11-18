@@ -37,6 +37,18 @@ services:
       - '8080:8080'
     command: ["serve", "--env", "production", "--hostname", "0.0.0.0", "--port", "8080"]
 
+  # Veo sync worker (same as on DigitalOcean). Needs VEO_* and SPACES_* in .env; set VEO_SYNC_MODE=queue on the app.
+  #   docker compose --profile veo up app veo-worker
+  veo-worker:
+    build:
+      context: ./tools/veo-sync
+    env_file: .env
+    environment:
+      VEO_SYNC_BACKEND_URL: http://app:8080
+    depends_on:
+      - app
+    profiles: ["veo"]
+
   migrate:
     image: oekfbbackend:latest
     build:

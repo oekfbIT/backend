@@ -56,8 +56,10 @@ extension AdminController {
         let matchID = try req.parameters.require("id", as: UUID.self)
         let recording = try await VeoRecording.query(on: req.db).filter(\.$matchID == matchID).first()
         let job = try await VeoSyncJob.query(on: req.db).filter(\.$matchID == matchID).sort(\.$createdAt, .descending).first()
-        if let job, job.status == "running", let updated = job.updatedAt ?? job.createdAt, Date().timeIntervalSince(updated) > 1800 {
-            job.status = "failed"; job.log.append("✗ Keine Rückmeldung mehr (Server neu gestartet?)")
+        if let job, ["running", "queued"].contains(job.status), let updated = job.updatedAt ?? job.createdAt, Date().timeIntervalSince(updated) > 1800 {
+            let wasQueued = job.status == "queued"
+            job.status = "failed"
+            job.log.append(wasQueued ? "✗ Kein Worker hat den Auftrag übernommen (läuft der Veo-Worker?)" : "✗ Keine Rückmeldung mehr (Worker neu gestartet?)")
             try await job.save(on: req.db)
         }
         let clips = try await MatchClip.query(on: req.db).filter(\.$matchID == matchID).count()
@@ -67,7 +69,7 @@ extension AdminController {
     func startMatchVeoSync(req: Request) async throws -> MatchVeoStatus {
         let matchID = try req.parameters.require("id", as: UUID.self)
         guard try await Match.find(matchID, on: req.db) != nil else { throw Abort(.notFound, reason: "Spiel nicht gefunden.") }
-        if let running = try await VeoSyncJob.query(on: req.db).filter(\.$matchID == matchID).filter(\.$status == "running").first(),
+        if let running = try await VeoSyncJob.query(on: req.db).filter(\.$matchID == matchID).filter(\.$status ~~ ["running", "queued"]).first(),
            let updated = running.updatedAt ?? running.createdAt, Date().timeIntervalSince(updated) < 1800 {
             throw Abort(.conflict, reason: "Für dieses Spiel läuft bereits ein Veo-Import.")
         }
@@ -82,6 +84,12 @@ extension AdminController {
             }
         }
         let job = VeoSyncJob(matchID: matchID, veoSlug: slug, withVideo: body.withVideo ?? true)
+        if VeoSyncMode.isQueue {
+            job.status = "queued"
+            job.log = ["In Warteschlange – der Veo-Worker übernimmt in Kürze…"]
+            try await job.save(on: req.db)
+            return try await matchVeoStatus(req: req)
+        }
         try await job.save(on: req.db)
         do {
             try VeoSyncRunner.start(job: job, app: req.application)

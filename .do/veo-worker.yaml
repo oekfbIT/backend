@@ -1,0 +1,51 @@
+# Veo sync worker – add this block under `workers:` in the existing App Platform app spec
+# (App → Settings → App Spec → Edit), next to the API service. Replace `api` with the name of
+# the API service component in your app.
+workers:
+  - name: veo-worker
+    github:
+      repo: oekfbIT/backend
+      branch: main
+      deploy_on_push: true
+    source_dir: tools/veo-sync                 # build context
+    dockerfile_path: tools/veo-sync/Dockerfile # relative to the repo root
+    instance_count: 1                          # exactly one: jobs are processed one after another
+    instance_size_slug: apps-s-1vcpu-1gb       # Chromium needs ~1 GB RAM
+    envs:
+      - key: VEO_SYNC_BACKEND_URL
+        value: ${api.PRIVATE_URL}              # internal URL of the API service in the same app
+      - key: VEO_SYNC_SERVICE_KEY
+        type: SECRET
+        value: "<same value as on the API>"
+      - key: VEO_EMAIL
+        type: SECRET
+        value: "<veo account email>"
+      - key: VEO_PASSWORD
+        type: SECRET
+        value: "<veo account password>"
+      - key: VEO_CLUB_URL
+        value: https://app.veo.co/clubs/osterreichischer-kleinfeld-fuball-bund/recordings/
+      - key: VEO_CLIP_TYPES
+        value: goal
+      - key: VEO_SYNC_FULL_VIDEO
+        value: "false"
+      - key: VEO_SYNC_NIGHTLY_HOUR             # optional: import all new recordings every night at 03:00
+        value: ""
+      - key: SPACES_ENDPOINT
+        value: "<SPACES_ENDPOINT from BE/.env>"
+      - key: SPACES_REGION
+        value: "<SPACES_REGION from BE/.env>"
+      - key: SPACES_BUCKET
+        value: "<SPACES_BUCKET from BE/.env>"
+      - key: SPACES_CDN_BASE
+        value: "<SPACES_CDN_BASE from BE/.env>"
+      - key: SPACES_KEY
+        type: SECRET
+        value: "<spaces access key>"
+      - key: SPACES_SECRET
+        type: SECRET
+        value: "<spaces secret key>"
+
+# And on the API service (envs of the existing `api` component):
+#   VEO_SYNC_MODE=queue                (admin button queues jobs instead of starting a process)
+#   VEO_SYNC_SERVICE_KEY=<same secret> (type SECRET)

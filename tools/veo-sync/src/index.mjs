@@ -26,6 +26,11 @@ let forcedMatchId = null;
 setTimeout(() => { console.error("✗ Abbruch nach 60 Minuten (Zeitlimit)"); process.exit(2); }, 60 * 60 * 1000).unref();
 process.on("unhandledRejection", (e) => { console.error(`✗ ${e?.message ?? e}`); process.exit(1); });
 
+if (mode === "worker") {
+  const { startWorker } = await import("./worker.mjs");
+  await startWorker(); // runs forever
+}
+
 // ffmpeg is optional now (Veo delivers clips ready-made); only used to optimise the full video for streaming.
 const hasFfmpeg = await checkFfmpeg().then(() => true, () => false);
 const veo = await openVeo();
@@ -76,6 +81,17 @@ try {
 }
 
 async function importRecording(recording, known, info) {
+  try {
+    await importRecordingInner(recording, known, info);
+  } finally {
+    if (process.env.VEO_SYNC_CLEANUP === "true") {
+      await fs.rm(path.join(config.paths.downloads, recording.slug), { recursive: true, force: true }).catch(() => {});
+      await fs.rm(path.join(config.paths.captures, recording.slug), { recursive: true, force: true }).catch(() => {});
+    }
+  }
+}
+
+async function importRecordingInner(recording, known, info) {
   console.log(`→ ${recording.slug} (${recording.title})`);
 
   // 1) Read every panel; keep the raw data on disk for debugging.

@@ -10,7 +10,7 @@ final class VeoSyncJob: Model {
     @Field(key: "match") var matchID: UUID
     @OptionalField(key: "veo_slug") var veoSlug: String?
     @Field(key: "with_video") var withVideo: Bool
-    @Field(key: "status") var status: String          // running | completed | failed
+    @Field(key: "status") var status: String          // queued | running | completed | failed
     @Field(key: "log") var log: [String]
     @Timestamp(key: "created_at", on: .create) var createdAt: Date?
     @Timestamp(key: "updated_at", on: .update) var updatedAt: Date?
@@ -38,6 +38,13 @@ struct VeoSyncJobResponse: Content {
 
 /// Starts tools/veo-sync as a child process (login shell, so node/npm/ffmpeg from Homebrew are on PATH)
 /// and streams its output into the job document every few seconds.
+/// How admin-started syncs run:
+///  - "local" (default): the API starts tools/veo-sync as a child process (developer Mac).
+///  - "queue": the API only stores the job as "queued"; a separate worker (DigitalOcean) claims and runs it.
+enum VeoSyncMode {
+    static var isQueue: Bool { (Environment.get("VEO_SYNC_MODE") ?? "local").lowercased() == "queue" }
+}
+
 enum VeoSyncRunner {
     actor Buffer {
         var lines: [String] = []

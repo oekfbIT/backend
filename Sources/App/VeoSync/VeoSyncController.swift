@@ -55,6 +55,9 @@ struct VeoSyncController: RouteCollection {
         let sync = routes.grouped("veo-sync").grouped(ServiceKeyMiddleware())
         sync.get("known", use: known)
         sync.get("match", ":id", use: matchInfo)
+        // Job queue for the standalone worker (VEO_SYNC_MODE=queue).
+        sync.post("jobs", "claim", use: claimJob)
+        sync.post("jobs", ":jobId", "log", use: jobLog)
         sync.on(.POST, "recordings", body: .collect(maxSize: "10mb"), use: upsertRecording)
         sync.post("recordings", ":slug", "video", use: setVideo)
         sync.post("recordings", ":slug", "clips", use: addClips)
@@ -63,6 +66,30 @@ struct VeoSyncController: RouteCollection {
     func known(req: Request) async throws -> [KnownRecording] {
         try await VeoRecording.query(on: req.db).all()
             .map { KnownRecording(veoSlug: $0.veoSlug, status: $0.status, hasVideo: $0.videoURL != nil) }
+    }
+
+    struct ClaimedJob: Content { let id: UUID; let matchId: UUID; let veoSlug: String?; let withVideo: Bool }
+    struct JobLogUpdate: Content { var lines: [String]; var status: String? }
+
+    /// Oldest queued job → "running", returned to the worker. 204 when there is nothing to do.
+    func claimJob(req: Request) async throws -> Response {
+        guard let job = try await VeoSyncJob.query(on: req.db).filter(\.$status == "queued").sort(\.$createdAt, .ascending).first(),
+              let id = job.id else { return Response(status: .noContent) }
+        job.status = "running"
+        job.log.append("Worker hat den Auftrag übernommen")
+        try await job.save(on: req.db)
+        return try await ClaimedJob(id: id, matchId: job.matchID, veoSlug: job.veoSlug, withVideo: job.withVideo).encodeResponse(for: req)
+    }
+
+    /// Appends worker output to a job (last 300 lines) and optionally sets its final status.
+    func jobLog(req: Request) async throws -> HTTPStatus {
+        let id = try req.parameters.require("jobId", as: UUID.self)
+        guard let job = try await VeoSyncJob.find(id, on: req.db) else { throw Abort(.notFound) }
+        let body = try req.content.decode(JobLogUpdate.self)
+        job.log = Array((job.log + body.lines).suffix(300))
+        if let status = body.status, ["running", "completed", "failed"].contains(status) { job.status = status }
+        try await job.save(on: req.db)
+        return .ok
     }
 
     /// Date and team names of one ÖKFB match, so the worker can find it in the Veo library.

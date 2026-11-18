@@ -322,20 +322,59 @@ Group `clips` by `match.gameday` (newest first) for "Alle Tore"; `matches` for m
 
 ---
 
-## 10. Production
+## 10. Production (DigitalOcean)
 
-On production the worker should not run inside the API container (Chromium + large downloads).
+The worker does not run inside the API container (Chromium + downloads). It is its own **Worker** component in
+the same App Platform app, built from `tools/veo-sync/Dockerfile`.
 
-Recommended: a separate **Worker** component (DigitalOcean App Platform) or small Droplet built from
-`tools/veo-sync` (Node 20+, `npx playwright install --with-deps chromium`, optional `ffmpeg`), with the same
-`VEO_*` / `SPACES_*` variables and `VEO_SYNC_BACKEND_URL` pointing to the API.
+### How it works
 
-Today the admin button starts the worker as a child process of the API (`VeoSyncRunner`). For production,
-change it so the API only writes a `veo_sync_jobs` document (`status: queued`) and the worker polls for queued
-jobs, runs them and writes the log/status back. The worker endpoints stay the same.
+```
+Admin button ──POST /admin/matches/:id/veo/sync──▶ API (VEO_SYNC_MODE=queue)
+                                                     └─ veo_sync_jobs { status: "queued" }
+veo-worker (polls every 15 s) ──POST /veo-sync/jobs/claim──▶ API → job "running"
+   └─ runs `node src/index.mjs match <matchId>` (child process)
+   └─ every 3 s ──POST /veo-sync/jobs/:id/log──▶ API → admin tab shows the log
+   └─ end: status completed | failed, local files deleted (VEO_SYNC_CLEANUP=true)
+```
 
-A nightly `node src/index.mjs sync` (cron) can import every new library recording automatically
-(matched by team names ±36 h around kick-off).
+- `VEO_SYNC_MODE=local` (default, developer Mac): the API starts the worker itself, as before.
+- `VEO_SYNC_MODE=queue` (production): the API only queues; the worker component runs the jobs.
+- A queued job that no worker picks up within 30 min is marked failed ("Kein Worker…").
+- On redeploy/stop the worker marks its running job failed so it can be started again.
+- Optional `VEO_SYNC_NIGHTLY_HOUR=3`: every night at 03:00 (Vienna) all new library recordings are imported.
+
+### Setup (once)
+
+1. **API component** – App → *Settings* → API component → *Environment Variables*:
+   - `VEO_SYNC_MODE` = `queue`
+   - `VEO_SYNC_SERVICE_KEY` = long random string (Encrypt) – same value as in step 2
+2. **Add the worker** – App → *Settings* → *App Spec* → *Edit*, paste the `workers:` block from
+   [`.do/veo-worker.yaml`](../.do/veo-worker.yaml) and fill in the secrets (`VEO_EMAIL`, `VEO_PASSWORD`,
+   `VEO_SYNC_SERVICE_KEY`, `SPACES_*` – same values as in `BE/.env`). Replace `api` in
+   `${api.PRIVATE_URL}` with the name of your API component.
+   *(Alternative in the UI: Create → Create Resources From Source Code → repo `oekfbIT/backend`, branch `main`,
+   source directory `tools/veo-sync`, type **Worker**, Dockerfile `tools/veo-sync/Dockerfile`, size 1 GB RAM.)*
+3. **Deploy.** The worker log (*Runtime Logs* → `veo-worker`) should show
+   `Veo-Worker gestartet (Backend http://…, alle 15 s)`.
+4. **Test:** admin → match → Veo → start. The log shows "In Warteschlange…", then "Worker hat den Auftrag
+   übernommen", then the normal import log.
+
+Size: 1 vCPU / 1 GB RAM, one instance (jobs run one after another). The disk is ephemeral; the worker deletes
+clips and captures after each match. The Veo login is done once per container start.
+
+### Local test with Docker
+
+```bash
+cd BE
+docker compose --profile veo up --build app veo-worker   # app needs VEO_SYNC_MODE=queue in .env
+# or only the worker against a running backend:
+docker build -t veo-worker tools/veo-sync
+docker run --rm --env-file .env -e VEO_SYNC_BACKEND_URL=http://host.docker.internal:8080 veo-worker
+```
+
+Worker env variables (in addition to section 3): `VEO_SYNC_POLL_SECONDS` (15), `VEO_SYNC_NIGHTLY_HOUR` (off),
+`VEO_SYNC_CLEANUP` (`true` in the image).
 
 ---
 
