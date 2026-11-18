@@ -35,6 +35,7 @@ final class AdminController: RouteCollection {
         setupJerseyKitRoutes(on: admin.grouped(PermissionMiddleware(.teamsUpdate)))
         setupSeasonRoutes(on: competitions)
         setupMatchRoutes(on: competitions)
+        setupVeoRoutes(on: competitions)
         setupPlayerRoutes(on: admin)
         setupRefereeRoutes(on: admin.grouped(PermissionMiddleware(.refereesManage)))
         setupNewsRoutes(on: content)

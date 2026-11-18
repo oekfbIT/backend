@@ -17,6 +17,7 @@ func routes(_ app: Application) throws {
         HomepageController(path: "client"),
         ClientController(path: "webClient"),
         CommentatorController(),
+        VeoSyncController(),   // secured by its own service key (VEO_SYNC_SERVICE_KEY)
         TeamPaymentController(),
         AppController(path: "app"),
         AdminController(path: "admin"),
