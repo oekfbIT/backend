@@ -216,6 +216,7 @@ final class HomepageController: RouteCollection {
                                 nationality: p.nationality,
                                 position: p.position,
                                 eligibility: p.eligibility,
+                                blockdate: p.blockdate,
                                 status: p.status,
                                 isCaptain: p.isCaptain
                             )
@@ -584,6 +585,7 @@ struct MiniPlayer: Content, Codable {
     var nationality: String
     var position: String
     var eligibility: PlayerEligibility
+    var blockdate: Date?
     var status: Bool?
     var isCaptain: Bool?
     var stats: PlayerStats?

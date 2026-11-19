@@ -18,9 +18,19 @@ extension CommentaryValidationService {
         context.requiredFactIDs.forEach(append)
         var order = [String]()
         for fact in context.facts where !order.contains(fact.group) { order.append(fact.group) }
+        // Protect one turning point per match before spending the budget on supporting facts.
+        let arcIDs = context.facts.filter { $0.id.hasPrefix("arc.") }.map(\.id)
+        let arcsByGroup = Dictionary(grouping: arcIDs) { facts[$0]!.group }
+        for group in order {
+            guard let options = arcsByGroup[group], let fallback = options.first else { continue }
+            append(ranked.first(where: { options.contains($0) }) ?? fallback)
+            if !selected.contains(where: { options.contains($0) }) { append(fallback) }
+        }
+        let arcs = Set(arcIDs)
+        let supporting = (ranked + context.facts.map(\.id)).filter { !arcs.contains($0) }
         let candidates = order.map { group in
             var seen = Set<String>()
-            return (ranked + context.facts.map(\.id)).filter { id in facts[id]?.group == group && seen.insert(id).inserted }
+            return supporting.filter { id in facts[id]?.group == group && seen.insert(id).inserted }
         }
         // Spread additional substance across fixtures instead of spending the budget on one game.
         for depth in 0..<(candidates.map(\.count).max() ?? 0) {
@@ -31,7 +41,8 @@ extension CommentaryValidationService {
         }
         var paragraphs = [[String]]()
         for group in order {
-            let ids = selected.filter { facts[$0]?.group == group }
+            let groupIDs = selected.filter { facts[$0]?.group == group }
+            let ids = groupIDs.filter { arcs.contains($0) } + groupIDs.filter { !arcs.contains($0) }
             for start in stride(from: 0, to: ids.count, by: 8) { paragraphs.append(Array(ids[start..<min(start + 8, ids.count)])) }
         }
         return .init(titleIndex: selection.titleIndex, language: selection.language, paragraphs: paragraphs)
@@ -44,6 +55,96 @@ extension CommentaryContextBuilder {
         case .pending, .first, .halftime, .second: return false
         case .completed, .submitted, .done, .cancelled, .abbgebrochen: return true
         }
+    }
+
+    private static func matchArcs(_ match: Match, home: String, away: String) -> (texts: [String], sources: [String])? {
+        guard let id = match.id else { return nil }
+        var goals = [(minute: Int, side: MatchAssignment)](), sources = Set<UUID>()
+        for event in match.$events.value ?? [] where event.type == .goal {
+            guard let eventID = event.id, event.$match.id == id, sources.insert(eventID).inserted,
+                  event.minute > 0,
+                  let side = TeamStatisticsService.scoringAssignment(for: event, in: match) else { return nil }
+            goals.append((event.minute, side))
+        }
+        guard !goals.isEmpty, goals.filter({ $0.side == .home }).count == match.score.home,
+              goals.filter({ $0.side == .away }).count == match.score.away else { return nil }
+
+        // Goals within the same minute have no recorded order. Use the score after the whole minute.
+        var score = Score(home: 0, away: 0)
+        let minutes = Dictionary(grouping: goals, by: \.minute)
+        let checkpoints = minutes.keys.sorted().map { minute in
+            let homeGoals = minutes[minute]!.filter { $0.side == .home }.count
+            let awayGoals = minutes[minute]!.count - homeGoals
+            score.home += homeGoals
+            score.away += awayGoals
+            return (minute: minute, score: score, homeGoals: homeGoals, awayGoals: awayGoals)
+        }
+        let sourceIDs = ([id] + Array(sources)).map(\.uuidString).sorted()
+        let halfLength = 25
+        let lateMinute = 2 * halfLength - 5
+        // The match clock can record minute 25 on either side of halftime.
+        let halftime = minutes[halfLength] == nil
+            ? checkpoints.last(where: { $0.minute < halfLength })?.score ?? Score(home: 0, away: 0)
+            : nil
+        if score.home == score.away {
+            guard let last = checkpoints.last, last.minute >= lateMinute, last.homeGoals + last.awayGoals == 1 else { return nil }
+            let team = last.homeGoals == 1 ? home : away
+            return (["Mit dem Ausgleich in Minute \(last.minute) sicherte sich \(team) noch einen Punkt."], sourceIDs)
+        }
+
+        let homeWon = score.home > score.away
+        let winner = homeWon ? home : away
+        func difference(_ score: Score) -> Int { homeWon ? score.home - score.away : score.away - score.home }
+        func winnerGoals(_ score: Score) -> Int { homeWon ? score.home : score.away }
+        func winnerScore(_ score: Score) -> String { homeWon ? score.displayText : "\(score.away):\(score.home)" }
+        if let lowest = checkpoints.min(by: { difference($0.score) < difference($1.score) }), difference(lowest.score) < 0 {
+            let first = checkpoints[0]
+            let opened = homeWon ? first.awayGoals == 0 : first.homeGoals == 0
+            let lead = opened ? "\(winner) traf zum 1:0, lag zwischenzeitlich aber \(winnerScore(lowest.score)) zurück."
+                : "\(winner) musste einen \(winnerScore(lowest.score))-Rückstand aufholen."
+            if let halftime, difference(halftime) < 0 {
+                let secondHalfGoals = winnerGoals(score) - winnerGoals(halftime)
+                let turnaround = secondHalfGoals >= 3
+                    ? "Mit \(secondHalfGoals) Treffern nach der Pause drehte das Team die Partie."
+                    : "Nach der Pause drehte das Team die Partie."
+                let pauseLead = opened
+                    ? "Trotz des 1:0 lag \(winner) zur Pause \(winnerScore(halftime)) hinten."
+                    : "Zur Pause lag \(winner) \(winnerScore(halftime)) hinten."
+                return ([lead + " " + turnaround, pauseLead + " " + turnaround], sourceIDs)
+            }
+            var run = 0, turnaroundRun = 0, beforeRun = 0, previous = 0
+            for checkpoint in checkpoints {
+                let opponentGoals = homeWon ? checkpoint.awayGoals : checkpoint.homeGoals
+                let current = difference(checkpoint.score)
+                if opponentGoals == 0 {
+                    if run == 0 { beforeRun = previous }
+                    run += current - previous
+                    if beforeRun < 0 && current > 0 { turnaroundRun = max(turnaroundRun, run) }
+                } else {
+                    // A mixed minute breaks a streak whose order cannot be verified.
+                    run = 0
+                }
+                previous = current
+            }
+            let turnaround = turnaroundRun >= 3
+                ? "\(turnaroundRun) Treffer in Folge brachten das Team in Führung."
+                : "Am Ende drehte das Team die Partie."
+            return ([lead + " " + turnaround], sourceIDs)
+        }
+        let lastLevel = checkpoints.lastIndex { difference($0.score) == 0 }
+        let decisiveLead = checkpoints[(lastLevel ?? -1) + 1]
+        if decisiveLead.minute >= lateMinute, decisiveLead.homeGoals + decisiveLead.awayGoals == 1 {
+            return (["In Minute \(decisiveLead.minute) ging \(winner) in Führung und gab sie bis zum Abpfiff nicht mehr ab."], sourceIDs)
+        }
+        if let halftime, difference(score) - difference(halftime) >= 3 {
+            let lead = difference(halftime) == 0 ? "Zur Pause stand es \(halftime.displayText)."
+                : "Zur Pause führte \(winner) \(winnerScore(halftime))."
+            return ([lead + " Mit \(winnerGoals(score) - winnerGoals(halftime)) Treffern nach dem Seitenwechsel zog \(winner) davon."], sourceIDs)
+        }
+        if let halftime, difference(halftime) >= 3 {
+            return (["Schon zur Pause hatte sich \(winner) mit dem \(winnerScore(halftime)) einen deutlichen Vorsprung erspielt."], sourceIDs)
+        }
+        return nil
     }
 
     static func weeklySummary(data: CommentarySeasonData, gameday: Int, allowPartial: Bool, now: Date) throws -> CommentaryContext {
@@ -120,8 +221,15 @@ extension CommentaryContextBuilder {
                 leads = ["Drei Punkte für \(winner): Gegen \(loser) reichte es zu einem \(winningScore).",
                          "\(winner) durfte sich über den Sieg freuen: \(winningScore) lautete das Ergebnis gegen \(loser)."]
             }
-            add("result.\(id)", group, leads[matchIndex % leads.count], [id.uuidString])
+            let arc = matchArcs(match, home: home, away: away)
+            let result = arc == nil ? leads[matchIndex % leads.count] : "Am Ende stand es \(score)."
+            add("result.\(id)", group, result, [id.uuidString])
             required.append("result.\(id)")
+            if let arc {
+                for (index, text) in arc.texts.enumerated() {
+                    add("arc.\(id).\(index)", group, text, arc.sources)
+                }
+            }
             if total >= 10 && margin != 0 {
                 add("outcome.\(id)", group, "\(total) Tore in einer Partie – an Treffern mangelte es hier wahrlich nicht.", [id.uuidString])
             }

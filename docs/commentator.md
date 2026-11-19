@@ -231,7 +231,7 @@ The extra calculations reuse loaded matches/events and add no per-player databas
 
 ## Weekly reviews are a separate format
 
-`league-review-de-v2` is a played-match recap, not an expanded preview. One article
+`league-review-de-v3` is a played-match recap. One article
 covers one season/game day in one league. Every completed result is required and gets
 an escaped HTML `<h2>` match heading. The plain-text version includes the same headings.
 The generator prioritizes basic report data: scores, high-scoring/close/clear result
@@ -241,9 +241,11 @@ It does not build a full form/home-away/player-availability dossier for each mat
 Reports normally use about 40–80 words per match and roughly 300–750 for four to eight
 fixtures, depending on available evidence. The configured maximum remains 900 words by
 default. A round-sized minimum and balanced fact selection prevent a three-paragraph
-summary from silently leaving games out. Required results always come before optional
-highlights, with the table section at the end. Sparse source data is not padded with
-invented tempo, chances, tactical descriptions, quotations or match chronology.
+summary from silently leaving games out. The word budget reserves room for required
+results first, then one verified turning point per match before supporting details.
+The model can choose between available angles. Comebacks, halftime swings and late
+goals require a timed goal log that agrees with both teams' final scores. The table
+section follows the match recaps.
 
 Round tables show actual placements and movements versus the previous round. Scorer
 rank gains inside the top 10, entering the top 10 or reaching the lead require complete goal records for

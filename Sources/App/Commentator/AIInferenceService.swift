@@ -13,7 +13,7 @@ struct CommentaryInferenceError: Error {
 
 enum CommentaryPromptBuilder {
     static let version = "matchup-brief-de-v6"
-    static func version(for kind: CommentaryKind) -> String { kind == .gameDaySummary ? "league-review-de-v2" : version }
+    static func version(for kind: CommentaryKind) -> String { kind == .gameDaySummary ? "league-review-de-v3" : version }
     static func instructions(for context: CommentaryContext, configuration: CommentaryConfiguration) -> String {
         if context.kind == .gameDaySummary {
             return """
@@ -24,8 +24,10 @@ enum CommentaryPromptBuilder {
             Verändere oder erfinde keinen Satz. Jede ID höchstens einmal, alle requiredFactIDs müssen vorkommen.
             Aufbau: Einstieg zum Spieltag; JEDE abgeschlossene Partie mit eigenem Abschnitt; anschließend
             besondere Spielerleistungen und die Tabellensituation. Die Überschriften setzt der Server.
-            Pro Partie meistens 40–80 Wörter, bei mehr belegtem Geschehen ausführlicher. Berichte über Ergebnis,
-            torreiche/knappe/deutliche Spiele, Mehrfachtorschützen und erfasste Gelbe, Rote oder Gelb-Rote Karten.
+            Gib jeder Partie einen eigenen Schwerpunkt. Wenn arc-Fakten vorliegen, wähle pro Spiel höchstens
+            einen Verlauf: etwa Führung, Rückstand und Wende, einen Halbzeitumschwung oder ein spätes Schlüsseltor.
+            Entscheide redaktionell, welche der angebotenen Fassungen den Wendepunkt am besten erzählt.
+            Ergänze passende Details wie Mehrfachtorschützen oder Platzverweise. Eine kurze Szene genügt.
             Kein vollständiger Vorschau-Kontext pro Spiel: keine langen Heim-/Auswärtssplits oder Formanalysen.
             Tabellenbewegungen und Sprünge in der Torjägerliste kurz einordnen, wenn sie belegt sind.
             Wähle die interessanteren Spiele zuerst. Lasse keine Partie aus. Ein Torprotokoll allein ist kein Bericht:
@@ -145,7 +147,13 @@ enum CommentaryValidationService {
         }
         if context.sectionHeadings != nil {
             let matches = context.facts.filter { $0.id.hasPrefix("result.") }.count
-            return (min(100 + 40 * matches, configuration.maxSummaryWords, context.availableWords), configuration.maxSummaryWords)
+            let arcs = context.facts.filter { $0.id.hasPrefix("arc.") }
+            let arcWords = Dictionary(grouping: arcs, by: \.group).values.reduce(0) { total, alternatives in
+                total + (alternatives.map { $0.text.split(whereSeparator: \.isWhitespace).count }.min() ?? 0)
+            }
+            let alternativeWords = arcs.reduce(0) { $0 + $1.text.split(whereSeparator: \.isWhitespace).count }
+            let available = context.availableWords - alternativeWords + arcWords
+            return (min(100 + 40 * matches, configuration.maxSummaryWords, available), configuration.maxSummaryWords)
         }
         return (context.availableWords >= 150 ? min(150, configuration.maxSummaryWords) : min(25, context.availableWords), configuration.maxSummaryWords)
     }

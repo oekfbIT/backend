@@ -134,6 +134,52 @@ final class CommentaryTests: XCTestCase {
         }
     }
 
+    func testWeeklyReportLeadsWithOneVerifiedTurningPointPerMatch() throws {
+        let (data, _, now) = fixture()
+        let comeback = data.matches[1], lateWinner = data.matches[2], lateDraw = data.matches[3]
+        func setGoals(_ match: Match, _ score: Score, _ goals: [(Int, MatchAssignment)]) {
+            match.score = score
+            match.$events.value = goals.reversed().map { minute, side in
+                MatchEvent(id: UUID(), matchId: match.id!, type: .goal, minute: minute,
+                    name: nil, image: nil, number: nil, assign: side)
+            }
+        }
+        setGoals(comeback, .init(home: 8, away: 4), [
+            (1, .home), (4, .away), (12, .away), (14, .away), (18, .home), (27, .home),
+            (29, .home), (31, .home), (34, .home), (38, .home), (40, .away), (47, .home)
+        ])
+        setGoals(lateWinner, .init(home: 0, away: 1), [(48, .away)])
+        setGoals(lateDraw, .init(home: 1, away: 1), [(7, .home), (49, .away)])
+        let context = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now)
+        let arc = "arc.\(comeback.id!).0", alternate = "arc.\(comeback.id!).1"
+        let fact = try XCTUnwrap(context.facts.first { $0.id == arc })
+        XCTAssertTrue(fact.text.contains("FC Gast traf zum 1:0, lag zwischenzeitlich aber 1:3 zurück."))
+        XCTAssertTrue(fact.text.contains("6 Treffern nach der Pause"))
+        XCTAssertEqual(Set(fact.sourceIDs), Set([comeback.id!.uuidString] + comeback.events.map { $0.id!.uuidString }))
+        let config = settings()
+        for ranked in [[String](), [alternate, arc]] {
+            let selection = CommentarySelection(titleIndex: 0, language: "de", paragraphs: [ranked])
+            let normalized = CommentaryValidationService.normalize(selection, context: context, configuration: config)
+            let article = try CommentaryValidationService.render(.init(selection: normalized, inputTokens: 0, outputTokens: 0),
+                                                                 context: context, configuration: config)
+            XCTAssertEqual(article.factIDs.filter { $0.hasPrefix("arc.\(comeback.id!)") }, [ranked.first ?? arc])
+            XCTAssertTrue(normalized.paragraphs.contains { $0.first == (ranked.first ?? arc) && $0.dropFirst().first == "result.\(comeback.id!)" })
+            XCTAssertTrue(article.text.contains("In Minute 48 ging FC Gast in Führung"))
+            XCTAssertTrue(article.text.contains("Mit dem Ausgleich in Minute 49 sicherte sich FC Heim noch einen Punkt."))
+        }
+
+        comeback.events.first { $0.minute == 27 }?.minute = 25
+        let ambiguousHalf = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now)
+        XCTAssertFalse(try XCTUnwrap(ambiguousHalf.facts.first { $0.id == arc }).text.contains("Pause"))
+        comeback.events.first { $0.minute == 4 }?.minute = 1
+        let ambiguousOpening = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now)
+        XCTAssertFalse(try XCTUnwrap(ambiguousOpening.facts.first { $0.id == arc }).text.contains("traf zum 1:0"))
+        comeback.score = .init(home: 9, away: 4)
+        let incomplete = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now)
+        XCTAssertFalse(incomplete.facts.contains { $0.id == arc })
+        XCTAssertTrue(incomplete.requiredFactIDs.contains("result.\(comeback.id!)"))
+    }
+
     func testWeeklyReportBlocksPendingAndExplainsAbandonedGames() throws {
         let (data, _, now) = fixture()
         let target = data.matches[1]
@@ -989,7 +1035,7 @@ final class CommentaryTests: XCTestCase {
         let article = try CommentaryValidationService.render(.init(selection: selected, inputTokens: 0, outputTokens: 0), context: context, configuration: settings())
         for match in results { XCTAssertTrue(article.factIDs.contains("result.\(match.id!)")) }
         XCTAssertEqual(article.html.components(separatedBy: "<h2>").count - 1, results.count + 1) // Each game + table.
-        XCTAssertEqual(article.promptVersion, "league-review-de-v2")
+        XCTAssertEqual(article.promptVersion, "league-review-de-v3")
         XCTAssertFalse(CommentaryPromptBuilder.instructions(for: context, configuration: settings()).contains("Drei kurze Absätze"))
         XCTAssertTrue(article.text.contains("So steht die Liga"))
         data.teams[0].teamName = "<script>Heim</script>"
@@ -1004,16 +1050,18 @@ final class CommentaryTests: XCTestCase {
         let match = data.matches[2], player = UUID()
         var events = [MatchEvent]()
         for minute in [2, 15, 20] { events.append(.init(id: UUID(), matchId: match.id!, type: .goal, playerId: player, minute: minute, name: "Dreifachtorschütze", image: nil, number: nil, assign: .home)) }
-        events.append(.init(id: UUID(), matchId: match.id!, type: .yellowCard, playerId: player, minute: 21, name: "Dreifachtorschütze", image: nil, number: nil, assign: .home))
+        for minute in [21, 22, 23, 24] {
+            events.append(.init(id: UUID(), matchId: match.id!, type: .yellowCard, minute: minute, name: nil, image: nil, number: nil, assign: .home))
+        }
         events.append(.init(id: UUID(), matchId: match.id!, type: .redCard, playerId: player, minute: 30, name: "Dreifachtorschütze", image: nil, number: nil, assign: .home))
         match.$events.value = events + [events.last!]
         let context = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now)
         let text = context.facts.map(\.text).joined(separator: " ")
-        XCTAssertTrue(text.contains("mindestens 3 Treffer"))
-        XCTAssertTrue(text.contains("1 Gelbe Karte"))
+        XCTAssertTrue(text.contains("mindestens 3 Tore"))
+        XCTAssertTrue(text.contains("4 Gelbe Karten"))
         XCTAssertEqual(context.facts.filter { $0.id.hasPrefix("card.") }.count, 1)
         XCTAssertTrue(text.contains("Rote Karte in Minute 30"))
-        XCTAssertFalse(text.contains("Führungswechsel")); XCTAssertFalse(context.facts.contains { $0.id.hasPrefix("race.") })
+        XCTAssertFalse(context.facts.contains { $0.id.hasPrefix("arc.") || $0.id.hasPrefix("race.") })
     }
 
     func testPreviewTableStakesAreConditionalAndDoNotInventRelegationRules() throws {
