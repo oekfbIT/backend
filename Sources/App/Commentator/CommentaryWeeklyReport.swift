@@ -42,8 +42,13 @@ extension CommentaryValidationService {
         var paragraphs = [[String]]()
         for group in order {
             let groupIDs = selected.filter { facts[$0]?.group == group }
-            let ids = groupIDs.filter { arcs.contains($0) } + groupIDs.filter { !arcs.contains($0) }
-            for start in stride(from: 0, to: ids.count, by: 8) { paragraphs.append(Array(ids[start..<min(start + 8, ids.count)])) }
+            // A named performance can lead a result when the timeline offers no turning point.
+            let lead = groupIDs.first { arcs.contains($0) } ?? groupIDs.first { $0.hasPrefix("scorer.") }
+            let ids = lead.map { [$0] } ?? []
+            let orderedIDs = ids + groupIDs.filter { $0 != lead }
+            for start in stride(from: 0, to: orderedIDs.count, by: 8) {
+                paragraphs.append(Array(orderedIDs[start..<min(start + 8, orderedIDs.count)]))
+            }
         }
         return .init(titleIndex: selection.titleIndex, language: selection.language, paragraphs: paragraphs)
     }
@@ -89,7 +94,7 @@ extension CommentaryContextBuilder {
         if score.home == score.away {
             guard let last = checkpoints.last, last.minute >= lateMinute, last.homeGoals + last.awayGoals == 1 else { return nil }
             let team = last.homeGoals == 1 ? home : away
-            return (["Mit dem Ausgleich in Minute \(last.minute) sicherte sich \(team) noch einen Punkt."], sourceIDs)
+            return (["\(team) rettete mit dem Ausgleich in Minute \(last.minute) einen Punkt."], sourceIDs)
         }
 
         let homeWon = score.home > score.away
@@ -109,7 +114,7 @@ extension CommentaryContextBuilder {
                     : "Nach der Pause drehte das Team die Partie."
                 let pauseLead = opened
                     ? "Trotz des 1:0 lag \(winner) zur Pause \(winnerScore(halftime)) hinten."
-                    : "Zur Pause lag \(winner) \(winnerScore(halftime)) hinten."
+                    : "\(winner) ging mit einem \(winnerScore(halftime))-Rückstand in die Pause."
                 return ([lead + " " + turnaround, pauseLead + " " + turnaround], sourceIDs)
             }
             var run = 0, turnaroundRun = 0, beforeRun = 0, previous = 0
@@ -138,11 +143,11 @@ extension CommentaryContextBuilder {
         }
         if let halftime, difference(score) - difference(halftime) >= 3 {
             let lead = difference(halftime) == 0 ? "Zur Pause stand es \(halftime.displayText)."
-                : "Zur Pause führte \(winner) \(winnerScore(halftime))."
+                : "\(winner) führte zur Pause \(winnerScore(halftime))."
             return ([lead + " Mit \(winnerGoals(score) - winnerGoals(halftime)) Treffern nach dem Seitenwechsel zog \(winner) davon."], sourceIDs)
         }
         if let halftime, difference(halftime) >= 3 {
-            return (["Schon zur Pause hatte sich \(winner) mit dem \(winnerScore(halftime)) einen deutlichen Vorsprung erspielt."], sourceIDs)
+            return (["\(winner) lag zur Pause bereits \(winnerScore(halftime)) vorne."], sourceIDs)
         }
         return nil
     }
@@ -178,7 +183,9 @@ extension CommentaryContextBuilder {
             let b = $1.status == .cancelled ? -1 : $1.score.home + $1.score.away
             return a != b ? a > b : $0.id!.uuidString < $1.id!.uuidString
         }
-        for (matchIndex, match) in sorted.enumerated() {
+        let highestTotal = played.map { $0.score.home + $0.score.away }.max()
+        let shareHighestTotal = played.filter { $0.score.home + $0.score.away == highestTotal }.count > 1
+        for match in sorted {
             let id = match.id!, group = "match.\(id)", home = name(match.$homeTeam.id, in: data), away = name(match.$awayTeam.id, in: data)
             headings[group] = "\(home) – \(away) \(match.score.home):\(match.score.away)"
             if match.status == .cancelled || match.status == .abbgebrochen {
@@ -200,29 +207,23 @@ extension CommentaryContextBuilder {
             let total = match.score.home + match.score.away, margin = abs(match.score.home - match.score.away)
             let winner = match.score.home > match.score.away ? home : away
             let loser = match.score.home > match.score.away ? away : home
-            let score = "\(match.score.home):\(match.score.away)"
             let winningScore = "\(max(match.score.home, match.score.away)):\(min(match.score.home, match.score.away))"
-            // Rotate grounded leads: emotion comes from the score, never an invented match narrative.
-            let leads: [String]
-            if margin == 0 {
-                leads = total == 0
-                    ? ["Keine Tore, je ein Punkt: \(home) und \(away) trennten sich 0:0.",
-                       "Die Tore blieben aus: Beim 0:0 teilen sich \(home) und \(away) die Punkte."]
-                    : ["\(total) Tore und kein Sieger: \(home) und \(away) teilten beim \(score) die Punkte.",
-                       "Je ein Punkt nach \(total) Toren: \(home) und \(away) trennten sich \(score)."]
-            } else if margin == 1 {
-                leads = ["Ein Tor machte den Unterschied! \(winner) holte gegen \(loser) beim \(winningScore) die drei Punkte.",
-                         "Knapper hätte der Vorsprung kaum sein können: \(winner) setzte sich gegen \(loser) durch – \(winningScore)."]
-            } else if margin >= 4 {
-                leads = ["Ein deutliches Ausrufezeichen von \(winner)! Gegen \(loser) stand ein \(winningScore) – \(margin) Tore Unterschied.",
-                         "\(loser) musste eine deutliche Niederlage hinnehmen: \(winner) gewann mit \(margin) Toren Vorsprung, \(winningScore).",
-                         "Drei Punkte, klarer Abstand: \(winner) ließ mit dem \(winningScore) gegen \(loser) aufhorchen."]
-            } else {
-                leads = ["Drei Punkte für \(winner): Gegen \(loser) reichte es zu einem \(winningScore).",
-                         "\(winner) durfte sich über den Sieg freuen: \(winningScore) lautete das Ergebnis gegen \(loser)."]
-            }
             let arc = matchArcs(match, home: home, away: away)
-            let result = arc == nil ? leads[matchIndex % leads.count] : "Am Ende stand es \(score)."
+            let result: String
+            if margin == 0 {
+                result = total == 0 ? "\(home) und \(away) blieben beim 0:0 torlos."
+                    : "\(home) und \(away) trafen je \(match.score.home)-mal und teilten sich die Punkte."
+            } else if min(match.score.home, match.score.away) == 0 && margin >= 3 {
+                result = "\(winner) erzielte gegen \(loser) \(margin) Tore und blieb ohne Gegentreffer."
+            } else if arc != nil {
+                result = "\(winner) gewann \(winningScore)."
+            } else if margin == 1 {
+                result = "\(winner) setzte sich mit \(winningScore) knapp gegen \(loser) durch."
+            } else if margin >= 4 {
+                result = "\(winner) schlug \(loser) mit \(margin) Toren Vorsprung."
+            } else {
+                result = "\(winner) gewann \(winningScore) gegen \(loser)."
+            }
             add("result.\(id)", group, result, [id.uuidString])
             required.append("result.\(id)")
             if let arc {
@@ -231,16 +232,22 @@ extension CommentaryContextBuilder {
                 }
             }
             if total >= 10 && margin != 0 {
-                add("outcome.\(id)", group, "\(total) Tore in einer Partie – an Treffern mangelte es hier wahrlich nicht.", [id.uuidString])
+                if !partial && total == highestTotal {
+                    let ranking = shareHighestTotal ? "eine der torreichsten Partien" : "die torreichste Partie"
+                    add("outcome.\(id)", group, "Mit \(total) Toren war es \(ranking) des Spieltags.", played.compactMap { $0.id?.uuidString })
+                } else {
+                    add("outcome.\(id)", group, "Insgesamt fielen \(total) Tore.", [id.uuidString])
+                }
             }
             let scorer = scorerRace([match])
             let standout = Array(scorer.rows.prefix(3).filter { $0.goals >= 2 })
             if !standout.isEmpty {
                 let contributions = standout.map { row in
-                    "\(row.name.trimmingCharacters(in: .whitespacesAndNewlines)) (\(scorer.complete ? "" : "mindestens ")\(row.goals) Tore)"
-                }.joined(separator: "; ")
-                let lead = matchIndex % 2 == 0 ? "Besonders treffsicher:" : "Im Blickpunkt der Torjäger:"
-                add("scorer.\(id).highlights", group, "\(lead) \(contributions).", standout.flatMap { Array($0.sources) })
+                    "\(row.name.trimmingCharacters(in: .whitespacesAndNewlines)) traf \(scorer.complete ? "" : "mindestens ")\(row.goals)-mal"
+                }
+                let sentence = contributions.dropLast().joined(separator: ", ")
+                let text = contributions.count > 1 ? "\(sentence) und \(contributions.last!)." : "\(contributions[0])."
+                add("scorer.\(id).highlights", group, text, standout.flatMap { Array($0.sources) })
             }
             var seen = Set<UUID>()
             let cards = (match.$events.value ?? []).filter {

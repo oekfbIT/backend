@@ -231,7 +231,7 @@ The extra calculations reuse loaded matches/events and add no per-player databas
 
 ## Weekly reviews are a separate format
 
-`league-review-de-v3` is a played-match recap. One article
+`league-review-de-v4` is a played-match recap. One article
 covers one season/game day in one league. Every completed result is required and gets
 an escaped HTML `<h2>` match heading. The plain-text version includes the same headings.
 The generator prioritizes basic report data: scores, high-scoring/close/clear result

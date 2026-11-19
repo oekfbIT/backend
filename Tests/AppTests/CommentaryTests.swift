@@ -165,7 +165,7 @@ final class CommentaryTests: XCTestCase {
             XCTAssertEqual(article.factIDs.filter { $0.hasPrefix("arc.\(comeback.id!)") }, [ranked.first ?? arc])
             XCTAssertTrue(normalized.paragraphs.contains { $0.first == (ranked.first ?? arc) && $0.dropFirst().first == "result.\(comeback.id!)" })
             XCTAssertTrue(article.text.contains("In Minute 48 ging FC Gast in Führung"))
-            XCTAssertTrue(article.text.contains("Mit dem Ausgleich in Minute 49 sicherte sich FC Heim noch einen Punkt."))
+            XCTAssertTrue(article.text.contains("FC Heim rettete mit dem Ausgleich in Minute 49 einen Punkt."))
         }
 
         comeback.events.first { $0.minute == 27 }?.minute = 25
@@ -495,6 +495,18 @@ final class CommentaryTests: XCTestCase {
             let saved = try XCTUnwrap(storedSaved)
             do { _ = try await service.publish(article: saved, overwrite: false); XCTFail("Expected manual edit protection") }
             catch let error as AbortError { XCTAssertEqual(error.status, .conflict) }
+
+            data.matches[2].score = .init(home: 5, away: 2)
+            let updated = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now)
+            let regeneration = try await service.enqueue(context: updated, options: .init(publish: true, overwrite: true,
+                idempotencyKey: "replace-weekly-report"))
+            XCTAssertNotEqual(regeneration.id, job.id)
+            try await service.process(regeneration.id, slot: 0)
+            let replaced = try await NewsItem.find(published.publishedNewsID!, on: app.db)
+            XCTAssertTrue(replaced?.text?.contains("5:2") == true)
+            XCTAssertEqual(replaced?.image, customImage)
+            let replacedCount = try await store.collection(NewsItem.schema).count().get()
+            XCTAssertEqual(replacedCount, 1)
         }
     }
 
@@ -1035,7 +1047,7 @@ final class CommentaryTests: XCTestCase {
         let article = try CommentaryValidationService.render(.init(selection: selected, inputTokens: 0, outputTokens: 0), context: context, configuration: settings())
         for match in results { XCTAssertTrue(article.factIDs.contains("result.\(match.id!)")) }
         XCTAssertEqual(article.html.components(separatedBy: "<h2>").count - 1, results.count + 1) // Each game + table.
-        XCTAssertEqual(article.promptVersion, "league-review-de-v3")
+        XCTAssertEqual(article.promptVersion, "league-review-de-v4")
         XCTAssertFalse(CommentaryPromptBuilder.instructions(for: context, configuration: settings()).contains("Drei kurze Absätze"))
         XCTAssertTrue(article.text.contains("So steht die Liga"))
         data.teams[0].teamName = "<script>Heim</script>"
@@ -1057,11 +1069,14 @@ final class CommentaryTests: XCTestCase {
         match.$events.value = events + [events.last!]
         let context = try CommentaryContextBuilder.summary(data: data, gameday: 2, allowPartial: false, now: now)
         let text = context.facts.map(\.text).joined(separator: " ")
-        XCTAssertTrue(text.contains("mindestens 3 Tore"))
+        XCTAssertTrue(text.contains("Dreifachtorschütze traf mindestens 3-mal"))
         XCTAssertTrue(text.contains("4 Gelbe Karten"))
         XCTAssertEqual(context.facts.filter { $0.id.hasPrefix("card.") }.count, 1)
         XCTAssertTrue(text.contains("Rote Karte in Minute 30"))
         XCTAssertFalse(context.facts.contains { $0.id.hasPrefix("arc.") || $0.id.hasPrefix("race.") })
+        let selected = CommentaryValidationService.normalize(.init(titleIndex: 0, language: "de",
+            paragraphs: [["scorer.\(match.id!).highlights"]]), context: context, configuration: settings())
+        XCTAssertTrue(selected.paragraphs.contains { $0.first == "scorer.\(match.id!).highlights" })
     }
 
     func testPreviewTableStakesAreConditionalAndDoNotInventRelegationRules() throws {

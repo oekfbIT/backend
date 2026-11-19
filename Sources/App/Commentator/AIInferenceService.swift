@@ -13,7 +13,7 @@ struct CommentaryInferenceError: Error {
 
 enum CommentaryPromptBuilder {
     static let version = "matchup-brief-de-v6"
-    static func version(for kind: CommentaryKind) -> String { kind == .gameDaySummary ? "league-review-de-v3" : version }
+    static func version(for kind: CommentaryKind) -> String { kind == .gameDaySummary ? "league-review-de-v4" : version }
     static func instructions(for context: CommentaryContext, configuration: CommentaryConfiguration) -> String {
         if context.kind == .gameDaySummary {
             return """
@@ -27,6 +27,8 @@ enum CommentaryPromptBuilder {
             Gib jeder Partie einen eigenen Schwerpunkt. Wenn arc-Fakten vorliegen, wähle pro Spiel höchstens
             einen Verlauf: etwa Führung, Rückstand und Wende, einen Halbzeitumschwung oder ein spätes Schlüsseltor.
             Entscheide redaktionell, welche der angebotenen Fassungen den Wendepunkt am besten erzählt.
+            Bevorzuge einen konkreten Spielverlauf oder einen Namen mit einer besonderen Leistung als Einstieg.
+            Wähle unterschiedliche Einstiege über den ganzen Bericht hinweg. Meide Floskeln und Wiederholungen.
             Ergänze passende Details wie Mehrfachtorschützen oder Platzverweise. Eine kurze Szene genügt.
             Kein vollständiger Vorschau-Kontext pro Spiel: keine langen Heim-/Auswärtssplits oder Formanalysen.
             Tabellenbewegungen und Sprünge in der Torjägerliste kurz einordnen, wenn sie belegt sind.
