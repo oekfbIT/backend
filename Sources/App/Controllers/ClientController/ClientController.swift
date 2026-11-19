@@ -517,7 +517,7 @@ extension ClientController {
         let playersFuture = teamFuture
             .flatMap { self.fetchPlayers(for: $0, db: req.db) }
             .map { players in
-                players.map { player in
+                players.captainFirst.map { player in
                     MiniPlayer(
                         id: player.id,
                         sid: player.sid,
@@ -576,6 +576,7 @@ extension ClientController {
                     membershipSince: team.membershipSince,
                     averageAge: team.averageAge,
                     coach: team.coach?.asPublic(),
+                    altCoach: team.altCoach?.asPublic(),
                     captain: team.captain,
                     trikot: team.trikot,
                     players: players,
@@ -601,7 +602,7 @@ extension ClientController {
         let playersFuture = teamFuture
             .flatMap { self.fetchPlayers(for: $0, db: req.db) }
             .map { players in
-                players.map { player in
+                players.captainFirst.map { player in
                     MiniPlayer(
                         id: player.id,
                         sid: player.sid,
@@ -638,6 +639,7 @@ extension ClientController {
                     membershipSince: team.membershipSince,
                     averageAge: team.averageAge,
                     coach: team.coach?.asPublic(),
+                    altCoach: team.altCoach?.asPublic(),
                     captain: team.captain,
                     trikot: team.trikot,
                     players: players,

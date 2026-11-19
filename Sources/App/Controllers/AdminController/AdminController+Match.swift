@@ -402,6 +402,12 @@ extension AdminController {
         guard let player = try await Player.find(body.playerId, on: req.db) else {
             throw Abort(.notFound, reason: "Player not found")
         }
+        guard player.$team.id == match.homeTeam.id else {
+            throw Abort(.badRequest, reason: "Player does not belong to the home team.")
+        }
+        guard player.bank != true else {
+            throw Abort(.forbidden, reason: "Bench players cannot be added to the lineup.")
+        }
         guard let pid = player.id else {
             throw Abort(.internalServerError, reason: "Player ID missing")
         }
@@ -460,6 +466,12 @@ extension AdminController {
 
         guard let player = try await Player.find(body.playerId, on: req.db) else {
             throw Abort(.notFound, reason: "Player not found")
+        }
+        guard player.$team.id == match.awayTeam.id else {
+            throw Abort(.badRequest, reason: "Player does not belong to the away team.")
+        }
+        guard player.bank != true else {
+            throw Abort(.forbidden, reason: "Bench players cannot be added to the lineup.")
         }
         guard let pid = player.id else {
             throw Abort(.internalServerError, reason: "Player ID missing")

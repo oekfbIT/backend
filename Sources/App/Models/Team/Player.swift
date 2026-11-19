@@ -279,7 +279,9 @@ extension Player {
             matches: matches,
             nextMatch: nextMatches,
             position: position,
-            birthDate: birthday
+            birthDate: birthday,
+            bank: bank ?? false,
+            isCaptain: isCaptain ?? false
         )
     }
 
@@ -316,5 +318,11 @@ extension Player {
             eligilibity: eligibility,
             image: image ?? ""
         )
+    }
+}
+
+extension Array where Element == Player {
+    var captainFirst: [Player] {
+        filter { $0.isCaptain == true } + filter { $0.isCaptain != true }
     }
 }

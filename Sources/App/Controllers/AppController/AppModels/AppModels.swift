@@ -151,6 +151,8 @@ struct AppModels {
         let nextMatch: [NextMatch]
         let position: String
         let birthDate: String
+        var bank: Bool? = nil
+        var isCaptain: Bool? = nil
 
     }
 
@@ -234,7 +236,7 @@ struct AppModels {
             trikot = team.trikot
             cancelled = team.cancelled
             postponed = team.postponed
-            players = team.players.map(PublicAppPlayer.init)
+            players = team.players.filter { $0.bank != true }.map(PublicAppPlayer.init)
             stats = team.stats
             seasonStats = team.seasonStats
             form = team.form

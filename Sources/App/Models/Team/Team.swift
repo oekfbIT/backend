@@ -13,6 +13,7 @@ struct Trainer: Content, Codable {
     var name: String
     var email: String?
     var image: String?
+    var nationality: String?
 }
 
 final class Team: Model, Content {

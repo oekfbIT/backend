@@ -204,9 +204,9 @@ final class HomepageController: RouteCollection {
             .unwrap(or: Abort(.notFound, reason: "Team not found"))
             .flatMap { team in
                 // Players (no per-player stats needed for MiniPlayer)
-                let playersFuture: EventLoopFuture<[MiniPlayer]> = team.$players.query(on: req.db).all()
+                let playersFuture: EventLoopFuture<[MiniPlayer]> = team.$players.query(on: req.db).filter(\.$bank != true).all()
                     .map { players in
-                        players.map { p in
+                        players.captainFirst.map { p in
                             MiniPlayer(
                                 id: p.id,
                                 sid: p.sid,
@@ -238,6 +238,7 @@ final class HomepageController: RouteCollection {
                         membershipSince: team.membershipSince,
                         averageAge: team.averageAge,
                         coach: team.coach?.asPublic(),
+                        altCoach: team.altCoach?.asPublic(),
                         captain: team.captain,
                         trikot: team.trikot,
                         players: publicPlayers,
@@ -564,6 +565,7 @@ struct PublicTeamFull: Content, Codable {
     var membershipSince: String?
     var averageAge: String
     var coach: PublicTrainer?
+    var altCoach: PublicTrainer?
     var captain: String?
     var trikot: Trikot
     var players: [MiniPlayer]
@@ -624,6 +626,7 @@ struct PublicMatch: Content, Codable {
 struct PublicTrainer: Content, Codable {
     let name: String
     let image: String?
+    let nationality: String?
 }
 
 struct PublicReferee: Content, Codable {
@@ -635,7 +638,7 @@ struct PublicReferee: Content, Codable {
 
 extension Trainer {
     func asPublic() -> PublicTrainer {
-        PublicTrainer(name: name, image: image)
+        PublicTrainer(name: name, image: image, nationality: nationality)
     }
 }
 
@@ -648,8 +651,8 @@ extension Referee {
 extension Blankett {
     func asPublic() -> Blankett {
         var copy = self
-        copy.coach = coach.map { Trainer(name: $0.name, email: nil, image: $0.image) }
-        copy.altCoach = altCoach.map { Trainer(name: $0.name, email: nil, image: $0.image) }
+        copy.coach = coach.map { Trainer(name: $0.name, email: nil, image: $0.image, nationality: $0.nationality) }
+        copy.altCoach = altCoach.map { Trainer(name: $0.name, email: nil, image: $0.image, nationality: $0.nationality) }
         return copy
     }
 }

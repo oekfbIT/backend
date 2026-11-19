@@ -14,6 +14,7 @@ import Fluent
 struct UpdatePlayerRequest: Content {
     let email: String?
     let playerNumber: String?
+    let bank: Bool?
     let image: File?
 }
 
@@ -147,7 +148,7 @@ extension AppController {
         let playerID = try req.parameters.require("playerID", as: UUID.self)
         let payload = try req.content.decode(UpdatePlayerRequest.self)
 
-        if payload.email == nil && payload.playerNumber == nil && payload.image == nil {
+        if payload.email == nil && payload.playerNumber == nil && payload.image == nil && payload.bank == nil {
             throw Abort(.badRequest, reason: "No updatable fields provided.")
         }
 
@@ -170,6 +171,8 @@ extension AppController {
         if let newNumber = payload.playerNumber {
             player.number = newNumber
         }
+
+        if let bank = payload.bank { player.bank = bank }
 
         try await player.save(on: req.db)
         return .ok // 200, empty body

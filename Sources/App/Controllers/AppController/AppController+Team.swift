@@ -13,6 +13,7 @@ import Fluent
 struct UpdateTrainerRequest: Content {
     let name: String?
     let email: String?
+    let nationality: String?
     let image: File?   // ⬅️ MUST be File for upload
 }
 
@@ -34,6 +35,7 @@ extension AppController {
         let ownedTeam = team.grouped(":teamID").grouped(TeamParameterAccessMiddleware(parameter: "teamID"))
         ownedTeam.get(use: getTeamByID)
         ownedTeam.get("fixtures", use: getFixturesByTeamID)
+        ownedTeam.patch("players", ":playerID", use: updateTeamPlayer)
         ownedTeam.get("balance", use: getTeamBalance)
         ownedTeam.get("overdraft", use: setOverdraftLimit)
         ownedTeam.get("overdraftInfo", use: getOverdraftInfo)
@@ -48,6 +50,46 @@ extension AppController {
         trainer.get(use: getTrainer)
         trainer.get("alt", use: getAltTrainer)
 
+    }
+
+    struct UpdateTeamPlayerRequest: Content {
+        let bank: Bool?
+        let isCaptain: Bool?
+    }
+
+    // PATCH /app/team/:teamID/players/:playerID
+    // Bench status and captain assignment can only be changed for a player on
+    // the authenticated team's roster. Assigning captain clears any previous one.
+    func updateTeamPlayer(req: Request) async throws -> Player.Public {
+        let teamID = try req.parameters.require("teamID", as: UUID.self)
+        let playerID = try req.parameters.require("playerID", as: UUID.self)
+        let body = try req.content.decode(UpdateTeamPlayerRequest.self)
+        guard body.bank != nil || body.isCaptain != nil else {
+            throw Abort(.badRequest, reason: "No updatable fields provided.")
+        }
+        _ = try await ApplicationAccess.requireTeam(teamID, req: req)
+        guard let player = try await Player.query(on: req.db)
+            .filter(\.$id == playerID)
+            .filter(\.$team.$id == teamID)
+            .first()
+        else { throw Abort(.notFound, reason: "Player not found in this team.") }
+
+        try await req.db.transaction { database async throws -> Void in
+            if body.isCaptain == true {
+                let currentCaptains = try await Player.query(on: database)
+                    .filter(\.$team.$id == teamID)
+                    .filter(\.$isCaptain == true)
+                    .all()
+                for captain in currentCaptains where captain.id != playerID {
+                    captain.isCaptain = false
+                    try await captain.save(on: database)
+                }
+            }
+            if let bank = body.bank { player.bank = bank }
+            if let isCaptain = body.isCaptain { player.isCaptain = isCaptain }
+            try await player.save(on: database)
+        }
+        return player.asPublic()
     }
 
     // GET /app/team/:teamID/teamfoto
@@ -119,10 +161,11 @@ extension AppController {
 
         let teamOverview = try await team.toAppTeamOverview(league: leagueOverview, req: req).get()
 
-        let ids = team.players.compactMap(\.id)
+        let rosterPlayers = team.players.captainFirst
+        let ids = rosterPlayers.compactMap(\.id)
         let leagues = Dictionary(uniqueKeysWithValues: ids.map { ($0, team.$league.id) })
         let playerStats = try await PlayerStatisticsService.calculate(playerIDs: ids, activeLeagueIDs: leagues, on: req.db).get()
-        let playerOverviews = try await team.players.asyncMap { player in
+        let playerOverviews = try await rosterPlayers.asyncMap { player in
             let pair = player.id.flatMap { playerStats[$0] }
             return try await player.toAppPlayer(team: teamOverview, stats: pair?.all ?? PlayerStatisticsService.emptyStats(), seasonStats: pair?.season, req: req)
         }
@@ -168,10 +211,11 @@ extension AppController {
 
         let teamOverview = try await team.toAppTeamOverview(league: leagueOverview, req: req).get()
 
-        let ids = team.players.compactMap(\.id)
+        let rosterPlayers = team.players.captainFirst
+        let ids = rosterPlayers.compactMap(\.id)
         let leagues = Dictionary(uniqueKeysWithValues: ids.map { ($0, team.$league.id) })
         let playerStats = try await PlayerStatisticsService.calculate(playerIDs: ids, activeLeagueIDs: leagues, on: req.db).get()
-        let playerOverviews = try await team.players.asyncMap { player in
+        let playerOverviews = try await rosterPlayers.asyncMap { player in
             let pair = player.id.flatMap { playerStats[$0] }
             return try await player.toAppPlayer(team: teamOverview, stats: pair?.all ?? PlayerStatisticsService.emptyStats(), seasonStats: pair?.season, req: req)
         }
@@ -298,7 +342,7 @@ extension AppController {
         let payload = try req.content.decode(UpdateTrainerRequest.self)
 
         // If all optional fields are nil -> 400
-        if payload.name == nil && payload.email == nil && payload.image == nil {
+        if payload.name == nil && payload.email == nil && payload.nationality == nil && payload.image == nil {
             throw Abort(.badRequest, reason: "No updatable fields provided.")
         }
 
@@ -341,7 +385,8 @@ extension AppController {
         let updatedCoach = Trainer(
             name: payload.name ?? existingCoach?.name ?? "Unbekannt",
             email: payload.email ?? existingCoach?.email,
-            image: finalImageURL
+            image: finalImageURL,
+            nationality: payload.nationality ?? existingCoach?.nationality
         )
 
         team.coach = updatedCoach
@@ -464,7 +509,7 @@ extension AppController {
         let payload = try req.content.decode(UpdateTrainerRequest.self)
 
         // If all optional fields are nil -> 400
-        if payload.name == nil && payload.email == nil && payload.image == nil {
+        if payload.name == nil && payload.email == nil && payload.nationality == nil && payload.image == nil {
             throw Abort(.badRequest, reason: "No updatable fields provided.")
         }
 
@@ -505,7 +550,8 @@ extension AppController {
         let updatedAltCoach = Trainer(
             name: payload.name ?? existingAltCoach?.name ?? "Unbekannt",
             email: payload.email ?? existingAltCoach?.email,
-            image: finalImageURL
+            image: finalImageURL,
+            nationality: payload.nationality ?? existingAltCoach?.nationality
         )
 
         team.altCoach = updatedAltCoach

@@ -68,7 +68,7 @@ extension ClientController {
     }
 
     func fetchPlayers(for team: Team, db: Database) -> EventLoopFuture<[Player]> {
-        team.$players.query(on: db).all()
+        team.$players.query(on: db).filter(\.$bank != true).all()
     }
 
     func fetchAllPlayerStats(_ players: [Player], db: Database) -> EventLoopFuture<[MiniPlayer]> {

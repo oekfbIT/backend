@@ -11,7 +11,7 @@ import Vapor
 
 final class NewsItem: Model, Content, Codable {
     static let schema = "news"
-    static let defaultImageURL = "https://football-observatory.com/local/adapt-img/450/10x/IMG/logo/survey2026_900x600-2.jpg?1792746206"
+    static let defaultImageURL = "https://firebasestorage.googleapis.com/v0/b/oekfbbucket.appspot.com/o/news%2F1C5B09BB-5673-A9B6-BDAD-09AB4B41C136%2Fnews_image.png?alt=media&token=6c7ed09c-c946-425d-8397-d9c264bbc80c"
 
     @ID(custom: FieldKeys.id) var id: UUID?
     @OptionalField(key: FieldKeys.image) var image: String?

@@ -469,6 +469,13 @@ extension AppController {
         guard let player = try await Player.find(playerRequest.playerId, on: req.db) else {
             throw Abort(.notFound, reason: "Player with ID \(playerRequest.playerId) not found.")
         }
+        let homeTeam = try await match.$homeTeam.get(on: req.db)
+        guard player.$team.id == homeTeam.id else {
+            throw Abort(.badRequest, reason: "Player does not belong to the home team.")
+        }
+        guard player.bank != true else {
+            throw Abort(.forbidden, reason: "Bench players cannot be added to the lineup.")
+        }
 
         if let index = match.homeBlanket?.players.firstIndex(where: { $0.id == player.id }) {
             match.homeBlanket?.players[index].number = playerRequest.number
@@ -535,6 +542,13 @@ extension AppController {
 
         guard let player = try await Player.find(playerRequest.playerId, on: req.db) else {
             throw Abort(.notFound, reason: "Player with ID \(playerRequest.playerId) not found.")
+        }
+        let awayTeam = try await match.$awayTeam.get(on: req.db)
+        guard player.$team.id == awayTeam.id else {
+            throw Abort(.badRequest, reason: "Player does not belong to the away team.")
+        }
+        guard player.bank != true else {
+            throw Abort(.forbidden, reason: "Bench players cannot be added to the lineup.")
         }
 
         guard let playerId = player.id else {
