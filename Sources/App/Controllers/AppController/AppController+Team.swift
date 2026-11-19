@@ -40,6 +40,8 @@ extension AppController {
         ownedTeam.get("overdraft", use: setOverdraftLimit)
         ownedTeam.get("overdraftInfo", use: getOverdraftInfo)
         ownedTeam.get("teamfoto", use: getTeamFoto)
+        ownedTeam.on(.PUT, "president", body: .collect(maxSize: "10mb"), use: updateTeamPresident)
+        ownedTeam.delete("president", use: removeTeamPresident)
         ownedTeam.on(.PUT, "teamfoto", body: .collect(maxSize: "11mb"), use: updateTeamFoto)
 
         // Trainer (kept as-is but grouped neatly)
@@ -558,6 +560,46 @@ extension AppController {
 
         try await team.save(on: req.db)
         return .ok
+    }
+
+    func updateTeamPresident(_ req: Request) async throws -> HTTPStatus {
+        let teamID = try req.parameters.require("teamID", as: UUID.self)
+        let team = try await ApplicationAccess.requireTeam(teamID, req: req)
+        let payload = try req.content.decode(UpdateTrainerRequest.self)
+        let existing = team.president
+        guard let name = (payload.name ?? existing?.name)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !name.isEmpty else {
+            throw Abort(.badRequest, reason: "President name is required.")
+        }
+
+        var image = existing?.image
+        if let file = payload.image {
+            try UploadValidation.validate(file, allowed: [.jpeg, .png])
+            let firebase = req.application.firebaseManager
+            try await firebase.authenticate().get()
+            image = try await firebase.uploadFile(
+                file: file, to: "teams/\(teamID.uuidString)/president/\(UUID().uuidString)"
+            ).get()
+        }
+
+        let email = payload.email ?? existing?.email
+        let nationality = payload.nationality ?? existing?.nationality
+        team.president = Trainer(
+            name: name,
+            email: email == "" ? nil : email,
+            image: image,
+            nationality: nationality == "" ? nil : nationality
+        )
+        try await team.save(on: req.db)
+        return .ok
+    }
+
+    func removeTeamPresident(_ req: Request) async throws -> HTTPStatus {
+        let teamID = try req.parameters.require("teamID", as: UUID.self)
+        let team = try await ApplicationAccess.requireTeam(teamID, req: req)
+        team.president = nil
+        try await team.save(on: req.db)
+        return .noContent
     }
 
 }

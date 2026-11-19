@@ -239,6 +239,7 @@ final class HomepageController: RouteCollection {
                         averageAge: team.averageAge,
                         coach: team.coach?.asPublic(),
                         altCoach: team.altCoach?.asPublic(),
+                        president: team.president?.asPublic(),
                         captain: team.captain,
                         trikot: team.trikot,
                         players: publicPlayers,
@@ -536,6 +537,7 @@ struct PublicTeam: Content, Codable {
     var averageAge: String
     var coach: PublicTrainer?
     var altCoach: PublicTrainer?
+    var president: PublicTrainer?
     var captain: String?
     var trikot: Trikot
     var stats: TeamStats?
@@ -566,6 +568,7 @@ struct PublicTeamFull: Content, Codable {
     var averageAge: String
     var coach: PublicTrainer?
     var altCoach: PublicTrainer?
+    var president: PublicTrainer?
     var captain: String?
     var trikot: Trikot
     var players: [MiniPlayer]
@@ -583,6 +586,7 @@ struct MiniPlayer: Content, Codable {
     var eligibility: PlayerEligibility
     var status: Bool?
     var isCaptain: Bool?
+    var stats: PlayerStats?
 }
 
 

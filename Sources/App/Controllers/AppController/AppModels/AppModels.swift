@@ -41,6 +41,7 @@ struct AppModels {
         let membership: String
         let coach: Trainer
         let altCoach: Trainer?
+        let president: Trainer?
         let captain: UUID
         let trikot: Trikot
         let balance: Double?
@@ -210,6 +211,7 @@ struct AppModels {
         let membership: String
         let coach: PublicTrainer
         let altCoach: PublicTrainer?
+        let president: PublicTrainer?
         let captain: UUID
         let trikot: Trikot
         let cancelled: Int?
@@ -232,6 +234,7 @@ struct AppModels {
             membership = team.membership
             coach = team.coach.asPublic()
             altCoach = team.altCoach?.asPublic()
+            president = team.president?.asPublic()
             captain = team.captain
             trikot = team.trikot
             cancelled = team.cancelled

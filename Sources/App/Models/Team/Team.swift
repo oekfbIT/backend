@@ -37,6 +37,7 @@ final class Team: Model, Content {
     @Field(key: FieldKeys.averageAge) var averageAge: String
     @OptionalField(key: FieldKeys.coach) var coach: Trainer?
     @OptionalField(key: FieldKeys.altCoach) var altCoach: Trainer?
+    @OptionalField(key: FieldKeys.president) var president: Trainer?
     @OptionalField(key: FieldKeys.captain) var captain: String?
     @Field(key: FieldKeys.trikot) var trikot: Trikot
     @OptionalField(key: FieldKeys.balance) var balance: Double?
@@ -88,6 +89,7 @@ final class Team: Model, Content {
         static var membershipSince: FieldKey { "membershipSince" }
         static var averageAge: FieldKey { "averageAge" }
         static var coach: FieldKey { "coach" }
+        static var president: FieldKey { "president" }
         static var altCoach: FieldKey { "altCoach" }
         static var captain: FieldKey { "captain" }
         static var totalMatches: FieldKey { "totalMatches" }
@@ -308,6 +310,7 @@ extension Team {
             averageAge: self.averageAge,
             coach: self.coach?.asPublic(),
             altCoach: self.altCoach?.asPublic(),
+            president: self.president?.asPublic(),
             captain: self.captain,
             trikot: self.trikot,
             stats: nil
@@ -349,6 +352,7 @@ extension Team {
                     membership: self.membershipSince ?? "",
                     coach: self.coach ?? Trainer(name: "Unbekannt"),
                     altCoach: self.altCoach,
+                    president: self.president,
                     captain: UUID(uuidString: self.captain ?? "") ?? UUID(),
                     trikot: self.trikot,
                     balance: self.balance,
@@ -402,4 +406,14 @@ extension Team {
 
 private var defaultFromItemBlank: FormItem {
     return FormItem(result: .D, matchID: UUID(), gameday: 1)
+}
+
+struct TeamPresidentMigration: AsyncMigration {
+    func prepare(on database: Database) async throws {
+        try await database.schema(Team.schema).field(Team.FieldKeys.president, .json).update()
+    }
+
+    func revert(on database: Database) async throws {
+        try await database.schema(Team.schema).deleteField(Team.FieldKeys.president).update()
+    }
 }
