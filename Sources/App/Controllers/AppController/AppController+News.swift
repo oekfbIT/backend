@@ -23,7 +23,6 @@ extension AppController {
     // 1️⃣ GET /app/news/all
     func getAllNews(req: Request) async throws -> [NewsItem] {
         try await NewsItem.query(on: req.db)
-            .filter(\.$tag == "Alle")
             .sort(\.$created, .descending)
             .all()
     }
