@@ -304,6 +304,34 @@ GET /webClient/team/{teamId}/clips       → [{ clip, match }]
 Horizontal carousel of `clip.thumbnail_url`, tap → full-screen player with `clip.video_url`; subtitle from
 `match` (`home_name score away_name · gameday. Spieltag`).
 
+### Local phone preview
+
+The Expo app's **Highlights** tab uses the match endpoint for video, statistics,
+shots, passes and possession. Team and player highlights link back to the match
+analysis.
+
+Start the backend with the local connection from the `oekfbbackend` Xcode scheme
+on port 8080. With the Mac and phone on the same Wi-Fi, start the preview server
+from the backend repo. Replace `MAC_LAN_IP` with the Mac’s Wi-Fi IPv4 address.
+
+```bash
+VEO_PREVIEW_URL=http://MAC_LAN_IP:8083 node tools/veo-sync/src/local-preview.mjs \
+  7EE832B2-147B-4EC7-809C-BF239C187CD3=20261115-bida-united-vs-as-vipers-v3b6395f \
+  FF003371-0DFF-4440-A85E-F4864AADCF79=20261115-zuta-perla-vs-gruppe-gesundheit-va83dcc6
+```
+
+From the Expo app repo, start Metro against that preview address.
+
+```bash
+EXPO_PUBLIC_API_BASE_URL=http://MAC_LAN_IP:8083 npx expo start --lan --port 8082 --go
+```
+
+Scan the Expo QR code. Open **Bida United 8–4 AS Vipers**, **Bida United**, or
+**David Tal** and select **Highlights**. The preview server reads the local
+public API and serves existing media files from `tools/veo-sync/downloads`,
+including byte ranges used by the phone’s video player. It leaves the database
+and saved media URLs intact.
+
 ### Videos feed (e.g. a "Videos" tab in the app)
 
 ```

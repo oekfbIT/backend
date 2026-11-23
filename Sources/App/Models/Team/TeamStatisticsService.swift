@@ -133,7 +133,8 @@ enum TeamStatisticsService {
             let opponent = home ? match.score.away : match.score.home
             return FormItem(result: mine == opponent ? .D : (mine > opponent ? .W : .L),
                             matchID: id, gameday: match.details.gameday, score: match.score,
-                            home: match.homeBlanket?.name, away: match.awayBlanket?.name, date: match.details.date)
+                            home: match.homeBlanket?.name, away: match.awayBlanket?.name, date: match.details.date,
+                            homeLogo: match.homeBlanket?.logo, awayLogo: match.awayBlanket?.logo)
         }
     }
 
