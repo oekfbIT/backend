@@ -27,6 +27,7 @@ final class SeasonController: RouteCollection {
         route.delete(":id", use: repository.deleteID)
 
         route.patch(":id", use: repository.updateID)
+        route.patch(":id", "rules", use: updateRules)
         route.patch("batch", use: repository.updateBatch)
         // Add the new route to delete a season with its matches
         route.delete("matches", ":id", use: deleteSeasonWithMatches)
@@ -48,6 +49,21 @@ final class SeasonController: RouteCollection {
         return season
     }
     
+    private struct SeasonRulesPatch: Content {
+        let transferOpen: Bool?
+        let yellowCardSuspensionEnabled: Bool?
+    }
+
+    func updateRules(req: Request) async throws -> Season {
+        let id = try req.parameters.require("id", as: UUID.self)
+        let rules = try req.content.decode(SeasonRulesPatch.self)
+        guard let season = try await Season.find(id, on: req.db) else { throw Abort(.notFound) }
+        if let open = rules.transferOpen { season.transferOpen = open }
+        if let enabled = rules.yellowCardSuspensionEnabled { season.yellowCardSuspensionEnabled = enabled }
+        try await season.update(on: req.db)
+        return season
+    }
+
     // MARK: - Toggle Primary
     func togglePrimary(req: Request) -> EventLoopFuture<Season> {
         guard let seasonID = req.parameters.get("id", as: UUID.self) else {
@@ -75,6 +91,7 @@ final class SeasonController: RouteCollection {
                             .filter(\.$league.$id == leagueID)
                             .filter(\.$id != seasonID)
                             .set(\.$primary, to: false)
+                            .set(\.$transferOpen, to: false)
                             .update()
                             .transform(to: season)
                     }

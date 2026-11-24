@@ -207,9 +207,8 @@ public func configure(_ app: Application) throws {
     app.firebaseManager = firebaseManager
 
     app.queues.schedule(UnlockPlayerJob())
-        .weekly()
-        .on(.tuesday)
-        .at(8,0)
+        .hourly()
+        .at(0)
     
     app.queues.schedule(DressLockJob())
         .weekly()

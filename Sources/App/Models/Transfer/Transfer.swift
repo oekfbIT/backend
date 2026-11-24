@@ -97,6 +97,8 @@ final class Transfer: Model, Content {
 
     @Field(key: FieldKeys.team) var team: UUID
     @Field(key: FieldKeys.player) var player: UUID
+    @OptionalField(key: "seasonID") var seasonID: UUID?
+    @OptionalField(key: "withdrawn") var withdrawn: Bool?
 
     // Keep this non-optional because DB column is required
     @Field(key: FieldKeys.status) var status: TransferStatus

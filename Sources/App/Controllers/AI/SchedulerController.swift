@@ -13,20 +13,12 @@ struct UnlockPlayerJob: AsyncScheduledJob {
     
     func run(context: QueueContext) async throws {
         context.logger.info("Unlock Job is running.")
-        print("Unlock Job is running.")
-
-        // Job logic
-        // Get all the players with eligibility Gesperrt, Check if their blockdate has passed, if yes set their eligibility to Spielberechtigt
-        let players = try await Player.query(on: context.application.db)
+        try await Player.query(on: context.application.db)
             .filter(\.$eligibility == .Gesperrt)
+            .filter(\.$blockdate != nil)
             .filter(\.$blockdate <= Date.viennaNow)
-            .all()
-        
-        for player in players {
-            player.eligibility = .Spielberechtigt
-            try await player.save(on: context.application.db)
-            context.logger.info("Player \(player.name) eligibility updated to Spielberechtigt.")
-        }
+            .set(\.$eligibility, to: .Spielberechtigt)
+            .update()
     }
 }
 

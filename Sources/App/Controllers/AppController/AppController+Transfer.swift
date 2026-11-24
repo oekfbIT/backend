@@ -26,6 +26,11 @@ extension AppController {
         let isCaptain: Bool?
     }
 
+    struct TeamTransferHistoryEntry: Content {
+        let transfer: Transfer
+        let seasonName: String?
+    }
+
     func setupTransferRoutes(on root: RoutesBuilder) {
         let transfers = root.grouped("transfer")
 
@@ -41,15 +46,18 @@ extension AppController {
         // confirm / reject
         transfers.get("confirm", ":id", use: confirmTransfer)
         transfers.get("reject", ":id", use: rejectTransfer)
+        transfers.post("withdraw", ":id", use: withdrawTransfer)
 
         // relations
         transfers.get("team", ":teamID", use: getTransfersByTeam)
+        transfers.get("team", ":teamID", "history", use: getTeamTransferHistory)
         transfers.get("player", ":playerID", use: getTransfersByPlayer)
 
         // options
         transfers.get("options", ":teamID", use: getTransfersOptions)
         // ✅ NEW: transfer market open check
         transfers.get("isOpen", use: isTransferMarketOpen)
+        transfers.get("isOpen", ":teamID", use: isTeamTransferWindowOpen)
 
     }
 
@@ -94,115 +102,26 @@ extension AppController {
 
     // MARK: - POST /app/transfer/create
     func createTransfer(req: Request) async throws -> Transfer {
-        struct CreateTransferDTO: Content {
-            let team: UUID
-            let player: UUID
-            let teamName: String?
-            let teamImage: String?
-            let playerName: String?
-            let playerImage: String?
-        }
-
-        let dto = try req.content.decode(CreateTransferDTO.self)
-
-        guard let settings = try await TransferSettings.query(on: req.db).first(),
-              settings.isTransferOpen else {
-            throw Abort(.forbidden, reason: "Transfers are currently closed.")
-        }
-
-        guard let player = try await Player.find(dto.player, on: req.db) else {
-            throw Abort(.notFound, reason: "Player not found.")
-        }
-
-        if player.transferred == true {
-            throw Abort(.badRequest, reason: "Player already has an active transfer.")
-        }
-
-        guard let originTeamID = player.$team.id,
-              let originTeam = try await Team.find(originTeamID, on: req.db) else {
-            throw Abort(.badRequest, reason: "Player's current team not set.")
-        }
-
-        guard let targetTeam = try await Team.find(dto.team, on: req.db) else {
-            throw Abort(.notFound, reason: "Target team not found.")
-        }
-        try ApplicationAccess.authorize(team: targetTeam, req: req)
-
-        let transfer = Transfer(
-            team: dto.team,
-            player: dto.player,
-            status: .warten,
-            playerName: player.name,
-            playerImage: player.image ?? dto.playerImage ?? "",
-            teamName: targetTeam.teamName,
-            teamImage: targetTeam.logo,
-            origin: originTeam.id,
-            originName: originTeam.teamName,
-            originImage: originTeam.logo
-        )
-
-        try await transfer.create(on: req.db)
-
-        player.transferred = true
-        try await player.update(on: req.db)
-
-        if let recipientEmail = player.email {
-            do {
-                _ = try EmailController()
-                    .sendTransferRequest(req: req, recipient: recipientEmail, transfer: transfer)
-            } catch {
-                req.logger.warning("Failed to send transfer email: \(error)")
-            }
-        }
-
-        return transfer
+        let dto = try req.content.decode(TransferRequest.self)
+        return try await SeasonTransfers.request(playerID: dto.player, targetID: dto.team, req: req)
     }
 
-    // MARK: - GET /app/transfer/reject/:id
     func rejectTransfer(req: Request) async throws -> HTTPStatus {
-        guard let id = req.parameters.get("id", as: UUID.self),
-              let transfer = try await Transfer.find(id, on: req.db)
-        else {
-            throw Abort(.notFound, reason: "Transfer not found.")
-        }
-        guard let originID = transfer.origin else {
-            throw Abort(.forbidden, reason: "Transfer has no originating team.")
-        }
-        _ = try await ApplicationAccess.requireTeam(originID, req: req)
-
-        transfer.status = .abgelehnt
-        try await transfer.save(on: req.db)
+        let id = try req.parameters.require("id", as: UUID.self)
+        _ = try await SeasonTransfers.respond(id: id, accept: false, req: req)
         return .ok
     }
 
-    // MARK: - GET /app/transfer/confirm/:id
+    func withdrawTransfer(req: Request) async throws -> HTTPStatus {
+        let id = try req.parameters.require("id", as: UUID.self)
+        try await SeasonTransfers.withdraw(id: id, req: req)
+        return .noContent
+    }
+
     func confirmTransfer(req: Request) async throws -> Player.Public {
-        guard let settings = try await TransferSettings.query(on: req.db).first(),
-              settings.isTransferOpen == true
-        else {
-            throw Abort(.badRequest, reason: "Transfers are currently closed.")
-        }
-
-        guard let id = req.parameters.get("id", as: UUID.self),
-              let transfer = try await Transfer.find(id, on: req.db),
-              let player = try await Player.find(transfer.player, on: req.db)
-        else {
-            throw Abort(.notFound, reason: "Transfer or player not found.")
-        }
-        guard let originID = transfer.origin ?? player.$team.id else {
-            throw Abort(.forbidden, reason: "Transfer has no originating team.")
-        }
-        _ = try await ApplicationAccess.requireTeam(originID, req: req)
-
-        transfer.origin = player.$team.id
-        transfer.status = .angenommen
-
-        player.$team.id = transfer.team
-        player.transferred = true
-
-        try await transfer.save(on: req.db)
-        try await player.save(on: req.db)
-
+        let id = try req.parameters.require("id", as: UUID.self)
+        let transfer = try await SeasonTransfers.respond(id: id, accept: true, req: req)
+        guard let player = try await Player.find(transfer.player, on: req.db) else { throw Abort(.notFound) }
         return player.asPublic()
     }
 
@@ -216,6 +135,19 @@ extension AppController {
         return try await Transfer.query(on: req.db)
             .filter(\.$team == teamID)
             .all()
+    }
+
+    func getTeamTransferHistory(req: Request) async throws -> [TeamTransferHistoryEntry] {
+        let transfers = try await getTransfersByTeam(req: req)
+        let seasonIDs = Set(transfers.compactMap(\.seasonID))
+        var names: [UUID: String] = [:]
+        if !seasonIDs.isEmpty {
+            let seasons = try await Season.query(on: req.db).filter(\.$id ~~ Array(seasonIDs)).all()
+            for season in seasons { names[try season.requireID()] = season.name }
+        }
+        return transfers.sorted { ($0.created ?? .distantPast) > ($1.created ?? .distantPast) }.map {
+            TeamTransferHistoryEntry(transfer: $0, seasonName: $0.seasonID.flatMap { names[$0] })
+        }
     }
 
     // MARK: - GET /app/transfer/player/:playerID
@@ -232,27 +164,9 @@ extension AppController {
 
     // MARK: - GET /app/transfer/options/:teamID
     func getTransfersOptions(req: Request) async throws -> [TransferPlayerOption] {
-        guard let settings = try await TransferSettings.query(on: req.db).first(),
-              settings.isTransferOpen == true
-        else {
-            throw Abort(.forbidden, reason: "Transfers are currently closed.")
-        }
-
-        guard let teamID = req.parameters.get("teamID", as: UUID.self) else {
-            throw Abort(.badRequest, reason: "Invalid team ID.")
-        }
-        _ = try await ApplicationAccess.requireTeam(teamID, req: req)
-
-        return try await Player.query(on: req.db)
-            .filter(\.$team.$id != teamID)
-            .group(.or) { group in
-                group.filter(\.$eligibility == .Gesperrt)
-                group.filter(\.$eligibility == .Spielberechtigt)
-            }
-            .filter(\.$email != nil)
-            .filter(\.$transferred != true)
-            .limit(200)
-            .all()
+        let teamID = try req.parameters.require("teamID", as: UUID.self)
+        let team = try await ApplicationAccess.requireTeam(teamID, req: req)
+        return try await SeasonTransfers.options(for: team, on: req.db)
             .map {
                 TransferPlayerOption(
                     id: $0.id,
@@ -272,12 +186,13 @@ extension AppController {
     
     // MARK: - GET /app/transfer/isOpen
     func isTransferMarketOpen(req: Request) async throws -> Bool {
-        guard let settings = try await TransferSettings.query(on: req.db).first() else {
-            // defensive default: closed
-            return false
-        }
+        try await SeasonTransfers.isOpen(on: req.db)
+    }
 
-        return settings.isTransferOpen
+    func isTeamTransferWindowOpen(req: Request) async throws -> Bool {
+        let teamID = try req.parameters.require("teamID", as: UUID.self)
+        let team = try await ApplicationAccess.requireTeam(teamID, req: req)
+        return try await SeasonTransfers.primarySeason(for: team, on: req.db)?.transferOpen == true
     }
 
 }

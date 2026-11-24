@@ -44,6 +44,8 @@ final class Player: Model, Content, Codable {
     @OptionalField(key: FieldKeys.bank) var bank: Bool?
     @OptionalField(key: FieldKeys.transferred) var transferred: Bool?
     @OptionalField(key: FieldKeys.blockdate) var blockdate: Date?
+    @OptionalField(key: "yellowCardSuspensionSeasonID") var yellowCardSuspensionSeasonID: UUID?
+    @OptionalField(key: "yellowCardSuspensionUntil") var yellowCardSuspensionUntil: Date?
 
     @Children(for: \.$player) var events: [MatchEvent]
 

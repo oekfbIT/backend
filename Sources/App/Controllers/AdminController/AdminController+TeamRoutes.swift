@@ -474,9 +474,7 @@ extension AdminController {
         let toTeam = try await requireTeamByID(body.toTeamId, db: req.db)
         let toTeamId = try toTeam.requireID()
 
-        player.$team.id = toTeamId
-        player.transferred = true // optional: you already have field
-        try await player.save(on: req.db)
+        _ = try await SeasonTransfers.create(playerID: player.requireID(), targetID: toTeamId, req: req, admin: true, expectedOrigin: fromTeamId)
 
         return .ok
     }
@@ -769,7 +767,6 @@ extension AdminController {
     ///
     /// Transfers multiple players from team :id to toTeamId.
     /// - Updates existing players' team id
-    /// - Sets `transferred = true`
     func transferPlayersBatch(req: Request) async throws -> HTTPStatus {
         let fromTeam = try await requireTeam(req: req, param: "id")
         let fromTeamId = try fromTeam.requireID()
@@ -785,12 +782,12 @@ extension AdminController {
 
         let players = try await requirePlayers(playerIds, belongTo: fromTeamId, db: req.db)
 
-        for player in players {
-            player.$team.id = toTeamId
-            player.transferred = true
-            // keep derived field consistent if you rely on it for searching
-            player.nameLower = player.name.lowercased()
-            try await player.save(on: req.db)
+        try await req.db.transaction { db in
+            for player in players {
+                _ = try await SeasonTransfers.create(
+                    playerID: player.requireID(), targetID: toTeamId, req: req, admin: true, database: db, expectedOrigin: fromTeamId
+                )
+            }
         }
 
         return .ok

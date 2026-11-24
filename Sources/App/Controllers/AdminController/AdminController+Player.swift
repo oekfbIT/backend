@@ -306,18 +306,7 @@ extension AdminController {
         let playerId = try req.parameters.require("id", as: UUID.self)
         let body = try req.content.decode(AdminTransferPlayerRequest.self)
 
-        guard let player = try await Player.find(playerId, on: req.db) else {
-            throw Abort(.notFound, reason: "Player not found.")
-        }
-        guard let _ = try await Team.find(body.toTeamId, on: req.db) else {
-            throw Abort(.notFound, reason: "Destination team not found.")
-        }
-
-        player.$team.id = body.toTeamId
-        player.transferred = true
-        player.nameLower = player.name.lowercased()
-
-        try await player.save(on: req.db)
+        _ = try await SeasonTransfers.create(playerID: playerId, targetID: body.toTeamId, req: req, admin: true)
         return .ok
     }
 

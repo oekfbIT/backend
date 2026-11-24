@@ -343,47 +343,9 @@ extension AppController {
 
     // POST /app/match/:matchID/yellowCard
     func addYellowCard(req: Request) async throws -> HTTPStatus {
-        let cardRequest = try req.content.decode(CardRequest.self)
-
-        _ = try await addCardEvent(req: req, cardType: .yellowCard)
-
+        let card = try req.content.decode(CardRequest.self)
         let matchID = try req.parameters.require("matchID", as: UUID.self)
-        guard let match = try await Match.find(matchID, on: req.db),
-              let seasonID = match.$season.id else {
-            throw Abort(.notFound, reason: "Match season not found")
-        }
-
-        let calendar = Calendar.current
-        let currentDate = Date.viennaNow
-        guard let futureDate = calendar.date(byAdding: .day, value: 8, to: currentDate) else {
-            throw Abort(.internalServerError, reason: "Failed to calculate block date")
-        }
-
-        var components = calendar.dateComponents([.year, .month, .day], from: futureDate)
-        components.hour = 7; components.minute = 0; components.second = 0
-        guard let blockDate = calendar.date(from: components) else {
-            throw Abort(.internalServerError, reason: "Failed to set block date to 7 AM")
-        }
-
-        let yellowCardCount = try await MatchEvent.query(on: req.db)
-            .join(Match.self, on: \MatchEvent.$match.$id == \Match.$id)
-            .filter(Match.self, \.$season.$id == seasonID)
-            .filter(\.$player.$id == cardRequest.playerId)
-            .filter(\.$type == .yellowCard)
-            .count()
-
-        let isFourthCard = (yellowCardCount % 4) == 0
-        guard isFourthCard else { return .ok }
-
-        guard let player = try await Player.find(cardRequest.playerId, on: req.db) else {
-            throw Abort(.notFound, reason: "Player not found")
-        }
-
-        player.blockdate = blockDate
-        player.eligibility = .Gesperrt
-        try await player.save(on: req.db)
-
-        return .ok
+        return try await YellowCardSuspension.record(matchID: matchID, card: card, req: req)
     }
 
     // POST /app/match/:matchID/yellowRedCard
@@ -473,6 +435,7 @@ extension AppController {
         guard player.$team.id == homeTeam.id else {
             throw Abort(.badRequest, reason: "Player does not belong to the home team.")
         }
+        try YellowCardSuspension.requireEligible(player, for: match, at: match.details.date ?? Date())
         guard player.bank != true else {
             throw Abort(.forbidden, reason: "Bench players cannot be added to the lineup.")
         }
@@ -547,6 +510,7 @@ extension AppController {
         guard player.$team.id == awayTeam.id else {
             throw Abort(.badRequest, reason: "Player does not belong to the away team.")
         }
+        try YellowCardSuspension.requireEligible(player, for: match, at: match.details.date ?? Date())
         guard player.bank != true else {
             throw Abort(.forbidden, reason: "Bench players cannot be added to the lineup.")
         }
@@ -633,6 +597,7 @@ extension AppController {
     func startGame(req: Request) async throws -> HTTPStatus {
         let matchId = try req.parameters.require("matchID", as: UUID.self)
         guard let match = try await Match.find(matchId, on: req.db) else { throw Abort(.notFound) }
+        try await YellowCardSuspension.validateLineup(for: match, on: req.db)
         match.status = .first
         match.firstHalfStartDate = Date()
         try await match.save(on: req.db)

@@ -118,6 +118,8 @@ final class AppTests: XCTestCase {
             "app/account",
             "app/match/\(id)",
             "app/transfer/\(id)",
+            "app/transfer/isOpen/\(id)",
+            "app/transfer/team/\(id)/history",
             "app/referee/me",
             "app/conversation",
             "app/transferSettings/toggle"
@@ -128,6 +130,10 @@ final class AppTests: XCTestCase {
                 XCTAssertEqual(res.status, .unauthorized, "Expected /\(path) to require a bearer token")
             })
         }
+
+        try app.test(.POST, "app/transfer/withdraw/\(id)", afterResponse: { res in
+            XCTAssertEqual(res.status, .unauthorized)
+        })
 
         try app.test(.POST, "admin/uploads", afterResponse: { res in
             XCTAssertEqual(res.status, .unauthorized, "Expected /admin/uploads to require an administrator bearer token")

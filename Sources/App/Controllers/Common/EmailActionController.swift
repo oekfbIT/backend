@@ -80,25 +80,7 @@ final class EmailActionController: RouteCollection {
 
     private func respondToTransfer(_ req: Request, accept: Bool) async throws -> EmailTransferDetail {
         let id = try authorizedID(req, kind: "transfer")
-        guard let transfer = try await Transfer.find(id, on: req.db) else { throw Abort(.notFound) }
-        guard transfer.status == .warten else { throw Abort(.conflict, reason: "Die Anfrage ist bereits abgeschlossen.") }
-        if accept {
-            guard try await TransferSettings.query(on: req.db).first()?.isTransferOpen == true else {
-                throw Abort(.conflict, reason: "Transfers sind derzeit geschlossen.")
-            }
-            guard let player = try await Player.find(transfer.player, on: req.db),
-                  player.$team.id == transfer.origin else {
-                throw Abort(.conflict, reason: "Der Spieler ist nicht mehr bei der ursprünglichen Mannschaft.")
-            }
-            transfer.status = .angenommen
-            player.$team.id = transfer.team
-            player.transferred = true
-            try await transfer.save(on: req.db)
-            try await player.save(on: req.db)
-        } else {
-            transfer.status = .abgelehnt
-            try await transfer.save(on: req.db)
-        }
+        let transfer = try await SeasonTransfers.respond(id: id, accept: accept, req: req, fromEmail: true)
         return EmailTransferDetail(id: id, player: transfer.player, playerName: transfer.playerName,
             playerImage: transfer.playerImage, team: transfer.team, teamName: transfer.teamName,
             teamImage: transfer.teamImage, originImage: transfer.originImage, status: transfer.status)

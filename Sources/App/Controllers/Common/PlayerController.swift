@@ -261,31 +261,17 @@ final class PlayerController: RouteCollection {
             }
     }
 
-    func searchTransferByName(req: Request) -> EventLoopFuture<[Player.Public]> {
-        guard let searchValue = req.parameters.get("search") else {
-            return req.eventLoop.future(error: Abort(.badRequest, reason: "Missing search parameter"))
-        }
-
-        return TransferSettings.query(on: req.db).first().flatMap { settings in
-            guard let settings = settings, settings.isTransferOpen else {
-                return req.eventLoop.makeFailedFuture(
-                    Abort(.forbidden, reason: "Transfers are currently closed.")
-                )
+    func searchTransferByName(req: Request) async throws -> [Player.Public] {
+        let search = try req.parameters.require("search")
+        let players = try await Player.query(on: req.db)
+            .group(.or) { group in
+                group.filter(\.$name ~~ search)
+                group.filter(\.$sid ~~ search)
             }
-
-            return Player.query(on: req.db)
-                .group(.or) { group in
-                    group.filter(\.$name ~~ searchValue)
-                    group.filter(\.$sid ~~ searchValue)
-                }
-                .filter(\.$email != nil)
-                .filter(\.$email != "")
-                .filter(\.$transferred != true)
-                .all()
-                .map { players in
-                    players.map { $0.asPublic() }
-                }
-        }
+            .filter(\.$email != nil)
+            .filter(\.$email != "")
+            .all()
+        return try await SeasonTransfers.search(players, on: req.db).map { $0.asPublic() }
     }
 
     func searchByName(req: Request) -> EventLoopFuture<[Player.Public]> {

@@ -32,6 +32,8 @@ final class Season: Model, Content {
     @OptionalField(key: FieldKeys.runnerup) var runnerup: UUID?
     @OptionalField(key: FieldKeys.startDate) var startDate: Date?
     @OptionalField(key: FieldKeys.endDate) var endDate: Date?
+    @OptionalField(key: "transferOpen") var transferOpen: Bool?
+    @OptionalField(key: "yellowCardSuspensionEnabled") var yellowCardSuspensionEnabled: Bool?
     @Children(for: \.$season) var matches: [Match]
     @OptionalField(key: FieldKeys.gameday) var gameday: Int? // Gameday should never be more then season matches.gameday unique list if theres 20 gamedays this cant be 21
 
@@ -50,6 +52,8 @@ final class Season: Model, Content {
         case startDate
         case endDate
         case gameday
+        case transferOpen
+        case yellowCardSuspensionEnabled
     }
 
     struct FieldKeys {

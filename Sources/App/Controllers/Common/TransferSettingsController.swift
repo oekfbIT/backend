@@ -7,6 +7,7 @@
   
 
 import Vapor
+import Fluent
 
 final class TransferSettingsController: RouteCollection {
     let repository: StandardControllerRepository<TransferSettings>
@@ -48,6 +49,7 @@ final class TransferSettingsController: RouteCollection {
         guard let settings = try await TransferSettings.query(on: req.db).first() else {
             throw Abort(.notFound, reason: "No TransferSettings found.")
         }
+        settings.isTransferOpen = try await SeasonTransfers.isOpen(on: req.db)
         return settings
     }
 
@@ -57,8 +59,9 @@ final class TransferSettingsController: RouteCollection {
             throw Abort(.notFound, reason: "No TransferSettings found.")
         }
 
-        settings.isTransferOpen.toggle()
-        try await settings.save(on: req.db)
+        let open = try await !SeasonTransfers.isOpen(on: req.db)
+        try await SeasonTransfers.setOpen(open, on: req.db)
+        settings.isTransferOpen = try await SeasonTransfers.isOpen(on: req.db)
         return settings
     }
 
@@ -83,7 +86,7 @@ final class TransferSettingsController: RouteCollection {
 
         let update = try req.content.decode(UpdateTransferSettingsRequest.self)
 
-        if let value = update.isTransferOpen { settings.isTransferOpen = value }
+
         if let value = update.isDressChangeOpen { settings.isDressChangeOpen = value }
         if let value = update.isCancelPossible { settings.isCancelPossible = value }
         if let value = update.isPostponePossible { settings.isPostponePossible = value }
@@ -95,6 +98,8 @@ final class TransferSettingsController: RouteCollection {
         if let value = update.minAppVersion { settings.minAppVersion = value }
 
         try await settings.save(on: req.db)
+        if let open = update.isTransferOpen { try await SeasonTransfers.setOpen(open, on: req.db) }
+        settings.isTransferOpen = try await SeasonTransfers.isOpen(on: req.db)
         return settings
     }
     

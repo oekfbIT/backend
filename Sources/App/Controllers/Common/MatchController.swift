@@ -432,60 +432,11 @@ final class MatchController: RouteCollection {
             .transform(to: .ok)
     }
 
-    func addYellowCard(req: Request) throws -> EventLoopFuture<HTTPStatus> {
-        let calendar = Calendar.current
-        let currentDate = Date.viennaNow
-
-        guard let futureDate = calendar.date(byAdding: .day, value: 8, to: currentDate) else {
-            throw Abort(.internalServerError, reason: "Failed to calculate block date")
-        }
-
-        var components = calendar.dateComponents([.year, .month, .day], from: futureDate)
-        components.hour = 7
-        components.minute = 0
-        components.second = 0
-
-        guard let blockDate = calendar.date(from: components) else {
-            throw Abort(.internalServerError, reason: "Failed to set block date to 7 AM")
-        }
-
-        let cardRequest = try req.content.decode(CardRequest.self)
+    func addYellowCard(req: Request) async throws -> HTTPStatus {
+        let card = try req.content.decode(CardRequest.self)
         let matchID = try req.parameters.require("id", as: UUID.self)
-
-        return addCardEvent(req: req, cardType: .yellowCard)
-            .flatMap { _ in
-                Match.find(matchID, on: req.db)
-                    .unwrap(or: Abort(.notFound, reason: "Match not found"))
-                    .flatMap { match in
-                        guard let seasonID = match.$season.id else {
-                            return req.eventLoop.makeFailedFuture(
-                                Abort(.notFound, reason: "Match season not found")
-                            )
-                        }
-                        return MatchEvent.query(on: req.db)
-                            .join(Match.self, on: \MatchEvent.$match.$id == \Match.$id)
-                            .filter(Match.self, \.$season.$id == seasonID)
-                            .filter(\.$player.$id == cardRequest.playerId)
-                            .filter(\.$type == .yellowCard)
-                            .count()
-                            .flatMap { yellowCardCount in
-                                guard yellowCardCount % 4 == 0 else {
-                                    return req.eventLoop.makeSucceededFuture(.ok)
-                                }
-
-                                return Player.find(cardRequest.playerId, on: req.db)
-                                    .unwrap(or: Abort(.notFound, reason: "Player not found"))
-                                    .flatMap { player in
-                                        player.blockdate = blockDate
-                                        player.eligibility = .Gesperrt
-                                        return player.save(on: req.db).transform(to: .ok)
-                                    }
-                            }
-                    }
-            }
+        return try await YellowCardSuspension.record(matchID: matchID, card: card, req: req, notify: true)
     }
-
-
 
     func addYellowRedCard(req: Request) throws -> EventLoopFuture<HTTPStatus> {
         let calendar = Calendar.current
@@ -844,24 +795,16 @@ final class MatchController: RouteCollection {
             }
     }
 
-    func startGame(req: Request) throws -> EventLoopFuture<HTTPStatus> {
-        let matchId = try req.parameters.require("id", as: UUID.self)
-        return Match.query(on: req.db)
-            .filter(\.$id == matchId)
-            .with(\.$homeTeam)
-            .with(\.$awayTeam)
-            .first()
-            .unwrap(or: Abort(.notFound))
-            .flatMap { match in
-                match.status = .first
-                match.firstHalfStartDate = Date()
-                return match.save(on: req.db)
-                    .flatMap { StatsCacheManager.invalidateStats(for: match, on: req.db) }
-                    .map {
-                    _ = MatchPushNotifier.fire(.gameStarted, match: match, req: req)
-                    return .ok
-                }
-            }
+    func startGame(req: Request) async throws -> HTTPStatus {
+        let matchID = try req.parameters.require("id", as: UUID.self)
+        guard let match = try await Match.find(matchID, on: req.db) else { throw Abort(.notFound) }
+        try await YellowCardSuspension.validateLineup(for: match, on: req.db)
+        match.status = .first
+        match.firstHalfStartDate = Date()
+        try await match.update(on: req.db)
+        try await StatsCacheManager.invalidateStats(for: match, on: req.db).get()
+        _ = MatchPushNotifier.fire(.gameStarted, match: match, req: req)
+        return .ok
     }
 
     func endFirstHalf(req: Request) throws -> EventLoopFuture<HTTPStatus> {
